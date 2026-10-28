@@ -23,8 +23,9 @@ bun run native:verify --presentation
   sources, including Dawn's engine, Tint, and upstream's proc-table module entry.
 - `native:verify`: load the same addon in Node.js and Bun, dispatch a compute
   shader, and assert the mapped readback values. Each runtime has a 30-second
-  timeout. The shared JavaScript fixture is in `packages/native/test/compute.mjs`
-  so both runtimes execute identical code without a transpilation step. It also
+  timeout. The shared TypeScript fixture is in `packages/native/test/compute.ts`
+  so both runtimes execute identical code directly; Node.js uses built-in type
+  stripping, and `typecheck` checks it with the standard WebGPU definitions. It also
   exercises invalid GPU flags and ordinary device cleanup.
 - `native:verify --presentation`: additionally run a C++ executable that creates
   a GLFW window and acquires, clears, and presents 60 frames through Dawn. This
@@ -63,7 +64,8 @@ TypeScript does not keep a second copy of those version requirements.
 
 Install these through your preferred system/toolchain manager before setup:
 
-- Bun for repository scripts; Node.js as well for runtime verification.
+- Bun for repository scripts; Node.js with built-in TypeScript stripping for
+  runtime verification.
 - Git, curl, and tar for pinned dependency retrieval and extraction.
 - CMake >= 3.22, Ninja, and a C++20 compiler with a compatible C++ standard library.
 - Go >= 1.26, as required by this Dawn revision's `go.mod`.

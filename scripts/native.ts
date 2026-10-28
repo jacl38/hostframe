@@ -26,8 +26,8 @@ export async function withBuildLock(action: () => Promise<void>) {
 
 async function verify(presentation: boolean) {
   const checks = [
-    ["node", resolve(root, "packages/native/test/compute.mjs")],
-    ["bun", resolve(root, "packages/native/test/compute.mjs")]
+    ["node", resolve(root, "packages/native/test/compute.ts")],
+    ["bun", resolve(root, "packages/native/test/compute.ts")]
   ];
   if(presentation) checks.push([resolve(buildRoot, "cmake/native_presentation_check")]);
   for(const command of checks) {

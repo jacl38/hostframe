@@ -6,6 +6,7 @@
   "devDependencies": {
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/bun": "latest",
+    "@webgpu/types": "^0.1.74",
     "oxlint": "^1.90.0"
   },
   "peerDependencies": {

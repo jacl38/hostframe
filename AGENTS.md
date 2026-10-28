@@ -34,6 +34,7 @@ ts-dawn aims to provide native desktop graphics applications in TypeScript using
 
 ## TypeScript style
 
+- Write project-owned scripts, source, and tests in TypeScript. Do not add `.js`, `.mjs`, or `.cjs` files to the repository; generated JavaScript stays in ignored build output.
 - Follow the shared TypeScript style enforced by the repository's [`.oxlintrc.json`](.oxlintrc.json). Treat that configuration as the source of truth for enforced formatting and lint rules.
 - Use two-space indentation, double quotes, semicolons, no trailing commas, and function declarations. Use arrow callbacks where appropriate and follow the configuration's control-flow spacing rules.
 - Prefer inferred return types. Add explicit return types when needed to express an intended contract, preserve a named type, resolve an inference limitation, or declare a type predicate or assertion signature.

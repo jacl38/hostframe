@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const addon = require("../../../build/native/cmake/ts_dawn.node");
+const addon: {
+  globals: Record<string, unknown>,
+  create(flags: string[]): GPU
+} = require("../../../build/native/cmake/ts_dawn.node");
 Object.assign(globalThis, addon.globals);
 assert.throws(() => addon.create(["invalid-flag"]), /key=value/);
 
@@ -13,7 +16,7 @@ Object.defineProperty(globalThis, "__tsDawnSmokeOwner", { value: gpu });
 const adapter = await gpu.requestAdapter();
 assert.ok(adapter, "No compatible GPU adapter; check Vulkan drivers and permissions.");
 const device = await adapter.requestDevice();
-const failures = [];
+const failures: string[] = [];
 device.addEventListener("uncapturederror", event => failures.push(event.error.message));
 const input = new Uint32Array([0, 1, 7, 42]);
 const storage = device.createBuffer({ size: input.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
