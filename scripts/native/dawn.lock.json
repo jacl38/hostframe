@@ -1,0 +1,84 @@
+{
+  "release": "v20261026.205545",
+  "revision": "5fbd545292cb7a4a9a275e322abec6007ffe2ae8",
+  "source": {
+    "name": "dawn-source-5fbd545292cb7a4a9a275e322abec6007ffe2ae8.tar.gz",
+    "url": "https://codeload.github.com/google/dawn/tar.gz/5fbd545292cb7a4a9a275e322abec6007ffe2ae8",
+    "sha256": "8f2c52b7ea2b17d7d2ced710204fa7baa53ffc68acdb1e6d665e0f4fd2a74ad0",
+    "strip": 1,
+    "sentinel": "DEPS"
+  },
+  "headers": {
+    "name": "dawn-headers-5fbd545292cb7a4a9a275e322abec6007ffe2ae8.tar.gz",
+    "url": "https://github.com/google/dawn/releases/download/v20261026.205545/dawn-headers-5fbd545292cb7a4a9a275e322abec6007ffe2ae8.tar.gz",
+    "sha256": "f52bb3c6b6da7c3261572c89ebce63e48a0fd1f40f6675236b93f08eecf5414a",
+    "strip": 1,
+    "sentinel": "include/dawn/dawn_version.h",
+    "includeDirectory": "include"
+  },
+  "engines": {
+    "linux-x64": {
+      "name": "Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-ubuntu-latest-Release.tar.gz",
+      "url": "https://github.com/google/dawn/releases/download/v20261026.205545/Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-ubuntu-latest-Release.tar.gz",
+      "sha256": "b1805d8b23449343f021f20939d554afd6b4b05618c6abe08d9917a69c8b48eb",
+      "strip": 1,
+      "sentinel": "lib64/libwebgpu_dawn.a"
+    }
+  },
+  "dependencies": {
+    "archives": [
+      {
+        "path": "third_party/node-api-headers",
+        "revision": "d5cfe19da8b974ca35764dd1c73b91d57cd3c4ce",
+        "name": "nodejs-node-api-headers-d5cfe19da8b974ca35764dd1c73b91d57cd3c4ce.tar.gz",
+        "url": "https://codeload.github.com/nodejs/node-api-headers/tar.gz/d5cfe19da8b974ca35764dd1c73b91d57cd3c4ce",
+        "sha256": "ec068a441c7d5563cc0eb94f15b42eb056abc070c4408f0cbde3792daea0d6a1",
+        "strip": 1,
+        "sentinel": "include/node_api.h"
+      },
+      {
+        "path": "third_party/node-addon-api",
+        "revision": "1e26dcb52829a74260ec262edb41fc22998669b6",
+        "name": "nodejs-node-addon-api-1e26dcb52829a74260ec262edb41fc22998669b6.tar.gz",
+        "url": "https://codeload.github.com/nodejs/node-addon-api/tar.gz/1e26dcb52829a74260ec262edb41fc22998669b6",
+        "sha256": "2143a6730301e6d84e0c3c0c6057d15d7af18188058bd9d0ec1820a2a358f233",
+        "strip": 1,
+        "sentinel": "napi.h"
+      },
+      {
+        "path": "third_party/gpuweb",
+        "revision": "22507c95ccb9e705eddc7cab8f28aa46b134f5fe",
+        "name": "gpuweb-gpuweb-22507c95ccb9e705eddc7cab8f28aa46b134f5fe.tar.gz",
+        "url": "https://codeload.github.com/gpuweb/gpuweb/tar.gz/22507c95ccb9e705eddc7cab8f28aa46b134f5fe",
+        "sha256": "fc5926ed8d1596e53b8b79ca5f55212112dd717adf3043033e34d3eb2748b685",
+        "strip": 1,
+        "sentinel": "webgpu.idl"
+      },
+      {
+        "path": "third_party/glfw3/src",
+        "revision": "92dcf4ce74f2e2554a98fea09be7c705c17daa5a",
+        "name": "glfw-glfw-92dcf4ce74f2e2554a98fea09be7c705c17daa5a.tar.gz",
+        "url": "https://codeload.github.com/glfw/glfw/tar.gz/92dcf4ce74f2e2554a98fea09be7c705c17daa5a",
+        "sha256": "833fef2ddc9b99d3c2af5c197fe01e6c07e6f6f5555115f1a790e3db9a2e7e07",
+        "strip": 1,
+        "sentinel": "CMakeLists.txt"
+      }
+    ],
+    "git": [
+      {
+        "path": "third_party/jinja2",
+        "revision": "c3027d884967773057bf74b957e3fea87e5df4d7",
+        "name": "jinja2",
+        "url": "https://chromium.googlesource.com/chromium/src/third_party/jinja2",
+        "sentinel": "__init__.py"
+      },
+      {
+        "path": "third_party/markupsafe",
+        "revision": "4256084ae14175d38a3ff7d739dca83ae49ccec6",
+        "name": "markupsafe",
+        "url": "https://chromium.googlesource.com/chromium/src/third_party/markupsafe",
+        "sentinel": "__init__.py"
+      }
+    ]
+  }
+}

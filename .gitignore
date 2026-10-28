@@ -1,0 +1,48 @@
+# dependencies (bun install)
+node_modules/
+
+# output
+out/
+dist/
+*.tgz
+
+# code coverage
+coverage/
+*.lcov
+
+# logs
+logs/
+*.log
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# caches
+.eslintcache
+.cache/
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea/
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# pinned native downloads, sources, and build output
+/vendor/
+/build/
+
+# local agent state and credentials
+/.agents/
+/.codex/
+/.aws/
+
+# generated CMake files (including editor compilation databases)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
