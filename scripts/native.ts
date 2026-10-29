@@ -27,12 +27,23 @@ export async function withBuildLock(action: () => Promise<void>) {
 async function verify(presentation: boolean) {
   const checks = [
     ["node", resolve(root, "packages/native/test/compute.ts")],
-    ["bun", resolve(root, "packages/native/test/compute.ts")]
+    ["bun", resolve(root, "packages/native/test/compute.ts")],
+    ["node", resolve(root, "packages/native/test/window.ts"), "--no-display"],
+    ["bun", resolve(root, "packages/native/test/window.ts"), "--no-display"]
   ];
-  if(presentation) checks.push([resolve(buildRoot, "cmake/native_presentation_check")]);
+  if(presentation) {
+    checks.push(
+      [resolve(buildRoot, "cmake/native_presentation_check")],
+      ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
+      ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
+      ["node", resolve(root, "packages/native/test/window.ts"), "--shutdown"],
+      ["bun", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
+    );
+  }
   for(const command of checks) {
     // Verification needs bounded process lifetimes and signal diagnostics.
-    const child = Bun.spawn(command, { cwd: root, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
+    const env = command.includes("--no-display") ? { ...process.env, DISPLAY: "" } : process.env;
+    const child = Bun.spawn(command, { cwd: root, env, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
     const code = await child.exited;
     if(code !== 0) throw new Error(`${command[0]} verification failed (exit ${code}, signal ${child.signalCode || "none"}).`);
   }

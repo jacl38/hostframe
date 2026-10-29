@@ -19,6 +19,7 @@
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test scripts",
-    "native:verify": "bun scripts/native.ts verify"
+    "native:verify": "bun scripts/native.ts verify",
+    "example:solid-color": "bun examples/solid-color.ts"
   }
 }

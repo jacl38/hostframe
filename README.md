@@ -1,6 +1,6 @@
 **ts-dawn is a TypeScript library for building native desktop graphics applications without a browser or WebView.** It aims to provide the same API across Node.js, and Bun.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). The public application/window API below remains a proposal; the native integration approach was validated in a prototype.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). An experimental fixed-size window bridge now connects JavaScript rendering to native presentation. The higher-level application/window API below remains a proposal.
 
 | Piece | Responsibility | Proposed location |
 |---|---|---|
@@ -12,6 +12,34 @@ The implementation combines existing native components with a small integration 
 | **ts-dawn TypeScript layer** | Provides the application/window API, typed events, and scheduling | `packages/core/` |
 
 Dawn supplies GPU functionality. GLFW supplies interactive windows. `ts-dawn` coordinates their ownership and execution.
+
+**Implemented experimental window bridge**
+
+After `bun install` and `bun run setup`, run the [solid-color example](examples/solid-color.ts):
+
+```sh
+bun run example:solid-color
+# The same TypeScript example runs directly in Node.js:
+node examples/solid-color.ts
+```
+
+The internal [bridge](packages/native/bridge.ts) provides `createGPU()` and
+`createWindow(device)`. One fixed 320×240 window supports synchronous
+`draw(texture => { /* encode and submit here */ })` and idempotent `dispose()`.
+The example renders a blue window for 180 frames and exits. It requires Linux
+x64, X11, and a compatible Vulkan driver.
+
+Native code acquires a surface texture, wraps it for ordinary JavaScript WebGPU
+commands, and presents after the callback. The texture and its views expire when
+the callback finishes. Failed callbacks abandon the frame and preserve the thrown
+value. Reentrant operations, asynchronous callback results, disposed windows, and
+lost devices are rejected.
+
+Use a device from this bridge's `createGPU()`. Its single GPU owner is deliberately
+rooted until process exit because upstream child objects do not retain it. Windows
+retain their JavaScript device while alive; callers own the device and should
+dispose the window before destroying it. This is an experimental bridge, without
+resize handling, event subscriptions, multi-window scheduling, or packaged addons.
 
 **Basic public API**
 
@@ -125,9 +153,9 @@ Bun manages the TypeScript workspace and runs the repository’s TypeScript setu
 3. Generate `WebGPU.h/.cpp` using upstream’s Go IDL generator and matching IDL/templates, and `ComboLimits.h/.cpp` using upstream’s Python generator. Apply the accessor patch to a separate binding copy. Generated files and libraries must come from reproducible inputs, without depending on files from another checkout or scratch directory.
 4. Use a project-owned CMake target to compile the binding implementations, interop `Core.cpp`, `ManualConstructors.cpp`, generated bridge sources, GLFW/helper, and ts-dawn integration. Import and link the downloaded `libwebgpu_dawn` archive. Do not add Dawn’s top-level CMake project with `add_subdirectory(vendor/dawn)` or invoke its full engine build/dependency fetcher.
 
-The TypeScript application/window layer is a subsequent implementation step; setup does not build that proposed API yet.
+The TypeScript application/window layer is a subsequent implementation step; setup builds the experimental bridge, not that proposed API.
 
-The developer entry point is `bun install` followed by `bun run setup`. Keep repository scripts in Bun/TypeScript and use CMake for platform-specific compilation/linking. Report missing system prerequisites without installing them through a distribution-specific package manager. Verify the resulting addon with compute/readback checks in Node.js and Bun, exercise GLFW/Dawn presentation with the native check executable, and inspect the compilation graph to confirm that no engine or Tint sources are compiled. JavaScript window presentation remains part of the proposed API.
+The developer entry point is `bun install` followed by `bun run setup`. Keep repository scripts in Bun/TypeScript and use CMake for platform-specific compilation/linking. Report missing system prerequisites without installing them through a distribution-specific package manager. Verify the resulting addon with compute/readback checks in Node.js and Bun, exercise native and JavaScript window presentation with `bun run native:verify --presentation`, and inspect the compilation graph to confirm that no engine or Tint sources are compiled.
 
 The implementation is organized into:
 
@@ -139,4 +167,4 @@ The implementation is organized into:
 
 Downloaded dependencies and generated artifacts are ignored and do not become ordinary tracked ts-dawn source files. Application developers would receive **prebuilt native addons**, rather than needing to build Dawn themselves.
 
-The prototype passed native presentation checks in Node.js and Bun on Linux/X11/Vulkan. This checkout now passes JavaScript compute/readback checks in both runtimes and a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Other platforms, complete GC/shutdown correctness, and performance remain unverified. The proposed public API and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.
+This checkout passes JavaScript compute/readback and fixed-size window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. The solid-color example was captured and inspected in both runtimes. Other platforms, complete GC/shutdown correctness, and performance remain unverified. The proposed public API and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.

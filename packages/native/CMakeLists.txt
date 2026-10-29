@@ -42,6 +42,7 @@ add_subdirectory("${DAWN_SOURCE}/third_party/glfw3/src" "${CMAKE_CURRENT_BINARY_
 file(GLOB BINDING_SOURCES CONFIGURE_DEPENDS "${BINDING_ROOT}/src/dawn/node/binding/*.cpp")
 add_library(ts_dawn MODULE
   src/module.cpp
+  src/window.cpp
   ${BINDING_SOURCES}
   "${BINDING_ROOT}/src/dawn/node/interop/Core.cpp"
   "${BINDING_ROOT}/src/dawn/node/ManualConstructors.cpp"
@@ -70,7 +71,7 @@ target_include_directories(ts_dawn SYSTEM PRIVATE
 target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG DAWN_USE_X11 GLFW_INCLUDE_NONE)
 target_link_libraries(ts_dawn PRIVATE dawn_engine glfw Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
-set_source_files_properties(src/module.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
+set_source_files_properties(src/module.cpp src/window.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 
 add_library(dawn_glfw STATIC "${DAWN_SOURCE}/src/dawn/glfw/utils.cpp")
 target_include_directories(dawn_glfw PRIVATE "${DAWN_SOURCE}" "${DAWN_SOURCE}/include")
