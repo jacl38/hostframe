@@ -27,44 +27,73 @@ bun run native:verify --presentation
   so both runtimes execute identical code directly; Node.js uses built-in type
   stripping, and `typecheck` checks it with the standard WebGPU definitions. It also
   exercises invalid GPU flags and ordinary device cleanup. Both runtimes also run
-  window initialization failure checks with `DISPLAY` cleared, including safe
-  retries and rejection of window creation from a worker thread.
+  application initialization failure checks with `DISPLAY` cleared, including safe
+  retries and rejection of application construction from a worker thread.
 - `native:verify --presentation`: additionally run a C++ executable that creates
   a GLFW window and acquires, clears, and presents 60 frames through Dawn. This
   checks native window/surface integration separately from the JavaScript binding.
   It then runs the JavaScript window fixture in Node.js and Bun: 60 rendered
   frames, forced GC, callback exceptions and recovery, asynchronous-result and
   reentrancy rejection, texture expiration, repeated disposal, recreation with
-  the same device, and destroyed-device checks. Separate processes also check
-  ordinary shutdown with a live window and no explicit disposal.
+  the same device within one application, failed window initialization, and
+  destroyed-device checks. It also checks recovery from GPU-global installation
+  failure after GLFW initialization. It verifies that a replacement window retains
+  the same X11 socket connection (the session survives window disposal),
+  application disposal closes a live window, disposed operations fail, and
+  buffer write/readback still
+  works on the caller-owned device afterward. Separate processes also check
+  ordinary shutdown with an application owning a live window and no explicit
+  disposal, including GC with only the application retained.
 - `lint`, `typecheck`, `test`: check project scripts and setup regression tests.
 
-The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and `Window`
-exports are internal building blocks, not the proposed public API.
+The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and native
+`Application` exports are internal building blocks. Import the TypeScript
+`Application` from the root `index.ts` entry point (implemented in
+`packages/core/application.ts`).
 
-## Experimental JavaScript presentation
+## Application ownership and JavaScript presentation
 
 Run `bun run example:solid-color` or `node examples/solid-color.ts` with an X11
 display. The same example renders a blue 320×240 window for 180 frames and exits.
 For a headless check, use `xvfb-run -a bun run native:verify --presentation`.
 
-`packages/native/bridge.ts` loads the addon and provides:
+`packages/core/application.ts` exposes the minimal `Application` API. The internal
+`packages/native/bridge.ts` handles addon loading, globals, and the process GPU root.
+The former experimental free functions have been removed.
 
-- `createGPU()`: installs Dawn's WebGPU globals and returns one GPU owner rooted
-  on `globalThis` until process exit, including runtime teardown.
-- `createWindow(device)`: accepts a Dawn JavaScript device created from that GPU.
-  Only one live window is supported, on the process main thread. The window retains
-  the device until disposal. Callers retain ownership of the device.
+- `new Application()`: initializes and owns a GLFW session on the process main
+  thread. Only one application may be live at a time. Initialization failures
+  release partial state; retries are safe.
+- `app.gpu`: exposes the single GPU owner rooted on `globalThis` until process
+  exit, including runtime teardown. Dawn's WebGPU globals are installed during
+  application construction. Use devices obtained through this GPU for windows.
+- `app.createWindow(device)`: creates one fixed 320×240 window. Only one live window
+  is supported. The application tracks and owns native window state even if the
+  JavaScript window wrapper is collected. The window owns its surface and
+  presentation resources and retains its JavaScript device until disposal;
+  callers retain ownership of the device.
 - `window.draw(callback)`: polls window events, acquires a surface texture, calls
   the callback synchronously, then presents. Encode and submit all work before
   returning `undefined`; async callbacks are rejected. A callback failure abandons
   the frame, preserves the thrown value, and permits a later draw. Acquired
   textures and their views cannot be used for GPU work after the callback ends.
-- `window.dispose()`: releases the surface, native window, and GLFW session.
-  Repeated calls are safe; drawing after disposal throws. Drawing or disposing
-  during another operation is rejected. A close request makes subsequent drawing
-  throw; there are no close-event subscriptions yet. Dispose before destroying the
-  caller-owned device; an already destroyed device is also handled safely.
+- `window.dispose()`: releases presentation resources and the native window,
+  releases the retained device reference, and unregisters from the application.
+  The GLFW session stays initialized so a replacement window can be created.
+- `app.dispose()`: disposes its windows before releasing GLFW. Does not destroy
+  caller-owned devices or release the process GPU root. Repeated window and
+  application disposal is safe. Creation on a disposed application and drawing
+  on a disposed window throw. Application creation/drawing/disposal during a draw
+  is rejected by native guards. A close request makes subsequent drawing throw;
+  there are no close-event subscriptions yet. Dispose windows or the application
+  before destroying the device; an already destroyed device is handled safely.
+
+Native application state strongly owns window state; each window refers weakly
+back to its application. A draw holds application state through the callback so
+GC cannot tear down its session in the middle of a frame. Explicit application
+cleanup and the environment cleanup hook close all windows before terminating
+GLFW; surviving wrappers remain safely disposed. Keep the application reachable
+while using it, and use explicit disposal for deterministic cleanup.
 
 Disposal advances Dawn's native GPU progress until idle before GLFW releases the
 X11 connection. In this pinned revision, a work-done future alone can leave
@@ -74,10 +103,9 @@ closed first. The implementation submits an empty command buffer and uses public
 it destroys the stalled device to release the display-dependent resources, and
 explicit disposal throws. This fallback is not exercised by the normal tests.
 
-The full application/window/context API remains proposed. Resize recovery, input
-events, multiple live windows, platform expansion, addon distribution, and complete
-GC/shutdown validation are outside this increment. No additional upstream patches
-are used for the bridge.
+Broader window/context APIs, resize recovery, input events, multiple live windows,
+scheduling, platform expansion, addon distribution, and complete GC/shutdown
+validation are outside this increment. No additional upstream patches are used.
 
 ## Script organization
 
@@ -182,11 +210,13 @@ in Node.js. The addon entry point initializes upstream interop and calls the
 monolithic engine's C entry points directly, without `dawnProcSetProcs`.
 
 The current upstream binding's child objects do not keep their originating GPU
-owner alive. The compute fixture and experimental bridge pin that owner globally for the process lifetime,
-including queued callbacks and teardown. A module-local variable alone proved
-insufficient under Bun's garbage collector. The future application/context layer
-must replace this process-lifetime workaround with managed ownership; the low-level addon is not yet a safe
-standalone application API.
+owner alive. The compute fixture and application bridge pin that owner globally
+for the process lifetime, including queued callbacks and teardown. A module-local
+variable alone proved insufficient under Bun's garbage collector. Introducing
+`Application` establishes GLFW/window ownership only: it does not solve upstream
+GPU-object lifetime management. Every application uses the same rooted GPU, and
+application disposal deliberately leaves it alive along with caller-owned GPU
+objects. Replacing this workaround requires separate upstream lifetime work.
 
 ## Recovery and updates
 
@@ -213,15 +243,21 @@ Python 3.14.5, Node.js 26.7.0, and Bun 1.3.14:
 
 - Fresh dependency retrieval, generation, and linking against the release archive.
 - Repeat `setup` reused generated sources and Ninja reported no work.
-- Build audit accepted 63 selected compilation units and rejected engine/Tint
+- Build audit accepted 64 selected compilation units and rejected engine/Tint
   sources in regression tests.
 - Compute/readback passed in both runtimes, including ordinary process exit.
 - The native presentation executable rendered and presented 60 frames under
   Xvfb/X11 using Mesa lavapipe Vulkan. A captured window was inspected.
 - The JavaScript window fixture passed in Node.js and Bun, including callback
-  recovery, texture expiration, GC during rendering, disposal, recreation, and
-  destroyed devices. Ordinary shutdown with an undisposed window passed as a
-  separate smoke check. The solid-color example exited normally in both runtimes;
+  recovery, texture expiration, GC during rendering, window disposal/recreation
+  within one application, application disposal with a live window, disposed
+  operation rejection, constructor failure recovery (including GPU-global
+  installation failure after GLFW initialization), and destroyed devices.
+  X11 socket identities verified session retention across window disposal and
+  release at application disposal. Buffer write/readback verified caller devices
+  survive both disposal paths. Ordinary shutdown with an undisposed
+  application/window passed separately. The solid-color example exited normally
+  in both runtimes;
   captured 320×240 windows were inspected. Captures are generated under
   `build/native/screenshots/` and are not source inputs.
 - Missing-display initialization failed cleanly. Corrupt downloads, reuse of
@@ -243,6 +279,6 @@ machine-specific and is not forced by the setup scripts.
 The native presentation executable tests the engine/helper directly; the separate
 JavaScript fixture exercises surface texture wrapping and synchronous presentation.
 Neither establishes multi-window scheduling, thread handoff, complete GC/disposal
-correctness, or the proposed application API.
+correctness, or broader window/context APIs.
 macOS, Windows, Linux arm64, Wayland, distribution packaging, and performance
 remain unverified.

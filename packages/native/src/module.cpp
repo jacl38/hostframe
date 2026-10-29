@@ -31,7 +31,7 @@
 
 #include "src/dawn/node/binding/Flags.h"
 #include "src/dawn/node/binding/GPU.h"
-#include "window.h"
+#include "application.h"
 
 namespace {
 
@@ -60,7 +60,7 @@ Napi::Value CreateGPU(const Napi::CallbackInfo& info) {
 Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
   exports.Set("globals", wgpu::interop::Initialize(env));
   exports.Set("create", Napi::Function::New<CreateGPU>(env));
-  ts_dawn::InitializeWindow(env, exports);
+  ts_dawn::InitializeApplication(env, exports);
   return exports;
 }
 

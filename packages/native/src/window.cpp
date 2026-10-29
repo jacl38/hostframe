@@ -4,48 +4,18 @@
 #include <memory>
 #include <stdexcept>
 #include <thread>
-#include <sys/syscall.h>
-#include <unistd.h>
 
 #include <GLFW/glfw3.h>
 #include <webgpu/webgpu_glfw.h>
 
 #include "src/dawn/node/binding/GPUDevice.h"
 #include "src/dawn/node/binding/GPUTexture.h"
+#include "application.h"
 
 namespace ts_dawn {
-namespace {
 
-void RequireMainThread(Napi::Env env) {
-  // This target is Linux-only. A worker cannot become GLFW's main thread.
-  if(syscall(SYS_gettid) != getpid()) {
-    throw Napi::Error::New(env, "Native windows require the process main thread");
-  }
-}
-
-class GlfwSession {
- public:
-  GlfwSession() {
-    if(active_) throw std::runtime_error("Only one native window is supported in this increment");
-    if(!glfwInit()) {
-      glfwTerminate();
-      throw std::runtime_error("GLFW initialization failed; check DISPLAY");
-    }
-    active_ = true;
-  }
-  ~GlfwSession() {
-    glfwTerminate();
-    active_ = false;
-  }
-  GlfwSession(const GlfwSession&) = delete;
-  GlfwSession& operator=(const GlfwSession&) = delete;
-
- private:
-  static bool active_;
-};
-bool GlfwSession::active_ = false;
-
-// Members release in reverse order: surface/device before window before GLFW.
+// Members release in reverse order: surface/device before the native window.
+// The application's GLFW session outlives all presentation resources.
 class Presentation {
  public:
   explicit Presentation(wgpu::Device device) : device_(std::move(device)) {
@@ -158,7 +128,6 @@ class Presentation {
     configured_ = false;
   }
 
-  GlfwSession session_;
   std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> window_{nullptr, glfwDestroyWindow};
   wgpu::Device device_;
   wgpu::Instance instance_;
@@ -167,66 +136,67 @@ class Presentation {
   bool configured_ = false;
 };
 
+WindowState::WindowState(Napi::Env env, Napi::Value value,
+                         const std::shared_ptr<ApplicationState>& application) : application_(application) {
+  void* wrapped = nullptr;
+  if(!value.IsObject() || napi_unwrap(env, value, &wrapped) != napi_ok || !wrapped) {
+    throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
+  }
+  auto* device = wgpu::interop::GPUDevice::Unwrap(value.As<Napi::Object>());
+  auto* binding = dynamic_cast<wgpu::binding::GPUDevice*>(device);
+  if(!binding) throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
+  device_ = Napi::Persistent(value.As<Napi::Object>());
+  presentation_ = std::make_unique<Presentation>(binding->GetNativeDevice());
+}
+
+WindowState::~WindowState() { Close(); }
+
+bool WindowState::Close() {
+  const bool drained = !presentation_ || presentation_->Close();
+  presentation_.reset();
+  device_.Reset();
+  if(auto application = Owner()) application->Unregister(this);
+  application_.reset();
+  return drained;
+}
+
+void WindowState::Draw(Napi::Env env, Napi::Function callback) {
+  if(!presentation_) throw Napi::Error::New(env, "Window is disposed");
+  presentation_->Draw(env, callback);
+}
+
+namespace {
 class Window final : public Napi::ObjectWrap<Window> {
  public:
-  static void Initialize(Napi::Env env, Napi::Object exports) {
-    exports.Set("Window", DefineClass(env, "Window", {
+  static Napi::Function Constructor(Napi::Env env) {
+    return DefineClass(env, "Window", {
       InstanceMethod("draw", &Window::Draw),
       InstanceMethod("dispose", &Window::Dispose)
-    }));
+    });
   }
 
   explicit Window(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Window>(info) {
     try {
       RequireMainThread(info.Env());
-      void* wrapped = nullptr;
-      if(!info[0].IsObject() || napi_unwrap(info.Env(), info[0], &wrapped) != napi_ok || !wrapped) {
-        throw Napi::TypeError::New(info.Env(), "Expected a Dawn GPUDevice");
+      if(!info[0].IsExternal()) {
+        throw Napi::TypeError::New(info.Env(), "Use Application.createWindow(device)");
       }
-      auto* device = wgpu::interop::GPUDevice::Unwrap(info[0].As<Napi::Object>());
-      auto* binding = dynamic_cast<wgpu::binding::GPUDevice*>(device);
-      if(!binding) throw Napi::TypeError::New(info.Env(), "Expected a Dawn GPUDevice");
-      device_ = Napi::Persistent(info[0].As<Napi::Object>());
-      presentation_ = std::make_unique<Presentation>(binding->GetNativeDevice());
-      if(napi_add_env_cleanup_hook(info.Env(), Cleanup, this) != napi_ok) {
-        presentation_.reset();
-        throw Napi::Error::New(info.Env(), "Could not register window cleanup");
-      }
-      cleanupRegistered_ = true;
+      state_ = *info[0].As<Napi::External<std::shared_ptr<WindowState>>>().Data();
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
-    } catch(const std::exception& error) {
-      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
     }
   }
 
-  ~Window() override {
-    if(cleanupRegistered_) napi_remove_env_cleanup_hook(Env(), Cleanup, this);
-    presentation_.reset();
-  }
-
  private:
-  struct Operation {
-    bool& active;
-    explicit Operation(bool& value) : active(value) { active = true; }
-    ~Operation() { active = false; }
-  };
-
-  static void Cleanup(void* data) {
-    // Runs before JS finalizers at environment shutdown, while the device is retained.
-    auto* window = static_cast<Window*>(data);
-    window->presentation_.reset();
-    window->cleanupRegistered_ = false;
-  }
-
   Napi::Value Draw(const Napi::CallbackInfo& info) {
     try {
       RequireMainThread(info.Env());
-      if(!presentation_) throw Napi::Error::New(info.Env(), "Window is disposed");
-      if(executing_) throw Napi::Error::New(info.Env(), "A window operation is already in progress");
+      auto application = state_->Owner();
+      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
+      application->RequireAvailable(info.Env());
       if(!info[0].IsFunction()) throw Napi::TypeError::New(info.Env(), "Expected a draw callback");
-      Operation operation(executing_);
-      presentation_->Draw(info.Env(), info[0].As<Napi::Function>());
+      ApplicationOperation operation(*application);
+      state_->Draw(info.Env(), info[0].As<Napi::Function>());
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
     }
@@ -236,27 +206,23 @@ class Window final : public Napi::ObjectWrap<Window> {
   Napi::Value Dispose(const Napi::CallbackInfo& info) {
     try {
       RequireMainThread(info.Env());
-      if(executing_) throw Napi::Error::New(info.Env(), "A window operation is already in progress");
-      Operation operation(executing_);
-      const bool drained = !presentation_ || presentation_->Close();
-      presentation_.reset();
-      device_.Reset();
-      if(!drained) throw Napi::Error::New(info.Env(), "GPU cleanup timed out; device was destroyed");
+      auto application = state_->Owner();
+      if(!application) return info.Env().Undefined();
+      application->RequireAvailable(info.Env());
+      ApplicationOperation operation(*application);
+      if(!state_->Close()) throw Napi::Error::New(info.Env(), "GPU cleanup timed out; device was destroyed");
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
     }
     return info.Env().Undefined();
   }
 
-  Napi::ObjectReference device_;
-  std::unique_ptr<Presentation> presentation_;
-  bool executing_ = false;
-  bool cleanupRegistered_ = false;
+  std::shared_ptr<WindowState> state_;
 };
 
 }  // namespace
 
-void InitializeWindow(Napi::Env env, Napi::Object exports) {
-  Window::Initialize(env, exports);
+Napi::Function DefineWindow(Napi::Env env) {
+  return Window::Constructor(env);
 }
 }  // namespace ts_dawn

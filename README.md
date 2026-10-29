@@ -1,19 +1,19 @@
 **ts-dawn is a TypeScript library for building native desktop graphics applications without a browser or WebView.** It aims to provide the same API across Node.js, and Bun.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). An experimental fixed-size window bridge now connects JavaScript rendering to native presentation. The higher-level application/window API below remains a proposal.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to fixed-size native presentation. Events, resizing, scheduling, and multiple windows remain planned.
 
-| Piece | Responsibility | Proposed location |
+| Piece | Responsibility | Location |
 |---|---|---|
 | **Dawn engine** | Implements WebGPU, shader compilation, GPU validation, and presentation surfaces | Pinned upstream binary archive with matching headers |
 | **Dawn’s JavaScript binding** | Exposes GPU objects, descriptors, promises, and resource operations through Node-API | Matching source at `vendor/dawn/`, compiled separately |
 | **GLFW** | Creates native windows and delivers input/window events | Selected dependency pinned by Dawn’s manifest |
 | **Dawn–GLFW helper** | Creates a Dawn presentation surface from a GLFW window | Matching source at `vendor/dawn/`, compiled separately |
-| **ts-dawn native integration** | Connects GPU objects to window surfaces; manages presentation, lifecycle, and event delivery | `packages/native/` |
-| **ts-dawn TypeScript layer** | Provides the application/window API, typed events, and scheduling | `packages/core/` |
+| **ts-dawn native integration** | Owns GLFW sessions and window surfaces; manages presentation and lifecycle | `packages/native/` |
+| **ts-dawn TypeScript layer** | Provides `Application`; typed events and scheduling remain planned | `packages/core/` |
 
 Dawn supplies GPU functionality. GLFW supplies interactive windows. `ts-dawn` coordinates their ownership and execution.
 
-**Implemented experimental window bridge**
+**Minimal application API**
 
 After `bun install` and `bun run setup`, run the [solid-color example](examples/solid-color.ts):
 
@@ -23,74 +23,71 @@ bun run example:solid-color
 node examples/solid-color.ts
 ```
 
-The internal [bridge](packages/native/bridge.ts) provides `createGPU()` and
-`createWindow(device)`. One fixed 320×240 window supports synchronous
-`draw(texture => { /* encode and submit here */ })` and idempotent `dispose()`.
-The example renders a blue window for 180 frames and exits. It requires Linux
-x64, X11, and a compatible Vulkan driver.
-
-Native code acquires a surface texture, wraps it for ordinary JavaScript WebGPU
-commands, and presents after the callback. The texture and its views expire when
-the callback finishes. Failed callbacks abandon the frame and preserve the thrown
-value. Reentrant operations, asynchronous callback results, disposed windows, and
-lost devices are rejected.
-
-Use a device from this bridge's `createGPU()`. Its single GPU owner is deliberately
-rooted until process exit because upstream child objects do not retain it. Windows
-retain their JavaScript device while alive; callers own the device and should
-dispose the window before destroying it. This is an experimental bridge, without
-resize handling, event subscriptions, multi-window scheduling, or packaged addons.
-
-**Basic public API**
-
-The application exposes GPU access, while each window exposes its own presentation context:
+The [Application](packages/core/application.ts) owns one native GLFW session and
+tracks its windows. One application and one live 320×240 window are supported at a
+time, on the process main thread. The example renders a blue window for 180 frames
+and exits. It requires Linux x64, X11, and a compatible Vulkan driver.
 
 ```ts
-import { Application } from "ts-dawn";
+import { Application } from "./index.ts";
 
 const app = new Application();
-const adapter = await app.gpu.requestAdapter();
-if(!adapter) {
-  app.dispose();
-  throw new Error("No suitable adapter");
-}
+let device: GPUDevice | undefined;
+try {
+  const adapter = await app.gpu.requestAdapter();
+  if(!adapter) throw new Error("No compatible adapter");
+  device = await adapter.requestDevice();
+  const renderingDevice = device;
+  const window = app.createWindow(renderingDevice);
 
-const window = app.createWindow({
-  title: "Hello WebGPU",
-  width: 800,
-  height: 600
-});
-
-const context = window.getContext("webgpu");
-
-const device = await adapter.requestDevice();
-const format = app.gpu.getPreferredCanvasFormat();
-
-context.configure({ device, format });
-
-window.on("redraw", () => {
-  const view = context.getCurrentTexture().createView();
-
-  const encoder = device.createCommandEncoder();
-  const pass = encoder.beginRenderPass({
-    colorAttachments: [{
-      view,
-      clearValue: { r: 0.05, g: 0.1, b: 0.2, a: 1 },
-      loadOp: "clear",
-      storeOp: "store"
-    }]
+  window.draw(texture => {
+    const encoder = renderingDevice.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: texture.createView(),
+        clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
+        loadOp: "clear",
+        storeOp: "store"
+      }]
+    });
+    pass.end();
+    renderingDevice.queue.submit([encoder.finish()]);
   });
-
-  pass.end();
-  device.queue.submit([encoder.finish()]);
-});
-
-window.on("close", () => app.dispose());
+} finally {
+  try {
+    app.dispose();
+  } finally {
+    device?.destroy();
+  }
+}
 ```
 
-This is an illustrative API contract. Applications use familiar WebGPU commands to draw into the window’s current texture. Dawn submits the GPU work and presents the result directly in the native window.
+Each `draw` polls native events, acquires a surface texture, runs the synchronous
+callback, and presents. Encode and submit commands before returning `undefined`.
+Textures and their views expire when the callback finishes. Failed callbacks
+abandon the frame, preserve the thrown value, and permit later draws. Reentrant
+creation/drawing/disposal, asynchronous callback results, disposed objects, and
+lost devices are rejected. Drawing is caller-driven; there is no scheduler.
 
-During a redraw, ts-dawn acquires a texture from the window’s Dawn surface, makes it available through the context, runs the synchronous TypeScript rendering callback, and presents afterward. Multiple windows may share a device.
+Windows own their surfaces and presentation resources and retain their JavaScript
+device while alive. Devices remain caller-owned: dispose the window or application
+before destroying a device. `window.dispose()` unregisters the window and permits
+`app.createWindow(device)` again without terminating GLFW. `app.dispose()` disposes
+all its windows before releasing GLFW. Repeated disposal is safe; creating a window
+on a disposed application or drawing on a disposed window throws. Application
+construction failure releases partial initialization so it can be retried.
+
+Use a device obtained through `app.gpu`. Its single GPU owner is deliberately rooted
+on `globalThis` until process exit because upstream child objects do not retain it.
+Application disposal does not release this root or destroy caller-owned devices.
+**Application ownership does not solve upstream GPU-object lifetime management.**
+Window/application cleanup still drains deferred swapchain deletion; a five-second
+GPU cleanup timeout destroys the stalled device and explicit disposal throws (see
+[the build guide](docs/native-build.md)).
+
+Resize handling, event subscriptions, scheduling, multiple live windows, and
+packaged addons are outside this increment. The former experimental free functions
+have been replaced by `Application`.
 
 **Native integration**
 
@@ -117,11 +114,11 @@ The project-owned addon entry point initializes upstream interop with `interop::
 
 Stock GPU, adapter, and device creation remains intact. Applications use normal JavaScript WebGPU commands with the acquired textures, followed by native presentation. No engine, texture, command-encoder, or GLFW patches are required. The accessor patch is compiled with the binding and does not require rebuilding the engine.
 
-Windowing and presentation implementation stays in ts-dawn’s own files. It must retain the originating GPU owner during asynchronous work and the JavaScript device while contexts depend on it, and coordinate GPU progress, device loss, and disposal.
+Windowing and presentation implementation stays in ts-dawn’s own files. The application owns the GLFW session and native window state; windows retain their JavaScript devices until disposal. The GPU owner remains rooted for the process lifetime. Native operation guards coordinate drawing, device loss, and disposal.
 
 **Dependency and build setup**
 
-The repository uses this layout (the TypeScript core remains planned):
+The repository uses this layout:
 
 ```
 vendor/
@@ -131,9 +128,10 @@ packages/
   native/
     CMakeLists.txt
     src/
-    test/          # Native presentation check
+    bridge.ts      # Internal addon transport and process GPU owner
+    test/          # Native and JavaScript runtime checks
   core/
-    src/
+    application.ts # Minimal application API
 
 scripts/
   native.ts       # setup, build, check-build, verify commands
@@ -153,7 +151,7 @@ Bun manages the TypeScript workspace and runs the repository’s TypeScript setu
 3. Generate `WebGPU.h/.cpp` using upstream’s Go IDL generator and matching IDL/templates, and `ComboLimits.h/.cpp` using upstream’s Python generator. Apply the accessor patch to a separate binding copy. Generated files and libraries must come from reproducible inputs, without depending on files from another checkout or scratch directory.
 4. Use a project-owned CMake target to compile the binding implementations, interop `Core.cpp`, `ManualConstructors.cpp`, generated bridge sources, GLFW/helper, and ts-dawn integration. Import and link the downloaded `libwebgpu_dawn` archive. Do not add Dawn’s top-level CMake project with `add_subdirectory(vendor/dawn)` or invoke its full engine build/dependency fetcher.
 
-The TypeScript application/window layer is a subsequent implementation step; setup builds the experimental bridge, not that proposed API.
+Setup builds the native addon used by the TypeScript `Application`. Broader window/context APIs remain future work.
 
 The developer entry point is `bun install` followed by `bun run setup`. Keep repository scripts in Bun/TypeScript and use CMake for platform-specific compilation/linking. Report missing system prerequisites without installing them through a distribution-specific package manager. Verify the resulting addon with compute/readback checks in Node.js and Bun, exercise native and JavaScript window presentation with `bun run native:verify --presentation`, and inspect the compilation graph to confirm that no engine or Tint sources are compiled.
 
@@ -167,4 +165,4 @@ The implementation is organized into:
 
 Downloaded dependencies and generated artifacts are ignored and do not become ordinary tracked ts-dawn source files. Application developers would receive **prebuilt native addons**, rather than needing to build Dawn themselves.
 
-This checkout passes JavaScript compute/readback and fixed-size window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. The solid-color example was captured and inspected in both runtimes. Other platforms, complete GC/shutdown correctness, and performance remain unverified. The proposed public API and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.
+This checkout passes JavaScript compute/readback and fixed-size window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. The solid-color example was captured and inspected in both runtimes. Other platforms, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.

@@ -3,7 +3,12 @@ import { createRequire } from "node:module";
 export type FixedWindow = {
   /** Submit before returning; textures/views expire afterward. Async results are rejected. */
   draw(callback: (texture: GPUTexture) => undefined): void,
-  /** Idempotent; forbidden inside draw. A cleanup timeout destroys the caller's device. */
+  /** Unregisters from the application; forbidden inside draw. Idempotent. */
+  dispose(): void
+};
+
+export type NativeApplication = {
+  createWindow(device: GPUDevice): FixedWindow,
   dispose(): void
 };
 
@@ -11,7 +16,7 @@ const require = createRequire(import.meta.url);
 const addon: {
   globals: Record<string, unknown>,
   create(flags: string[]): GPU,
-  Window: new (device: GPUDevice) => FixedWindow
+  Application: new () => NativeApplication
 } = require("../../build/native/cmake/ts_dawn.node");
 
 // Experimental bridge: upstream child objects do not retain their GPU owner.
@@ -19,7 +24,7 @@ const addon: {
 // This deliberately lasts until process exit, independently of window disposal.
 const ownerKey = Symbol.for("ts-dawn.experimental.gpu");
 
-export function createGPU() {
+export function getProcessGPU() {
   Object.assign(globalThis, addon.globals);
   const existing = Reflect.get(globalThis, ownerKey) as GPU | undefined;
   if(existing) return existing;
@@ -28,7 +33,4 @@ export function createGPU() {
   return gpu;
 }
 
-/** One fixed 320×240 window, on the main thread, using a device from createGPU(). */
-export function createWindow(device: GPUDevice) {
-  return new addon.Window(device);
-}
+export const NativeApplication = addon.Application;

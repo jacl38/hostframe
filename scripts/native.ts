@@ -36,8 +36,8 @@ async function verify(presentation: boolean) {
       [resolve(buildRoot, "cmake/native_presentation_check")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
-      ["node", resolve(root, "packages/native/test/window.ts"), "--shutdown"],
-      ["bun", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
+      ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"],
+      ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
     );
   }
   for(const command of checks) {
