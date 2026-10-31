@@ -3,6 +3,7 @@ import { readdirSync, readlinkSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
 import { Application } from "../../../index.ts";
+import { checkAdapter } from "./adapter.ts";
 
 function processSockets() {
   const sockets = new Set<string>();
@@ -73,6 +74,7 @@ if(!isMainThread) {
     assert.throws(() => app.createWindow(gpu as unknown as GPUDevice), /GPUDevice/);
     const adapter = await gpu.requestAdapter();
     assert.ok(adapter, "No compatible GPU adapter");
+    checkAdapter(adapter);
     const device = await adapter.requestDevice();
     const failures: string[] = [];
     device.addEventListener("uncapturederror", event => failures.push(event.error.message));
@@ -189,6 +191,28 @@ if(!isMainThread) {
       nextApp.dispose();
       nextApp.dispose();
       assert.deepEqual(lostFailures, []);
+      // Retain the process GPU while repeatedly closing/reopening GLFW's X11
+      // connection. Mesa may reuse cached WSI data when its address is recycled.
+      for(let session = 0; session < 4; session++) {
+        const recreated = new Application();
+        let recreatedDevice: GPUDevice | undefined;
+        try {
+          assert.equal(recreated.gpu, gpu);
+          const recreatedAdapter = await recreated.gpu.requestAdapter();
+          assert.ok(recreatedAdapter);
+          checkAdapter(recreatedAdapter);
+          recreatedDevice = await recreatedAdapter.requestDevice();
+          const recreatedWindow = recreated.createWindow(recreatedDevice);
+          recreatedWindow.draw(() => {});
+          await recreatedDevice.queue.onSubmittedWorkDone();
+        } finally {
+          try {
+            recreated.dispose();
+          } finally {
+            recreatedDevice?.destroy();
+          }
+        }
+      }
       console.log(`${process.versions.bun ? "Bun" : "Node.js"}: Application rendering/lifecycle passed.`);
     }
   }

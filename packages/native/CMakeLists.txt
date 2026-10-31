@@ -29,6 +29,7 @@ set_target_properties(dawn_engine PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${TS_DAWN_HEADERS_INCLUDE}"
 )
 find_package(Threads REQUIRED)
+find_package(X11 REQUIRED COMPONENTS Xfixes)
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -70,7 +71,7 @@ target_include_directories(ts_dawn SYSTEM PRIVATE
   "${DAWN_SOURCE}/third_party/node-api-headers/include"
 )
 target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG DAWN_USE_X11 GLFW_INCLUDE_NONE)
-target_link_libraries(ts_dawn PRIVATE dawn_engine glfw Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(ts_dawn PRIVATE dawn_engine glfw X11::Xfixes Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
 set_source_files_properties(src/module.cpp src/application.cpp src/window.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 

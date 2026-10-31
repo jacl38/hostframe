@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { Application, type FixedWindow } from "../../../index.ts";
+import { checkAdapter } from "./adapter.ts";
 
 const app = new Application();
 let device: GPUDevice | undefined;
 try {
   const adapter = await app.gpu.requestAdapter();
   assert.ok(adapter);
+  checkAdapter(adapter);
   device = await adapter.requestDevice();
   const renderingDevice = device;
   const failures: string[] = [];

@@ -67,6 +67,9 @@ Run `bun run example:solid-color` or `node examples/solid-color.ts` with an X11
 display. The same example uses 120 Hz fixed updates and renders a blue 320×240
 window for three seconds of simulated time. Native close requests stop it normally.
 For a headless check, use `xvfb-run -a bun run native:verify --presentation`.
+Xvfb is suitable for software presentation checks; Intel Vulkan presentation
+requires DRI3. See [the Intel validation report](intel-presentation.md) for an
+isolated hardware-accelerated Xwayland environment and reproduction commands.
 To exercise an OS close request manually, run
 `node packages/native/test/loop.ts --external-close` (or use `bun`) on a desktop
 and close the window through its window manager; the fixture must exit normally.
@@ -130,6 +133,13 @@ closed first. The implementation submits an empty command buffer and uses public
 it destroys the stalled device to release the display-dependent resources, and
 explicit disposal throws. This fallback is not exercised by the normal tests.
 
+Each new GLFW session also negotiates XFixes before Vulkan surface use. Mesa
+26.2.5 cached WSI extension information by connection address across application
+disposal while the process GPU remained alive. Reusing that address skipped
+negotiation and caused fatal XFixes `CreateRegion` errors on Intel. Per-session
+negotiation fixes the observed failure without changing Dawn, GLFW, or Mesa;
+the lifecycle fixture repeatedly disposes and recreates applications to cover it.
+
 `app.on("fixedUpdate", ...)`, `app.on("render", ...)`, and `app.run(options)` provide
 an optional scheduler with bounded catch-up and pause/resume/stop controls. See
 [the application loop contract](application-loop.md). The scheduler yields host
@@ -176,11 +186,14 @@ Install these through your preferred system/toolchain manager before setup:
 - Python 3 for Dawn's generator. Jinja2 and MarkupSafe come from Dawn's pinned
   dependencies; no global pip installation is needed.
 - Linux X11 development headers/libraries needed by GLFW, including Xrandr,
-  Xinerama, Xcursor, Xi, and Xshape, plus `pkg-config`.
+  Xinerama, Xcursor, Xi, and Xshape, plus `pkg-config`. ts-dawn also links Xfixes
+  for per-session extension negotiation.
 - A Vulkan loader and usable driver for runtime checks. Mesa software Vulkan can
   be useful on machines without a physical GPU, but driver capabilities vary.
 - An X11 display for presentation. A headless machine can use an existing Xvfb
-  installation, for example `xvfb-run -a bun run native:verify --presentation`.
+  installation for software-driver checks, for example
+  `xvfb-run -a bun run native:verify --presentation`. Hardware presentation needs
+  a suitable display with DRI3; Xvfb does not provide it.
 
 Setup reports missing prerequisites and compiler/configuration failures; it never
 installs system packages. CMake's GLFW configuration diagnoses missing X11 headers.
@@ -342,9 +355,14 @@ With only the Intel ICD selected using
   native presentation executable exited unsuccessfully. Software ICDs were
   excluded, so this did not silently fall back to lavapipe.
 
-These establish hardware compute and offscreen render/readback behavior. Hardware
-window presentation still needs an X11 display with DRI3; physical-monitor pacing,
-VRR, latency, and performance remain unverified.
+Hardware window presentation subsequently passed on an isolated KWin virtual
+output with Xwayland 24.1.12 and DRI3. The full native and JavaScript presentation
+suite passed with the Intel-only ICD and explicit Intel/non-fallback assertions
+in Node.js 26.7.0 and Bun 1.3.14. All four example settings were captured and
+inspected in each runtime, and external close requests exited normally.
+Application recreation uncovered and fixed the XFixes negotiation issue described
+above. The Xvfb/lavapipe suite also passed after the fix. See the
+[environment, evidence, and reproduction commands](intel-presentation.md).
 
 ## Validation limits
 
@@ -352,7 +370,9 @@ The native presentation executable tests the engine/helper directly; the separat
 JavaScript fixture exercises surface texture wrapping and synchronous presentation.
 Neither establishes multi-window scheduling, thread handoff, complete GC/disposal
 correctness, or broader window/context APIs.
-macOS, Windows, Linux arm64, Wayland, distribution packaging, and performance
+macOS, Windows, Linux arm64, native Wayland windows, distribution packaging, and performance
 remain unverified. High-refresh behavior has deterministic timing coverage, but
 real monitor pacing, frame-time percentiles, input latency, and VRR have not been
-measured; Xvfb/lavapipe correctness checks are not performance benchmarks.
+measured; neither Xvfb/lavapipe nor the virtual KWin/Intel checks are performance
+benchmarks. Xwayland verifies the X11 client path through a Wayland compositor,
+not a native Wayland GLFW backend or physical-monitor scanout.

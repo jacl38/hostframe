@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { setTimeout } from "node:timers/promises";
 import { Application, type RenderEvent } from "../../../index.ts";
+import { checkAdapter } from "./adapter.ts";
 
 function render(device: GPUDevice, texture: GPUTexture) {
   const encoder = device.createCommandEncoder();
@@ -30,6 +31,7 @@ try {
 
   const adapter = await app.gpu.requestAdapter();
   assert.ok(adapter);
+  checkAdapter(adapter);
   device = await adapter.requestDevice();
   const renderingDevice = device;
   const failures: string[] = [];

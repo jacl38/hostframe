@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { checkAdapter } from "./adapter.ts";
 
 const require = createRequire(import.meta.url);
 const addon: {
@@ -15,6 +16,7 @@ const gpu = addon.create([]);
 Object.defineProperty(globalThis, "__tsDawnSmokeOwner", { value: gpu });
 const adapter = await gpu.requestAdapter();
 assert.ok(adapter, "No compatible GPU adapter; check Vulkan drivers and permissions.");
+checkAdapter(adapter);
 const device = await adapter.requestDevice();
 const failures: string[] = [];
 device.addEventListener("uncapturederror", event => failures.push(event.error.message));

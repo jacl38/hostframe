@@ -14,6 +14,7 @@ let device: GPUDevice | undefined;
 try {
   const adapter = await app.gpu.requestAdapter();
   if(!adapter) throw new Error("No compatible GPU adapter");
+  console.log(`Adapter: ${adapter.info.vendor}, ${adapter.info.device}; fallback: ${adapter.info.isFallbackAdapter}`);
   device = await adapter.requestDevice();
   const renderingDevice = device;
   const window = app.createWindow(renderingDevice, { vsync });

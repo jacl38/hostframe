@@ -6,6 +6,9 @@
 #include <unistd.h>
 
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_X11
+#include <GLFW/glfw3native.h>
+#include <X11/extensions/Xfixes.h>
 
 #include "window.h"
 
@@ -26,6 +29,13 @@ class GlfwSession {
       glfwTerminate();
       throw std::runtime_error("GLFW initialization failed; check DISPLAY");
     }
+    // Mesa's Vulkan WSI caches extension data by xcb_connection_t address for
+    // the instance lifetime. A new GLFW session can reuse a closed connection's
+    // address while our process GPU is still alive, skipping XFixes negotiation.
+    // Negotiate on every new connection before WSI can create regions on it.
+    int major = 0;
+    int minor = 0;
+    XFixesQueryVersion(glfwGetX11Display(), &major, &minor);
     active_ = true;
   }
   ~GlfwSession() {

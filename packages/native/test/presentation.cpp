@@ -1,6 +1,7 @@
 #include <atomic>
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -107,6 +108,16 @@ void CheckPresentation() {
   ProgressUntil(instance, [&] { return adapterRequest->done; });
   auto adapter = adapterRequest->adapter;
   if(!adapter) throw std::runtime_error("No Vulkan adapter supports this surface.");
+  wgpu::AdapterInfo info;
+  if(adapter.GetInfo(&info) != wgpu::Status::Success) throw std::runtime_error("Adapter information unavailable.");
+  std::cout << "Vulkan adapter: " << std::string_view(info.vendor) << ", "
+            << std::string_view(info.device) << ", " << std::string_view(info.description)
+            << "; fallback: " << (info.adapterType == wgpu::AdapterType::CPU ? "true" : "false") << '\n';
+  if(const char* expected = std::getenv("TS_DAWN_EXPECT_VENDOR")) {
+    if(std::string_view(info.vendor) != expected || info.adapterType == wgpu::AdapterType::CPU) {
+      throw std::runtime_error("Unexpected GPU vendor or software adapter during hardware verification.");
+    }
+  }
 
   struct DeviceRequest {
     wgpu::Device device;
