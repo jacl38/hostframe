@@ -1,6 +1,6 @@
 **ts-dawn is a TypeScript library for building native desktop graphics applications without a browser or WebView.** It aims to provide the same API across Node.js, and Bun.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to fixed-size native presentation. Events, resizing, scheduling, and multiple windows remain planned.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to fixed-size native presentation. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Input events, resizing, and multiple windows remain planned.
 
 | Piece | Responsibility | Location |
 |---|---|---|
@@ -9,7 +9,7 @@ The implementation combines existing native components with a small integration 
 | **GLFW** | Creates native windows and delivers input/window events | Selected dependency pinned by Dawn’s manifest |
 | **Dawn–GLFW helper** | Creates a Dawn presentation surface from a GLFW window | Matching source at `vendor/dawn/`, compiled separately |
 | **ts-dawn native integration** | Owns GLFW sessions and window surfaces; manages presentation and lifecycle | `packages/native/` |
-| **ts-dawn TypeScript layer** | Provides `Application`; typed events and scheduling remain planned | `packages/core/` |
+| **ts-dawn TypeScript layer** | Provides `Application`, fixed updates, render callbacks, and optional scheduling | `packages/core/` |
 
 Dawn supplies GPU functionality. GLFW supplies interactive windows. `ts-dawn` coordinates their ownership and execution.
 
@@ -25,8 +25,9 @@ node examples/solid-color.ts
 
 The [Application](packages/core/application.ts) owns one native GLFW session and
 tracks its windows. One application and one live 320×240 window are supported at a
-time, on the process main thread. The example renders a blue window for 180 frames
-and exits. It requires Linux x64, X11, and a compatible Vulkan driver.
+time, on the process main thread. The example renders a blue window for three
+seconds of simulated time and exits, or stops normally when the window is closed.
+It requires Linux x64, X11, and a compatible Vulkan driver.
 
 ```ts
 import { Application } from "./index.ts";
@@ -40,6 +41,8 @@ try {
   const renderingDevice = device;
   const window = app.createWindow(renderingDevice);
 
+  // A single manual frame; call pollEvents regularly in a caller-owned loop.
+  app.pollEvents();
   window.draw(texture => {
     const encoder = renderingDevice.createCommandEncoder();
     const pass = encoder.beginRenderPass({
@@ -62,12 +65,13 @@ try {
 }
 ```
 
-Each `draw` polls native events, acquires a surface texture, runs the synchronous
-callback, and presents. Encode and submit commands before returning `undefined`.
+Each `draw` acquires a surface texture, runs the synchronous callback, and presents.
+Native events are pumped separately with `app.pollEvents()` or automatically by
+`app.run()`. Encode and submit commands before returning `undefined`.
 Textures and their views expire when the callback finishes. Failed callbacks
 abandon the frame, preserve the thrown value, and permit later draws. Reentrant
 creation/drawing/disposal, asynchronous callback results, disposed objects, and
-lost devices are rejected. Drawing is caller-driven; there is no scheduler.
+lost devices are rejected. Drawing remains synchronous and can be caller-driven.
 
 Windows own their surfaces and presentation resources and retain their JavaScript
 device while alive. Devices remain caller-owned: dispose the window or application
@@ -85,9 +89,38 @@ Window/application cleanup still drains deferred swapchain deletion; a five-seco
 GPU cleanup timeout destroys the stalled device and explicit disposal throws (see
 [the build guide](docs/native-build.md)).
 
-Resize handling, event subscriptions, scheduling, multiple live windows, and
-packaged addons are outside this increment. The former experimental free functions
-have been replaced by `Application`.
+**Optional fixed-update loop**
+
+Register synchronous callbacks, then explicitly start the loop:
+
+```ts
+const unsubscribe = app.on("fixedUpdate", ({ dt, tick }) => {
+  // Advance simulation by dt seconds. At updateHz: 120, dt is always 1 / 120.
+});
+app.on("render", ({ alpha, frameTime, droppedTime }) => {
+  // Interpolate simulation states with alpha, then call window.draw(...).
+});
+await app.run({ updateHz: 120 });
+unsubscribe();
+```
+
+`run()` polls events, advances fixed simulation steps, dispatches render callbacks,
+and yields to Node.js/Bun between iterations. Rendering has no scheduler-imposed
+rate limit unless `maxFPS` is specified. A render cap does not throttle update
+wakeups. Native presentation remains FIFO/vsync and surface acquisition can block;
+this API does not guarantee independent physics execution deadlines.
+
+`app.stop()` ends a run; `app.pause()` pauses callbacks while continuing event
+polling; `app.resume()` discards paused elapsed time and resets interpolation.
+Closing or disposing the last window ends the run normally. Callbacks must return
+`undefined` synchronously; a thrown value rejects the run promise unchanged.
+Stopping does not dispose resources. Use `finally` to dispose the application and
+then caller-owned devices. See [the loop contract](docs/application-loop.md) for
+catch-up limits, interpolation, listener semantics, and custom loops.
+
+Resize handling, input event subscriptions, multiple live windows, and packaged
+addons remain outside this increment. The former experimental free functions have
+been replaced by `Application`.
 
 **Native integration**
 
@@ -131,7 +164,10 @@ packages/
     bridge.ts      # Internal addon transport and process GPU owner
     test/          # Native and JavaScript runtime checks
   core/
-    application.ts # Minimal application API
+    application.ts # Application and listener API
+    loop.ts        # Optional host scheduling
+    timing.ts      # Fixed-step accounting and event types
+    test/          # Deterministic timing and scheduler checks
 
 scripts/
   native.ts       # setup, build, check-build, verify commands

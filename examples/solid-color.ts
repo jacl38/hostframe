@@ -1,4 +1,3 @@
-import { setTimeout } from "node:timers/promises";
 import { Application } from "../index.ts";
 
 const app = new Application();
@@ -9,7 +8,9 @@ try {
   device = await adapter.requestDevice();
   const renderingDevice = device;
   const window = app.createWindow(renderingDevice);
-  for(let frame = 0; frame < 180; frame++) {
+  let ticks = 0;
+  app.on("fixedUpdate", () => { ticks++; });
+  app.on("render", () => {
     window.draw(texture => {
       const encoder = renderingDevice.createCommandEncoder();
       const pass = encoder.beginRenderPass({
@@ -23,8 +24,10 @@ try {
       pass.end();
       renderingDevice.queue.submit([encoder.finish()]);
     });
-    await setTimeout(16);
-  }
+    // Three seconds of simulated time; OS close requests also stop run normally.
+    if(ticks >= 360) app.stop();
+  });
+  await app.run({ updateHz: 120 });
   await device.queue.onSubmittedWorkDone();
 } finally {
   try {

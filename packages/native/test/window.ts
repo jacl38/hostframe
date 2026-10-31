@@ -107,6 +107,7 @@ if(!isMainThread) {
 
           let escaped: GPUTexture | undefined;
           for(let frame = 0; frame < 60; frame++) {
+            assert.equal(app.pollEvents(), true);
             window.draw(texture => {
               assert.equal(texture.width, 320);
               assert.equal(texture.height, 240);

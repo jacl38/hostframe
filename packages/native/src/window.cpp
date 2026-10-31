@@ -73,7 +73,6 @@ class Presentation {
 
   void Draw(Napi::Env env, Napi::Function callback) {
     if(DeviceLost()) throw Napi::Error::New(env, "GPU device is lost or destroyed");
-    glfwPollEvents();
     if(glfwWindowShouldClose(window_.get())) throw Napi::Error::New(env, "Window close requested");
     if(!configured_) {
       surface_.Configure(&configuration_);
@@ -117,6 +116,9 @@ class Presentation {
       throw;
     }
   }
+
+  bool ShouldClose() const { return glfwWindowShouldClose(window_.get()); }
+  void RequestClose() { glfwSetWindowShouldClose(window_.get(), GLFW_TRUE); }
 
  private:
   bool DeviceLost() const {
@@ -165,12 +167,22 @@ void WindowState::Draw(Napi::Env env, Napi::Function callback) {
   presentation_->Draw(env, callback);
 }
 
+bool WindowState::ShouldClose() const {
+  return !presentation_ || presentation_->ShouldClose();
+}
+
+void WindowState::RequestClose() {
+  presentation_->RequestClose();
+}
+
 namespace {
 class Window final : public Napi::ObjectWrap<Window> {
  public:
   static Napi::Function Constructor(Napi::Env env) {
     return DefineClass(env, "Window", {
       InstanceMethod("draw", &Window::Draw),
+      InstanceAccessor("shouldClose", &Window::ShouldClose, nullptr),
+      InstanceMethod("requestClose", &Window::RequestClose),
       InstanceMethod("dispose", &Window::Dispose)
     });
   }
@@ -211,6 +223,33 @@ class Window final : public Napi::ObjectWrap<Window> {
       application->RequireAvailable(info.Env());
       ApplicationOperation operation(*application);
       if(!state_->Close()) throw Napi::Error::New(info.Env(), "GPU cleanup timed out; device was destroyed");
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value ShouldClose(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      auto application = state_->Owner();
+      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
+      application->RequireAvailable(info.Env());
+      return Napi::Boolean::New(info.Env(), state_->ShouldClose());
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value RequestClose(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      auto application = state_->Owner();
+      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
+      application->RequireAvailable(info.Env());
+      ApplicationOperation operation(*application);
+      state_->RequestClose();
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
     }

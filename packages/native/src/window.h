@@ -14,6 +14,8 @@ class WindowState {
   ~WindowState();
   bool Close();
   void Draw(Napi::Env env, Napi::Function callback);
+  bool ShouldClose() const;
+  void RequestClose();
   std::shared_ptr<ApplicationState> Owner() const { return application_.lock(); }
 
  private:

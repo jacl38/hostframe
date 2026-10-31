@@ -56,6 +56,12 @@ void ApplicationState::Unregister(WindowState* window) {
   std::erase_if(windows_, [window](const auto& entry) { return entry.get() == window; });
 }
 
+bool ApplicationState::HasOpenWindows() const {
+  return session_ && std::any_of(windows_.begin(), windows_.end(), [](const auto& window) {
+    return !window->ShouldClose();
+  });
+}
+
 bool ApplicationState::Close() {
   bool drained = true;
   // Detach first: window cleanup may unregister itself, including during teardown.
@@ -72,6 +78,9 @@ class Application final : public Napi::ObjectWrap<Application> {
   static void Initialize(Napi::Env env, Napi::Object exports) {
     exports.Set("Application", DefineClass(env, "Application", {
       InstanceMethod("createWindow", &Application::CreateWindow),
+      InstanceMethod("pollEvents", &Application::PollEvents),
+      InstanceAccessor("hasOpenWindows", &Application::HasOpenWindows, nullptr),
+      InstanceAccessor("disposed", &Application::Disposed, nullptr),
       InstanceMethod("dispose", &Application::Dispose)
     }));
   }
@@ -134,6 +143,40 @@ class Application final : public Napi::ObjectWrap<Application> {
       if(state_->executing) throw Napi::Error::New(info.Env(), "An application operation is already in progress");
       ApplicationOperation operation(*state_);
       if(!state_->Close()) throw Napi::Error::New(info.Env(), "GPU cleanup timed out; device was destroyed");
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value PollEvents(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      state_->RequireAvailable(info.Env());
+      ApplicationOperation operation(*state_);
+      glfwPollEvents();
+      return Napi::Boolean::New(info.Env(), state_->HasOpenWindows());
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value HasOpenWindows(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      if(!state_->IsDisposed()) state_->RequireAvailable(info.Env());
+      return Napi::Boolean::New(info.Env(), state_->HasOpenWindows());
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value Disposed(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      return Napi::Boolean::New(info.Env(), state_->IsDisposed());
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
     }

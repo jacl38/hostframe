@@ -40,11 +40,14 @@ bun run native:verify --presentation
   failure after GLFW initialization. It verifies that a replacement window retains
   the same X11 socket connection (the session survives window disposal),
   application disposal closes a live window, disposed operations fail, and
-  buffer write/readback still
-  works on the caller-owned device afterward. Separate processes also check
+  buffer write/readback still works on the caller-owned device afterward. Separate processes also check
   ordinary shutdown with an application owning a live window and no explicit
-  disposal, including GC with only the application retained.
-- `lint`, `typecheck`, `test`: check project scripts and setup regression tests.
+  disposal, including GC with only the application retained. The scheduler fixture
+  additionally checks synchronous fixed-update/render callbacks, host timer and GPU
+  readback progress during rendering, callback failure recovery, rejected async
+  results, pause/resume, cancellation, close requests, and disposal while running.
+- `lint`, `typecheck`, `test`: check project code, setup regression tests, and
+  deterministic clock/scheduler behavior at low and high render rates.
 
 The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and native
 `Application` exports are internal building blocks. Import the TypeScript
@@ -54,8 +57,12 @@ The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and nat
 ## Application ownership and JavaScript presentation
 
 Run `bun run example:solid-color` or `node examples/solid-color.ts` with an X11
-display. The same example renders a blue 320×240 window for 180 frames and exits.
+display. The same example uses 120 Hz fixed updates and renders a blue 320×240
+window for three seconds of simulated time. Native close requests stop it normally.
 For a headless check, use `xvfb-run -a bun run native:verify --presentation`.
+To exercise an OS close request manually, run
+`node packages/native/test/loop.ts --external-close` (or use `bun`) on a desktop
+and close the window through its window manager; the fixture must exit normally.
 
 `packages/core/application.ts` exposes the minimal `Application` API. The internal
 `packages/native/bridge.ts` handles addon loading, globals, and the process GPU root.
@@ -72,7 +79,13 @@ The former experimental free functions have been removed.
   JavaScript window wrapper is collected. The window owns its surface and
   presentation resources and retains its JavaScript device until disposal;
   callers retain ownership of the device.
-- `window.draw(callback)`: polls window events, acquires a surface texture, calls
+- `app.pollEvents()`: pumps GLFW events independently of drawing; returns true
+  while a window remains open, false when none exists or all have close requests.
+  Main-thread and reentrancy guards apply. `app.run()` pumps events automatically.
+- `window.shouldClose` / `window.requestClose()`: query or set the native close
+  flag. A request does not dispose the window. The scheduler stops normally when
+  the last window has a close request. Both operations throw after disposal.
+- `window.draw(callback)`: acquires a surface texture, calls
   the callback synchronously, then presents. Encode and submit all work before
   returning `undefined`; async callbacks are rejected. A callback failure abandons
   the frame, preserves the thrown value, and permits a later draw. Acquired
@@ -85,7 +98,7 @@ The former experimental free functions have been removed.
   application disposal is safe. Creation on a disposed application and drawing
   on a disposed window throw. Application creation/drawing/disposal during a draw
   is rejected by native guards. A close request makes subsequent drawing throw;
-  there are no close-event subscriptions yet. Dispose windows or the application
+  no close-event listener is required for the scheduler. Dispose windows or the application
   before destroying the device; an already destroyed device is handled safely.
 
 Native application state strongly owns window state; each window refers weakly
@@ -103,9 +116,15 @@ closed first. The implementation submits an empty command buffer and uses public
 it destroys the stalled device to release the display-dependent resources, and
 explicit disposal throws. This fallback is not exercised by the normal tests.
 
+`app.on("fixedUpdate", ...)`, `app.on("render", ...)`, and `app.run(options)` provide
+an optional scheduler with bounded catch-up and pause/resume/stop controls. See
+[the application loop contract](application-loop.md). The scheduler yields host
+turns for GPU promises and I/O. FIFO presentation remains fixed; blocking surface
+acquisition and OS/JavaScript scheduling affect callback execution times.
+
 Broader window/context APIs, resize recovery, input events, multiple live windows,
-scheduling, platform expansion, addon distribution, and complete GC/shutdown
-validation are outside this increment. No additional upstream patches are used.
+selectable presentation modes, platform expansion, addon distribution, and complete
+GC/shutdown validation are outside this increment. No additional upstream patches are used.
 
 ## Script organization
 
@@ -263,7 +282,14 @@ Python 3.14.5, Node.js 26.7.0, and Bun 1.3.14:
 - Missing-display initialization failed cleanly. Corrupt downloads, reuse of
   installed dependencies, refusal to overwrite existing directories, rejected
   partial downloads, and unsupported hosts were covered by script tests.
-- TypeScript lint and type checking passed.
+- TypeScript lint and type checking passed. Deterministic timing tests cover
+  120 Hz updates with 30/60/144/240/360/1000 FPS rendering, interpolation, catch-up
+  limits, capped/uncapped scheduling, paused time, and cancellation.
+- The scheduler fixture passed in Node.js and Bun with WebGPU rendering and
+  readback, including callback-error recovery, subscriptions, pause/resume, close
+  requests, window recreation, and application disposal while running. External
+  X11 close requests and the scheduler-driven example were also exercised in both
+  runtimes; captures are under `build/native/screenshots/scheduler/`.
 - After consolidating the scripts, archive and Git retrieval were exercised with
   paths containing spaces; tests also covered dirty/stale Git checkouts, cleanup
   after a failed Git fetch, and invalid CLI commands/flags.
@@ -274,6 +300,30 @@ headless presentation check we selected the installed lavapipe ICD with
 `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`; that path is
 machine-specific and is not forced by the setup scripts.
 
+### Intel hardware checks, 2026-10-31
+
+Outside the filesystem/device sandbox, Vulkan enumerated the host's Intel
+Alder Lake-N integrated graphics (`8086:46d1`) with Mesa 26.2.5. The sandbox does
+not expose `/dev/dri`, so hardware checks require execution outside it.
+
+With only the Intel ICD selected using
+`VK_DRIVER_FILES=/usr/share/vulkan/icd.d/intel_icd.x86_64.json`:
+
+- The existing compute shader/readback fixture passed in Node.js 26.7.0 and
+  Bun 1.3.14.
+- A temporary offscreen check created an `rgba8unorm` render attachment, cleared
+  it blue in a render pass, copied it to a mapped buffer, and asserted all 16
+  pixels. It passed in both runtimes, with the adapter reporting vendor `intel`.
+  The check is generated at `build/native/hardware-render.ts`.
+- The hardware presentation suite was attempted under Xvfb but could not run:
+  Mesa reported `No DRI3 support detected - required for presentation` and the
+  native presentation executable exited unsuccessfully. Software ICDs were
+  excluded, so this did not silently fall back to lavapipe.
+
+These establish hardware compute and offscreen render/readback behavior. Hardware
+window presentation still needs an X11 display with DRI3; physical-monitor pacing,
+VRR, latency, and performance remain unverified.
+
 ## Validation limits
 
 The native presentation executable tests the engine/helper directly; the separate
@@ -281,4 +331,6 @@ JavaScript fixture exercises surface texture wrapping and synchronous presentati
 Neither establishes multi-window scheduling, thread handoff, complete GC/disposal
 correctness, or broader window/context APIs.
 macOS, Windows, Linux arm64, Wayland, distribution packaging, and performance
-remain unverified.
+remain unverified. High-refresh behavior has deterministic timing coverage, but
+real monitor pacing, frame-time percentiles, input latency, and VRR have not been
+measured; Xvfb/lavapipe correctness checks are not performance benchmarks.

@@ -1,6 +1,9 @@
 import { createRequire } from "node:module";
 
 export type FixedWindow = {
+  /** Close requests do not dispose the window. Throws after disposal. */
+  readonly shouldClose: boolean,
+  requestClose(): void,
   /** Submit before returning; textures/views expire afterward. Async results are rejected. */
   draw(callback: (texture: GPUTexture) => undefined): void,
   /** Unregisters from the application; forbidden inside draw. Idempotent. */
@@ -9,6 +12,9 @@ export type FixedWindow = {
 
 export type NativeApplication = {
   createWindow(device: GPUDevice): FixedWindow,
+  pollEvents(): boolean,
+  readonly hasOpenWindows: boolean,
+  readonly disposed: boolean,
   dispose(): void
 };
 
