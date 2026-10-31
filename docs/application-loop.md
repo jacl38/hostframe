@@ -55,6 +55,40 @@ must be a positive safe integer. Numerically unrepresentable configurations are
 rejected. The render cap is an upper scheduling target; it does not guarantee an
 exact achieved FPS or change vsync.
 
+## Presentation settings
+
+`app.createWindow(device, options?: WindowOptions)` accepts `vsync?: boolean`.
+The default is `true`. Dawn surface capabilities are queried for the device's
+adapter before selecting the mode; `window.presentMode` exposes that selection as
+`"fifo"`, `"immediate"`, or `"mailbox"` (the exported `PresentMode` type). It throws
+after window disposal, like `window.shouldClose`. Settings are fixed for the
+window's lifetime; dispose and recreate the window to change vsync.
+
+| Window option | `run()` option | Behavior |
+|---|---|---|
+| omitted or `vsync: true` | omit `maxFPS` | FIFO presentation; no scheduler render cap |
+| omitted or `vsync: true` | `maxFPS: N` | FIFO presentation plus a scheduler render cap of N FPS |
+| `vsync: false` | omit `maxFPS` | Immediate preferred, then Mailbox; no scheduler render cap |
+| `vsync: false` | `maxFPS: N` | Immediate preferred, then Mailbox, plus a scheduler render cap of N FPS |
+
+FIFO queues frames for display refresh and can throttle acquisition. Immediate
+allows tearing. Mailbox replaces pending frames with newer ones while displaying
+at refresh; this fallback permits rendering without FIFO queue pacing but does
+not disable synchronization of displayed frames. Only advertised modes are used;
+FIFO-relaxed is not used for either policy. `vsync: false` throws during creation
+if neither Immediate nor Mailbox is available. A surface without FIFO also rejects
+`vsync: true`. These failures release the partially created window, so the caller
+can explicitly retry with another setting. Invalid option objects or non-boolean
+`vsync` values throw `TypeError`; no truthiness coercion is performed.
+
+`maxFPS` applies only to `app.run()` render events; it does not throttle manual
+`window.draw()` calls or set the surface mode. Omission means uncapped; `0`,
+negative values, `NaN`, and infinities are rejected. A cap above the display's
+refresh rate does not force FIFO to render that fast. Uncapped rendering still
+yields to the host between iterations and remains limited by GPU and display work.
+
+## Fixed-update accounting
+
 The scheduler uses a monotonic clock and an accumulator. It dispatches whole fixed
 simulation steps and retains the fractional remainder. The render event contains:
 
@@ -130,8 +164,8 @@ while(app.pollEvents()) {
 }
 ```
 
-The current native presentation policy is FIFO/vsync. Omitting `maxFPS` does not
-disable vsync. Surface acquisition/presentation can block the main thread and
+The default native presentation policy is FIFO/vsync. Omitting `maxFPS` does not
+disable vsync. All presentation modes can block the main thread and
 delay simulation callbacks. Fixed timesteps specify simulation integration, not
 hard execution deadlines; independently scheduled physics would need a separate
 execution context. Real high-refresh pacing, VRR, latency, and performance remain

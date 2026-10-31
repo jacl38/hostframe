@@ -26,6 +26,7 @@ export async function withBuildLock(action: () => Promise<void>) {
 
 async function verify(presentation: boolean) {
   const checks = [
+    [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
     ["node", resolve(root, "packages/native/test/compute.ts")],
     ["bun", resolve(root, "packages/native/test/compute.ts")],
     ["node", resolve(root, "packages/native/test/window.ts"), "--no-display"],
@@ -38,6 +39,8 @@ async function verify(presentation: boolean) {
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["node", resolve(root, "packages/native/test/loop.ts")],
       ["bun", resolve(root, "packages/native/test/loop.ts")],
+      ["node", resolve(root, "packages/native/test/presentation.ts")],
+      ["bun", resolve(root, "packages/native/test/presentation.ts")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"],
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
     );

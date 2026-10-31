@@ -1,6 +1,15 @@
 import { createRequire } from "node:module";
 
+export type WindowOptions = {
+  /** Default: true (FIFO). False prefers Immediate, then Mailbox; throws if neither is supported. */
+  vsync?: boolean
+};
+
+export type PresentMode = "fifo" | "immediate" | "mailbox";
+
 export type FixedWindow = {
+  /** Selected from Dawn surface capabilities at creation. Throws after disposal. */
+  readonly presentMode: PresentMode,
   /** Close requests do not dispose the window. Throws after disposal. */
   readonly shouldClose: boolean,
   requestClose(): void,
@@ -11,7 +20,7 @@ export type FixedWindow = {
 };
 
 export type NativeApplication = {
-  createWindow(device: GPUDevice): FixedWindow,
+  createWindow(device: GPUDevice, options?: WindowOptions): FixedWindow,
   pollEvents(): boolean,
   readonly hasOpenWindows: boolean,
   readonly disposed: boolean,

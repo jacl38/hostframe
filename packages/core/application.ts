@@ -1,4 +1,5 @@
 import { getProcessGPU, NativeApplication } from "../native/bridge.ts";
+import type { WindowOptions } from "../native/bridge.ts";
 import { ApplicationLoop } from "./loop.ts";
 import type { FixedUpdateEvent, RenderEvent, RunOptions } from "./timing.ts";
 
@@ -30,8 +31,8 @@ export class Application {
   }
 
   /** One live 320×240 window, retaining a caller-owned device obtained through app.gpu. */
-  createWindow(device: GPUDevice) {
-    return this.#native.createWindow(device);
+  createWindow(device: GPUDevice, options: WindowOptions = {}) {
+    return this.#native.createWindow(device, options);
   }
 
   /** Pumps native events without rendering. Returns whether any window is open. */

@@ -10,12 +10,13 @@ class Presentation;
 
 class WindowState {
  public:
-  WindowState(Napi::Env env, Napi::Value device, const std::shared_ptr<ApplicationState>& application);
+  WindowState(Napi::Env env, Napi::Value device, const std::shared_ptr<ApplicationState>& application, bool vsync);
   ~WindowState();
   bool Close();
   void Draw(Napi::Env env, Napi::Function callback);
   bool ShouldClose() const;
   void RequestClose();
+  const char* PresentMode() const;
   std::shared_ptr<ApplicationState> Owner() const { return application_.lock(); }
 
  private:

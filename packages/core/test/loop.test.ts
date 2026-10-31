@@ -4,6 +4,40 @@ import { expect, test } from "bun:test";
 import { ApplicationLoop } from "../loop.ts";
 import type { FixedUpdateEvent, RenderEvent } from "../timing.ts";
 
+for(const vsync of [true, false]) {
+  for(const maxFPS of [undefined, 20]) {
+    test(`fixed timing with vsync ${vsync} and ${maxFPS ?? "uncapped"} FPS`, async () => {
+      let now = 0;
+      const updates: FixedUpdateEvent[] = [];
+      const renders: number[] = [];
+      const loop = new ApplicationLoop({ updateHz: 125, maxFPS, maxCatchUpUpdates: 2 }, {
+        pollEvents: () => true,
+        fixedUpdate: event => {
+          updates.push(event);
+          if(event.tick === 125) loop.stop();
+        },
+        render: event => {
+          expect(event.droppedTime).toBe(0);
+          renders.push(now);
+          // Simulate a blocking native draw, including FIFO's refresh wait.
+          now += vsync ? 16 : 2;
+        }
+      }, { now: () => now, wait: async milliseconds => { now += milliseconds; } });
+      await loop.run();
+      expect(updates).toEqual(Array.from({ length: 125 }, (_, index) => ({ dt: 1 / 125, tick: index + 1 })));
+      expect(now).toBeGreaterThanOrEqual(1000);
+      expect(now).toBeLessThanOrEqual(1016);
+      expect(renders.length).toBeGreaterThan(1);
+      if(maxFPS !== undefined) {
+        expect(renders.every((time, index) => index === 0 || time - renders[index - 1]! >= 1000 / maxFPS)).toBe(true);
+        expect(renders.length).toBe(20);
+      } else {
+        expect(renders.length).toBeGreaterThan(60);
+      }
+    });
+  }
+}
+
 test("render caps account for work already spent in the frame", async () => {
   let now = 0;
   const waits: number[] = [];

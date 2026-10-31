@@ -1,19 +1,62 @@
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <thread>
 #include <utility>
+#include <string_view>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <webgpu/webgpu_cpp.h>
 #include <webgpu/webgpu_glfw.h>
 
+#include "../src/present_mode.h"
+
 namespace {
 
 std::atomic_bool validationFailed{false};
+
+void CheckPresentModes() {
+  using Mode = wgpu::PresentMode;
+  const std::array all{Mode::Mailbox, Mode::FifoRelaxed, Mode::Fifo, Mode::Immediate};
+  const std::array fifo{Mode::Fifo};
+  const std::array mailbox{Mode::Fifo, Mode::Mailbox};
+  const std::array immediate{Mode::Immediate};
+  const std::array relaxed{Mode::FifoRelaxed};
+  auto require = [](bool condition) {
+    if(!condition) throw std::runtime_error("Present mode selection regression");
+  };
+  require(ts_dawn::SelectPresentMode(all, true) == Mode::Fifo);
+  require(ts_dawn::SelectPresentMode(all, false) == Mode::Immediate);
+  require(ts_dawn::SelectPresentMode(fifo, true) == Mode::Fifo);
+  require(ts_dawn::SelectPresentMode(mailbox, false) == Mode::Mailbox);
+  require(ts_dawn::SelectPresentMode(immediate, false) == Mode::Immediate);
+  for(auto modes : {std::span<const Mode>{}, std::span<const Mode>{relaxed}, std::span<const Mode>{fifo}}) {
+    bool rejected = false;
+    try {
+      ts_dawn::SelectPresentMode(modes, false);
+    } catch(const std::runtime_error& error) {
+      rejected = std::string_view(error.what()).find("vsync: false") != std::string_view::npos;
+    }
+    require(rejected);
+  }
+  for(auto modes : {std::span<const Mode>{}, std::span<const Mode>{relaxed}, std::span<const Mode>{immediate}}) {
+    bool rejected = false;
+    try {
+      ts_dawn::SelectPresentMode(modes, true);
+    } catch(const std::runtime_error& error) {
+      rejected = std::string_view(error.what()).find("vsync: true") != std::string_view::npos;
+    }
+    require(rejected);
+  }
+  require(std::string_view(ts_dawn::PresentModeName(Mode::Fifo)) == "fifo");
+  require(std::string_view(ts_dawn::PresentModeName(Mode::Immediate)) == "immediate");
+  require(std::string_view(ts_dawn::PresentModeName(Mode::Mailbox)) == "mailbox");
+  std::cout << "Present mode capability selection and unsupported requests passed.\n";
+}
 
 class GlfwSession {
  public:
@@ -93,7 +136,7 @@ void CheckPresentation() {
   configuration.format = capabilities.formats[0];
   configuration.width = 320;
   configuration.height = 240;
-  configuration.presentMode = wgpu::PresentMode::Fifo;
+  configuration.presentMode = ts_dawn::SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, true);
   configuration.alphaMode = capabilities.alphaModes[0];
   surface.Configure(&configuration);
 
@@ -138,8 +181,10 @@ void CheckPresentation() {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
   try {
+    CheckPresentModes();
+    if(argc == 2 && std::string_view(argv[1]) == "--modes-only") return 0;
     CheckPresentation();
     return 0;
   } catch(const std::exception& error) {

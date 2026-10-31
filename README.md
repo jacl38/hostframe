@@ -29,6 +29,31 @@ time, on the process main thread. The example renders a blue window for three
 seconds of simulated time and exits, or stops normally when the window is closed.
 It requires Linux x64, X11, and a compatible Vulkan driver.
 
+Presentation and the render cap are separate settings:
+
+```ts
+const window = app.createWindow(device, { vsync: false });
+console.log(window.presentMode); // "immediate" or "mailbox", selected from surface capabilities
+await app.run({ updateHz: 120, maxFPS: 144 }); // Fixed updates still use dt = 1 / 120.
+```
+
+`vsync` defaults to `true`, selecting FIFO. `false` prefers Immediate (tearing
+permitted), then Mailbox (latest completed frame displayed at refresh, older
+pending frames replaced). Creation throws if no mode supporting the requested
+policy is advertised; it never silently falls back to FIFO for `vsync: false`.
+The selected `window.presentMode` is read-only. Omit `maxFPS` for no scheduler
+render cap. Both vsync settings support capped and uncapped rendering; uncapped
+does not guarantee a frame rate or bypass GPU/display limits.
+
+The example supports all four combinations in Bun or Node.js:
+
+```sh
+bun examples/solid-color.ts                              # FIFO, uncapped scheduler
+bun examples/solid-color.ts --max-fps=30                 # FIFO, capped
+bun examples/solid-color.ts --no-vsync                   # Immediate/Mailbox, uncapped
+bun examples/solid-color.ts --no-vsync --max-fps=144      # Immediate/Mailbox, capped
+```
+
 ```ts
 import { Application } from "./index.ts";
 
@@ -107,7 +132,8 @@ unsubscribe();
 `run()` polls events, advances fixed simulation steps, dispatches render callbacks,
 and yields to Node.js/Bun between iterations. Rendering has no scheduler-imposed
 rate limit unless `maxFPS` is specified. A render cap does not throttle update
-wakeups. Native presentation remains FIFO/vsync and surface acquisition can block;
+wakeups. Fixed-update accounting is independent of the presentation policy and
+render cap. Surface acquisition/presentation can still block the main thread;
 this API does not guarantee independent physics execution deadlines.
 
 `app.stop()` ends a run; `app.pause()` pauses callbacks while continuing event

@@ -29,6 +29,9 @@ bun run native:verify --presentation
   exercises invalid GPU flags and ordinary device cleanup. Both runtimes also run
   application initialization failure checks with `DISPLAY` cleared, including safe
   retries and rejection of application construction from a worker thread.
+  It also runs deterministic native present-mode selection checks without a
+  display: FIFO default, Immediate preference, Mailbox fallback, and explicit
+  rejection of unsupported policies (including empty capability lists).
 - `native:verify --presentation`: additionally run a C++ executable that creates
   a GLFW window and acquires, clears, and presents 60 frames through Dawn. This
   checks native window/surface integration separately from the JavaScript binding.
@@ -46,6 +49,10 @@ bun run native:verify --presentation
   additionally checks synchronous fixed-update/render callbacks, host timer and GPU
   readback progress during rendering, callback failure recovery, rejected async
   results, pause/resume, cancellation, close requests, and disposal while running.
+  A separate presentation-settings fixture exercises vsync on/off with capped
+  and uncapped rendering in both runtimes, checks fixed `dt`, option validation,
+  selected modes, and recovery from abandoned frames. Unsupported vsync-off
+  requests must fail explicitly and permit a FIFO retry.
 - `lint`, `typecheck`, `test`: check project code, setup regression tests, and
   deterministic clock/scheduler behavior at low and high render rates.
 
@@ -74,11 +81,18 @@ The former experimental free functions have been removed.
 - `app.gpu`: exposes the single GPU owner rooted on `globalThis` until process
   exit, including runtime teardown. Dawn's WebGPU globals are installed during
   application construction. Use devices obtained through this GPU for windows.
-- `app.createWindow(device)`: creates one fixed 320×240 window. Only one live window
+- `app.createWindow(device, options?: WindowOptions)`: creates one fixed 320×240
+  window. Only one live window
   is supported. The application tracks and owns native window state even if the
   JavaScript window wrapper is collected. The window owns its surface and
   presentation resources and retains its JavaScript device until disposal;
   callers retain ownership of the device.
+- `window.presentMode`: the selected `"fifo"`, `"immediate"`, or `"mailbox"` mode.
+  Vsync defaults to `true` (FIFO); `false` prefers advertised Immediate, then
+  Mailbox, and throws if neither is supported. FIFO requests also require
+  advertised support. Mode selection uses Dawn's surface capabilities, and the
+  C++ capabilities object releases its returned arrays through RAII. Mode choice
+  survives abandoned-frame reconfiguration and is fixed until window disposal.
 - `app.pollEvents()`: pumps GLFW events independently of drawing; returns true
   while a window remains open, false when none exists or all have close requests.
   Main-thread and reentrancy guards apply. `app.run()` pumps events automatically.
@@ -119,11 +133,11 @@ explicit disposal throws. This fallback is not exercised by the normal tests.
 `app.on("fixedUpdate", ...)`, `app.on("render", ...)`, and `app.run(options)` provide
 an optional scheduler with bounded catch-up and pause/resume/stop controls. See
 [the application loop contract](application-loop.md). The scheduler yields host
-turns for GPU promises and I/O. FIFO presentation remains fixed; blocking surface
+turns for GPU promises and I/O. The render cap is independent of vsync; blocking surface
 acquisition and OS/JavaScript scheduling affect callback execution times.
 
 Broader window/context APIs, resize recovery, input events, multiple live windows,
-selectable presentation modes, platform expansion, addon distribution, and complete
+platform expansion, addon distribution, and complete
 GC/shutdown validation are outside this increment. No additional upstream patches are used.
 
 ## Script organization
@@ -293,6 +307,14 @@ Python 3.14.5, Node.js 26.7.0, and Bun 1.3.14:
 - After consolidating the scripts, archive and Git retrieval were exercised with
   paths containing spaces; tests also covered dirty/stale Git checkouts, cleanup
   after a failed Git fetch, and invalid CLI commands/flags.
+- Configurable presentation passed the full native suite on Xvfb/lavapipe in
+  Node.js and Bun. Both runtimes rendered with FIFO and Immediate, each capped
+  and uncapped, while fixed updates retained `dt = 1 / 120`. Deterministic native
+  tests cover Mailbox fallback and unsupported requests; those cases were not
+  exercised against a physical surface restricted to those capabilities.
+  The solid-color example also exited normally for all four settings in both
+  runtimes; captured windows were inspected under
+  `build/native/screenshots/presentation-settings/`.
 
 This machine has several Vulkan ICDs installed. Default driver enumeration logs
 failures for unavailable hardware drivers while compute still succeeds. For the

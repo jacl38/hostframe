@@ -122,7 +122,19 @@ class Application final : public Napi::ObjectWrap<Application> {
       state_->RequireAvailable(info.Env());
       if(state_->HasWindow()) throw Napi::Error::New(info.Env(), "Only one native window is supported in this increment");
       ApplicationOperation operation(*state_);
-      auto window = std::make_shared<WindowState>(info.Env(), info[0], state_);
+      bool vsync = true;
+      if(!info[1].IsUndefined()) {
+        if(!info[1].IsObject() || info[1].IsNull() || info[1].IsArray() || info[1].IsFunction()) {
+          throw Napi::TypeError::New(info.Env(), "Expected window options object");
+        }
+        auto value = info[1].As<Napi::Object>().Get("vsync");
+        if(info.Env().IsExceptionPending()) return info.Env().Undefined();
+        if(!value.IsUndefined()) {
+          if(!value.IsBoolean()) throw Napi::TypeError::New(info.Env(), "vsync must be a boolean");
+          vsync = value.As<Napi::Boolean>().Value();
+        }
+      }
+      auto window = std::make_shared<WindowState>(info.Env(), info[0], state_, vsync);
       // The external is private to this synchronous constructor call and is copied
       // by the wrapper. Neither a raw window nor its constructor is exported.
       auto result = windowConstructor_.New({Napi::External<std::shared_ptr<WindowState>>::New(info.Env(), &window)});

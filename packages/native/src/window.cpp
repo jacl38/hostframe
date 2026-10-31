@@ -11,6 +11,7 @@
 #include "src/dawn/node/binding/GPUDevice.h"
 #include "src/dawn/node/binding/GPUTexture.h"
 #include "application.h"
+#include "present_mode.h"
 
 namespace ts_dawn {
 
@@ -18,7 +19,7 @@ namespace ts_dawn {
 // The application's GLFW session outlives all presentation resources.
 class Presentation {
  public:
-  explicit Presentation(wgpu::Device device) : device_(std::move(device)) {
+  Presentation(wgpu::Device device, bool vsync) : device_(std::move(device)) {
     instance_ = device_.GetAdapter().GetInstance();
     if(DeviceLost()) throw std::runtime_error("GPU device is lost or destroyed");
     glfwDefaultWindowHints();
@@ -36,7 +37,7 @@ class Presentation {
     configuration_.device = device_;
     configuration_.format = capabilities.formats[0];
     configuration_.alphaMode = capabilities.alphaModes[0];
-    configuration_.presentMode = wgpu::PresentMode::Fifo;
+    configuration_.presentMode = SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, vsync);
     int width = 0;
     int height = 0;
     glfwGetFramebufferSize(window_.get(), &width, &height);
@@ -119,6 +120,7 @@ class Presentation {
 
   bool ShouldClose() const { return glfwWindowShouldClose(window_.get()); }
   void RequestClose() { glfwSetWindowShouldClose(window_.get(), GLFW_TRUE); }
+  const char* PresentMode() const { return PresentModeName(configuration_.presentMode); }
 
  private:
   bool DeviceLost() const {
@@ -139,7 +141,7 @@ class Presentation {
 };
 
 WindowState::WindowState(Napi::Env env, Napi::Value value,
-                         const std::shared_ptr<ApplicationState>& application) : application_(application) {
+                         const std::shared_ptr<ApplicationState>& application, bool vsync) : application_(application) {
   void* wrapped = nullptr;
   if(!value.IsObject() || napi_unwrap(env, value, &wrapped) != napi_ok || !wrapped) {
     throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
@@ -148,7 +150,7 @@ WindowState::WindowState(Napi::Env env, Napi::Value value,
   auto* binding = dynamic_cast<wgpu::binding::GPUDevice*>(device);
   if(!binding) throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
   device_ = Napi::Persistent(value.As<Napi::Object>());
-  presentation_ = std::make_unique<Presentation>(binding->GetNativeDevice());
+  presentation_ = std::make_unique<Presentation>(binding->GetNativeDevice(), vsync);
 }
 
 WindowState::~WindowState() { Close(); }
@@ -175,6 +177,10 @@ void WindowState::RequestClose() {
   presentation_->RequestClose();
 }
 
+const char* WindowState::PresentMode() const {
+  return presentation_->PresentMode();
+}
+
 namespace {
 class Window final : public Napi::ObjectWrap<Window> {
  public:
@@ -182,6 +188,7 @@ class Window final : public Napi::ObjectWrap<Window> {
     return DefineClass(env, "Window", {
       InstanceMethod("draw", &Window::Draw),
       InstanceAccessor("shouldClose", &Window::ShouldClose, nullptr),
+      InstanceAccessor("presentMode", &Window::PresentMode, nullptr),
       InstanceMethod("requestClose", &Window::RequestClose),
       InstanceMethod("dispose", &Window::Dispose)
     });
@@ -250,6 +257,19 @@ class Window final : public Napi::ObjectWrap<Window> {
       application->RequireAvailable(info.Env());
       ApplicationOperation operation(*application);
       state_->RequestClose();
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value PresentMode(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      auto application = state_->Owner();
+      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
+      application->RequireAvailable(info.Env());
+      return Napi::String::New(info.Env(), state_->PresentMode());
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
     }
