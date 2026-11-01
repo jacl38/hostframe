@@ -1,6 +1,6 @@
 import { Application } from "../index.ts";
 
-// --no-vsync requests Immediate/Mailbox; --max-fps=30 caps rendering only.
+// Drag the window edges to resize. --no-vsync requests Immediate/Mailbox; --max-fps=30 caps rendering only.
 const args = process.argv.slice(2);
 if(args.some(arg => arg !== "--no-vsync" && !arg.startsWith("--max-fps="))) {
   throw new Error("Usage: solid-color.ts [--no-vsync] [--max-fps=<positive number>]");
@@ -17,12 +17,20 @@ try {
   console.log(`Adapter: ${adapter.info.vendor}, ${adapter.info.device}; fallback: ${adapter.info.isFallbackAdapter}`);
   device = await adapter.requestDevice();
   const renderingDevice = device;
-  const window = app.createWindow(renderingDevice, { vsync });
+  const window = app.createWindow(renderingDevice, {
+    title: "ts-dawn solid color",
+    width: 640,
+    height: 480,
+    resizable: true,
+    vsync
+  });
   console.log(`Present mode: ${window.presentMode}; render cap: ${maxFPS ?? "uncapped"}`);
   let ticks = 0;
   app.on("fixedUpdate", () => { ticks++; });
   app.on("render", () => {
     window.draw(texture => {
+      // texture.width/height are current framebuffer pixels, including high-DPI scaling.
+      // Size dependent attachments should follow these dimensions inside this callback.
       const encoder = renderingDevice.createCommandEncoder();
       const pass = encoder.beginRenderPass({
         colorAttachments: [{

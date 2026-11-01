@@ -12,7 +12,7 @@ type Listeners = {
   [Event in keyof ApplicationEvents]: Set<{ callback: (event: ApplicationEvents[Event]) => undefined }>
 };
 
-/** Owns one GLFW session and its fixed-size window. Construct on the process main thread. */
+/** Owns one GLFW session and its window. Construct on the process main thread. */
 export class Application {
   /** Rooted until process exit: upstream child GPU objects do not retain their owner. */
   readonly gpu: GPU;
@@ -30,7 +30,7 @@ export class Application {
     }
   }
 
-  /** One live 320×240 window, retaining a caller-owned device obtained through app.gpu. */
+  /** One live window (default: fixed 320×240), retaining a caller-owned device obtained through app.gpu. */
   createWindow(device: GPUDevice, options: WindowOptions = {}) {
     return this.#native.createWindow(device, options);
   }

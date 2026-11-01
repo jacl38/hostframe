@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "src/dawn/node/interop/NodeAPI.h"
+#include "window_options.h"
 
 namespace ts_dawn {
 class ApplicationState;
@@ -10,7 +11,7 @@ class Presentation;
 
 class WindowState {
  public:
-  WindowState(Napi::Env env, Napi::Value device, const std::shared_ptr<ApplicationState>& application, bool vsync);
+  WindowState(Napi::Env env, Napi::Value device, const std::shared_ptr<ApplicationState>& application, const WindowOptions& options);
   ~WindowState();
   bool Close();
   void Draw(Napi::Env env, Napi::Function callback);

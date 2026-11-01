@@ -4,6 +4,7 @@ import { setTimeout } from "node:timers/promises";
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
 import { Application } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
+import { assertDeviceAlive } from "./device.ts";
 
 function processSockets() {
   const sockets = new Set<string>();
@@ -16,18 +17,6 @@ function processSockets() {
     }
   }
   return sockets;
-}
-
-async function assertDeviceAlive(device: GPUDevice) {
-  const buffer = device.createBuffer({ size: 4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-  try {
-    device.queue.writeBuffer(buffer, 0, new Uint32Array([42]));
-    await buffer.mapAsync(GPUMapMode.READ);
-    assert.equal(new Uint32Array(buffer.getMappedRange())[0], 42);
-    buffer.unmap();
-  } finally {
-    buffer.destroy();
-  }
 }
 
 if(!isMainThread) {

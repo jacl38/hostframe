@@ -8,6 +8,7 @@
 #include <thread>
 #include <utility>
 #include <string_view>
+#include <vector>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -15,6 +16,7 @@
 #include <webgpu/webgpu_glfw.h>
 
 #include "../src/present_mode.h"
+#include "../src/surface_acquisition.h"
 
 namespace {
 
@@ -57,6 +59,69 @@ void CheckPresentModes() {
   require(std::string_view(ts_dawn::PresentModeName(Mode::Immediate)) == "immediate");
   require(std::string_view(ts_dawn::PresentModeName(Mode::Mailbox)) == "mailbox");
   std::cout << "Present mode capability selection and unsupported requests passed.\n";
+}
+
+void CheckSurfaceAcquisition() {
+  using Status = wgpu::SurfaceGetCurrentTextureStatus;
+  auto require = [](bool condition) {
+    if(!condition) throw std::runtime_error("Surface acquisition recovery regression");
+  };
+  struct Texture {
+    int* live = nullptr;
+    explicit operator bool() const { return live != nullptr; }
+    void Destroy() { --*live; }
+    void operator=(std::nullptr_t) { live = nullptr; }
+  };
+  struct Frame {
+    Status status = Status::Error;
+    Texture texture;
+  };
+  auto check = [&](std::vector<Status> statuses, bool expectedFrame, bool expectedError,
+                   int expectedResets, int expectedRecreations, bool missingTexture = false,
+                   int preparations = 2) {
+    int acquired = 0;
+    int prepared = 0;
+    int live = 0;
+    int resets = 0;
+    int recreations = 0;
+    bool failed = false;
+    Frame result;
+    try {
+      result = ts_dawn::AcquireSurfaceTexture(
+          [&] { return prepared++ < preparations; },
+          [&] {
+            require(acquired < static_cast<int>(statuses.size()));
+            auto status = statuses[acquired++];
+            if(!missingTexture) ++live;
+            return Frame{status, Texture{missingTexture ? nullptr : &live}};
+          },
+          [&](bool recreate) {
+            require(live == 0);  // Never reconfigure while an unusable frame is alive.
+            ++resets;
+            if(recreate) ++recreations;
+          });
+    } catch(const std::runtime_error&) {
+      failed = true;
+    }
+    require(failed == expectedError);
+    require(static_cast<bool>(result.texture) == expectedFrame);
+    require(acquired == static_cast<int>(statuses.size()));
+    require(resets == expectedResets && recreations == expectedRecreations);
+    if(result.texture) result.texture.Destroy();
+    require(live == 0);
+  };
+  check({Status::SuccessOptimal}, true, false, 0, 0);
+  check({Status::SuccessSuboptimal}, true, false, 0, 0);
+  check({Status::Outdated, Status::SuccessOptimal}, true, false, 1, 0);
+  check({Status::Lost, Status::SuccessOptimal}, true, false, 1, 1);
+  check({Status::Outdated, Status::Outdated}, false, false, 2, 0);
+  check({Status::Lost, Status::Lost}, false, false, 2, 2);
+  check({Status::Timeout}, false, false, 1, 0);
+  check({Status::Error}, false, true, 1, 0);
+  check({Status::SuccessOptimal}, false, true, 1, 0, true);
+  check({}, false, false, 0, 0, false, 0);  // Minimized/zero-size framebuffer.
+  check({Status::Outdated}, false, false, 1, 0, false, 1);  // Minimized during recovery.
+  std::cout << "Surface acquisition: bounded outdated/lost recovery, suboptimal, timeout, empty frames, and release ordering passed.\n";
 }
 
 class GlfwSession {
@@ -195,6 +260,7 @@ void CheckPresentation() {
 int main(int argc, char** argv) {
   try {
     CheckPresentModes();
+    CheckSurfaceAcquisition();
     if(argc == 2 && std::string_view(argv[1]) == "--modes-only") return 0;
     CheckPresentation();
     return 0;

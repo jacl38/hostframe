@@ -13,6 +13,8 @@ bun run setup
 bun run native:verify
 # With an X11 display available:
 bun run native:verify --presentation
+# With an X11 window manager, xdotool, and xprop available:
+bun run native:verify --window-interactions
 ```
 
 - `setup`: check prerequisites, download and verify pinned inputs, generate
@@ -31,7 +33,10 @@ bun run native:verify --presentation
   retries and rejection of application construction from a worker thread.
   It also runs deterministic native present-mode selection checks without a
   display: FIFO default, Immediate preference, Mailbox fallback, and explicit
-  rejection of unsupported policies (including empty capability lists).
+  rejection of unsupported policies (including empty capability lists). Deterministic
+  acquisition checks cover optimal/suboptimal frames, bounded outdated/lost retries,
+  timeouts, fatal errors, missing textures, non-drawable suspension, and
+  release of unusable textures before reconfiguration.
 - `native:verify --presentation`: additionally run a C++ executable that creates
   a GLFW window and acquires, clears, and presents 60 frames through Dawn. This
   checks native window/surface integration separately from the JavaScript binding.
@@ -53,6 +58,17 @@ bun run native:verify --presentation
   and uncapped rendering in both runtimes, checks fixed `dt`, option validation,
   selected modes, and recovery from abandoned frames. Unsupported vsync-off
   requests must fail explicitly and permit a FIFO retry.
+- `native:verify --window-interactions`: includes `--presentation` and additionally
+  runs `packages/native/test/resize.ts` in Node.js and Bun. Requires an EWMH X11
+  window manager (such as KWin), `xdotool`, and `xprop`. It checks default and
+  custom titles/sizes/resizability, repeated large/small framebuffer transitions,
+  minimizing/restoring without callbacks while minimized, abandoned-frame recovery,
+  retained texture/view expiration, native reentrancy guards, minimized window and
+  application disposal, caller device survival through write/readback, and destroyed
+  device rejection while minimized. Set `TS_DAWN_CAPTURE_DIRECTORY` to an output
+  directory to capture initial/resized/restored windows; this also requires
+  ImageMagick's `import`. These interaction checks require a window manager;
+  plain `xvfb-run` alone cannot provide minimize/restore semantics.
 - `lint`, `typecheck`, `test`: check project code, setup regression tests, and
   deterministic clock/scheduler behavior at low and high render rates.
 
@@ -64,7 +80,7 @@ The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and nat
 ## Application ownership and JavaScript presentation
 
 Run `bun run example:solid-color` or `node examples/solid-color.ts` with an X11
-display. The same example uses 120 Hz fixed updates and renders a blue 320×240
+display. The same example uses 120 Hz fixed updates and renders a resizable blue 640×480
 window for three seconds of simulated time. Native close requests stop it normally.
 For a headless check, use `xvfb-run -a bun run native:verify --presentation`.
 Xvfb is suitable for software presentation checks; Intel Vulkan presentation
@@ -84,8 +100,12 @@ The former experimental free functions have been removed.
 - `app.gpu`: exposes the single GPU owner rooted on `globalThis` until process
   exit, including runtime teardown. Dawn's WebGPU globals are installed during
   application construction. Use devices obtained through this GPU for windows.
-- `app.createWindow(device, options?: WindowOptions)`: creates one fixed 320×240
-  window. Only one live window
+- `app.createWindow(device, options?: WindowOptions)`: creates one window. Options
+  `title`, `width`, `height`, `resizable`, and `vsync` default to
+  `"ts-dawn solid color"`, `320`, `240`, `false`, and `true`. Dimensions must be
+  positive signed 32-bit integers in GLFW screen coordinates; title must be a string
+  without embedded null characters, and flags must be booleans. Omitted/undefined
+  fields use defaults. Only one live window
   is supported. The application tracks and owns native window state even if the
   JavaScript window wrapper is collected. The window owns its surface and
   presentation resources and retains its JavaScript device until disposal;
@@ -95,7 +115,8 @@ The former experimental free functions have been removed.
   Mailbox, and throws if neither is supported. FIFO requests also require
   advertised support. Mode selection uses Dawn's surface capabilities, and the
   C++ capabilities object releases its returned arrays through RAII. Mode choice
-  survives abandoned-frame reconfiguration and is fixed until window disposal.
+  survives resizing, restoration, surface recovery, and abandoned-frame reconfiguration
+  and is fixed until window disposal.
 - `app.pollEvents()`: pumps GLFW events independently of drawing; returns true
   while a window remains open, false when none exists or all have close requests.
   Main-thread and reentrancy guards apply. `app.run()` pumps events automatically.
@@ -107,6 +128,18 @@ The former experimental free functions have been removed.
   returning `undefined`; async callbacks are rejected. A callback failure abandons
   the frame, preserves the thrown value, and permits a later draw. Acquired
   textures and their views cannot be used for GPU work after the callback ends.
+  Before acquiring, drawing queries framebuffer pixels (independent of initial
+  screen-coordinate dimensions), and reconfigures only between frames. Use
+  `texture.width`/`texture.height` inside the callback to update size-dependent
+  attachments and rendering. Iconified or zero-size windows skip the callback and
+  return `undefined`; event polling and fixed updates continue. Restoration lazily
+  reconfigures at the new framebuffer size. A framebuffer exceeding the device's
+  `maxTextureDimension2D` throws before configuring and can recover after shrinking.
+  Outdated surfaces reconfigure and retry once; lost surfaces recreate their Dawn
+  surface for the same GLFW window before that retry. Repeated unavailability or
+  acquisition timeout skips the draw. Suboptimal textures render normally and
+  schedule reconfiguration for the next draw, after frame expiration. Device loss
+  and native lifecycle guards are checked even while minimized.
 - `window.dispose()`: releases presentation resources and the native window,
   releases the retained device reference, and unregisters from the application.
   The GLFW session stays initialized so a replacement window can be created.
@@ -146,7 +179,7 @@ an optional scheduler with bounded catch-up and pause/resume/stop controls. See
 turns for GPU promises and I/O. The render cap is independent of vsync; blocking surface
 acquisition and OS/JavaScript scheduling affect callback execution times.
 
-Broader window/context APIs, resize recovery, input events, multiple live windows,
+Broader window/context APIs, input events, multiple live windows,
 platform expansion, addon distribution, and complete
 GC/shutdown validation are outside this increment. No additional upstream patches are used.
 
@@ -328,6 +361,52 @@ Python 3.14.5, Node.js 26.7.0, and Bun 1.3.14:
   The solid-color example also exited normally for all four settings in both
   runtimes; captured windows were inspected under
   `build/native/screenshots/presentation-settings/`.
+
+### Resize interaction checks, 2026-10-31
+
+On the same Linux x64 / Node.js 26.7.0 / Bun 1.3.14 environment, Xvfb with KWin
+and Mesa lavapipe passed the full presentation suite and the actual X11 resize
+fixture in both runtimes, with both FIFO and Immediate presentation. The fixture resized 480×300 → 800×450 → 360×520,
+minimized/restored, then cycled through 640×360, 240×180, 900×600, and 480×300.
+Callbacks stopped while iconified and resumed with matching framebuffer texture
+sizes. Captures at initial, resized, and restored sizes were inspected under
+`build/native/resize-validation/screenshots/`. The resizable example also ran and
+was captured at 640×480 and resized to 760×420 in both runtimes.
+
+Run `bun run native:verify --window-interactions` within an existing X11 desktop,
+or start an isolated Xvfb session and a window manager before running it. For example,
+with the prerequisite tools installed:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x960x24' dbus-run-session -- sh -eu -c '
+  export QT_QPA_PLATFORM=xcb
+  validation_dir=$(mktemp -d)
+  export XDG_CONFIG_HOME="$validation_dir/config"
+  export XDG_RUNTIME_DIR="$validation_dir/runtime"
+  mkdir -p "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
+  chmod 700 "$XDG_RUNTIME_DIR"
+  kwin_x11 --replace > /tmp/ts-dawn-kwin.log 2>&1 &
+  manager_pid=$!
+  trap "kill $manager_pid 2>/dev/null || true" EXIT
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    xprop -root _NET_SUPPORTING_WM_CHECK | grep -q "window id # 0x[1-9a-f]" && break
+    sleep 0.2
+  done
+  bun run native:verify --window-interactions
+'
+```
+
+Select a suitable Vulkan ICD for that environment; the local software run used
+`VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`. X11 requires local
+sockets, which may need execution outside a restrictive sandbox. Use isolated
+KWin configuration/runtime directories when another desktop is active.
+
+Outdated/lost/timeout recovery has deterministic native coverage; real compositor
+interactions do not force each driver status. This run verifies the X11 pixel-size
+path at scale 1. A display with differing logical/framebuffer dimensions, physical
+DPI transitions, zero-size framebuffer events, and hardware-GPU resizing have not
+been exercised. Non-drawable acquisition suspension and recovery sequencing are
+covered deterministically. The existing Intel report predates resize support.
 
 This machine has several Vulkan ICDs installed. Default driver enumeration logs
 failures for unavailable hardware drivers while compute still succeeds. For the

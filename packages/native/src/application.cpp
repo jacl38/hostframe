@@ -1,6 +1,8 @@
 #include "application.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -132,19 +134,38 @@ class Application final : public Napi::ObjectWrap<Application> {
       state_->RequireAvailable(info.Env());
       if(state_->HasWindow()) throw Napi::Error::New(info.Env(), "Only one native window is supported in this increment");
       ApplicationOperation operation(*state_);
-      bool vsync = true;
+      WindowOptions options;
       if(!info[1].IsUndefined()) {
         if(!info[1].IsObject() || info[1].IsNull() || info[1].IsArray() || info[1].IsFunction()) {
           throw Napi::TypeError::New(info.Env(), "Expected window options object");
         }
-        auto value = info[1].As<Napi::Object>().Get("vsync");
-        if(info.Env().IsExceptionPending()) return info.Env().Undefined();
-        if(!value.IsUndefined()) {
-          if(!value.IsBoolean()) throw Napi::TypeError::New(info.Env(), "vsync must be a boolean");
-          vsync = value.As<Napi::Boolean>().Value();
+        auto object = info[1].As<Napi::Object>();
+        for(const auto name : {"title", "width", "height", "resizable", "vsync"}) {
+          auto value = object.Get(name);
+          if(info.Env().IsExceptionPending()) return info.Env().Undefined();
+          if(value.IsUndefined()) continue;
+          const std::string key(name);
+          if(key == "title") {
+            if(!value.IsString()) throw Napi::TypeError::New(info.Env(), "title must be a string");
+            options.title = value.As<Napi::String>().Utf8Value();
+            if(options.title.find('\0') != std::string::npos) {
+              throw Napi::TypeError::New(info.Env(), "title must not contain null characters");
+            }
+          } else if(key == "width" || key == "height") {
+            if(!value.IsNumber()) throw Napi::TypeError::New(info.Env(), key + " must be a positive integer");
+            const double number = value.As<Napi::Number>().DoubleValue();
+            if(!std::isfinite(number) || number < 1 || std::floor(number) != number ||
+               number > std::numeric_limits<int>::max()) {
+              throw Napi::RangeError::New(info.Env(), key + " must be a positive 32-bit signed integer");
+            }
+            (key == "width" ? options.width : options.height) = static_cast<int>(number);
+          } else {
+            if(!value.IsBoolean()) throw Napi::TypeError::New(info.Env(), key + " must be a boolean");
+            (key == "vsync" ? options.vsync : options.resizable) = value.As<Napi::Boolean>().Value();
+          }
         }
       }
-      auto window = std::make_shared<WindowState>(info.Env(), info[0], state_, vsync);
+      auto window = std::make_shared<WindowState>(info.Env(), info[0], state_, options);
       // The external is private to this synchronous constructor call and is copied
       // by the wrapper. Neither a raw window nor its constructor is exported.
       auto result = windowConstructor_.New({Napi::External<std::shared_ptr<WindowState>>::New(info.Env(), &window)});

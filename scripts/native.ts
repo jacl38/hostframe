@@ -24,7 +24,7 @@ export async function withBuildLock(action: () => Promise<void>) {
   }
 }
 
-async function verify(presentation: boolean) {
+async function verify(presentation: boolean, interactions: boolean) {
   const checks = [
     [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
     ["node", resolve(root, "packages/native/test/compute.ts")],
@@ -45,6 +45,12 @@ async function verify(presentation: boolean) {
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
     );
   }
+  if(interactions) {
+    checks.push(
+      ["node", resolve(root, "packages/native/test/resize.ts")],
+      ["bun", resolve(root, "packages/native/test/resize.ts")]
+    );
+  }
   for(const command of checks) {
     // Verification needs bounded process lifetimes and signal diagnostics.
     const env = command.includes("--no-display") ? { ...process.env, DISPLAY: "" } : process.env;
@@ -56,15 +62,15 @@ async function verify(presentation: boolean) {
 
 async function main() {
   const [command, ...flags] = process.argv.slice(2);
-  const usage = "Usage: bun scripts/native.ts <setup|build|check-build|verify> [--presentation]";
+  const usage = "Usage: bun scripts/native.ts <setup|build|check-build|verify> [--presentation] [--window-interactions]";
   if(command === "--help") {
     console.log(usage);
     return;
   }
-  if(!command || !["setup", "build", "check-build", "verify"].includes(command) || flags.some(flag => command !== "verify" || flag !== "--presentation")) {
+  if(!command || !["setup", "build", "check-build", "verify"].includes(command) || flags.some(flag => command !== "verify" || !["--presentation", "--window-interactions"].includes(flag))) {
     throw new Error(usage);
   }
-  if(command === "verify") return verify(flags.includes("--presentation"));
+  if(command === "verify") return verify(flags.includes("--presentation") || flags.includes("--window-interactions"), flags.includes("--window-interactions"));
   if(command === "check-build") return checkBuild();
   checkPrerequisites(command === "setup");
   await withBuildLock(async () => {

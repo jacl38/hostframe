@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { Application, type FixedWindow } from "../../../index.ts";
+import { Application, type Window } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 
 const app = new Application();
@@ -18,11 +18,30 @@ try {
     assert.throws(() => Reflect.apply(app.createWindow, app, [device, options]), TypeError);
     assert.equal(app.pollEvents(), false);
   }
+  for(const key of ["width", "height"]) {
+    for(const value of [null, "320", true, 0, -1, 1.5, NaN, Infinity, 2 ** 31]) {
+      assert.throws(() => Reflect.apply(app.createWindow, app, [device, { [key]: value }]), /positive/);
+      assert.equal(app.pollEvents(), false);
+    }
+  }
+  for(const options of [{ title: null }, { title: 42 }, { title: "bad\0title" }, { resizable: 1 }, { resizable: null }]) {
+    assert.throws(() => Reflect.apply(app.createWindow, app, [device, options]), TypeError);
+    assert.equal(app.pollEvents(), false);
+  }
   const sentinel = Symbol("options getter failed");
-  assert.throws(() => app.createWindow(renderingDevice, { get vsync(): boolean { throw sentinel; } }), error => error === sentinel);
-  assert.equal(app.pollEvents(), false);
+  for(const key of ["title", "width", "height", "resizable", "vsync"]) {
+    const options = Object.defineProperty({}, key, { get() { throw sentinel; } });
+    assert.throws(() => app.createWindow(renderingDevice, options), error => error === sentinel);
+    assert.equal(app.pollEvents(), false);
+  }
+  const reentrantOptions = { get title() {
+    assert.throws(() => app.dispose(), /in progress/);
+    assert.throws(() => app.createWindow(renderingDevice), /in progress/);
+    return "Options getter";
+  } };
+  app.createWindow(device, reentrantOptions).dispose();
 
-  for(const options of [undefined, {}, { vsync: undefined }]) {
+  for(const options of [undefined, {}, { title: undefined, width: undefined, height: undefined, resizable: undefined, vsync: undefined }]) {
     const window = app.createWindow(device, options);
     assert.equal(window.presentMode, "fifo");
     assert.equal(Reflect.set(window, "presentMode", "mailbox"), false);
@@ -30,9 +49,22 @@ try {
     assert.throws(() => window.presentMode, /disposed/);
   }
 
+  for(const resizable of [false, true]) {
+    const window = app.createWindow(device, { title: "Custom title — ts-dawn", width: 480, height: 270, resizable });
+    app.pollEvents();
+    let rendered = false;
+    window.draw(texture => {
+      rendered = true;
+      assert.equal(texture.width, 480);
+      assert.equal(texture.height, 270);
+    });
+    assert.ok(rendered);
+    window.dispose();
+  }
+
   for(const vsync of [true, false]) {
     for(const maxFPS of [undefined, 30]) {
-      let window: FixedWindow;
+      let window: Window;
       try {
         window = app.createWindow(device, { vsync });
       } catch (error) {

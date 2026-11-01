@@ -1,6 +1,6 @@
 **ts-dawn is a TypeScript library for building native desktop graphics applications without a browser or WebView.** It aims to provide the same API across Node.js, and Bun.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to fixed-size native presentation. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Input events, resizing, and multiple windows remain planned.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Input events and multiple windows remain planned.
 
 | Piece | Responsibility | Location |
 |---|---|---|
@@ -24,10 +24,41 @@ node examples/solid-color.ts
 ```
 
 The [Application](packages/core/application.ts) owns one native GLFW session and
-tracks its windows. One application and one live 320×240 window are supported at a
-time, on the process main thread. The example renders a blue window for three
+tracks its window. One application and one live window are supported at a
+time, on the process main thread. The example renders a resizable blue 640×480 window for three
 seconds of simulated time and exits, or stops normally when the window is closed.
 It requires Linux x64, X11, and a compatible Vulkan driver.
+
+Window creation preserves the original defaults: title `"ts-dawn solid color"`,
+320×240 client size, non-resizable, and vsync enabled. Override them at creation:
+
+```ts
+const window = app.createWindow(device, {
+  title: "My application",
+  width: 960,
+  height: 540,
+  resizable: true
+});
+```
+
+`width` and `height` are positive signed 32-bit integers in GLFW screen
+coordinates. Framebuffer dimensions can differ on high-DPI displays. Use the
+current `texture.width` and `texture.height` inside `draw` to size depth/MSAA
+attachments, viewports, and projection matrices. The surface follows framebuffer
+pixels automatically after native events are polled, including size changes
+independent of the logical window size. Framebuffers exceeding the device's
+`maxTextureDimension2D` are rejected before surface configuration.
+
+`draw` returns `undefined` and skips its callback while minimized or at zero
+framebuffer size. It resumes after restoration without recreating the window.
+Outdated/lost acquisitions get one recovery attempt; persistent unavailability
+or an acquisition timeout skips that draw. A suboptimal frame remains usable and
+requests reconfiguration on the next draw. Device loss, disposed windows, close
+requests, and invalid operations still throw. Keep polling events even when no
+frame is rendered. `app.run()` does this automatically; fixed updates continue
+while minimized.
+
+The public window type is `Window`; `FixedWindow` remains a deprecated type alias.
 
 Presentation and the render cap are separate settings:
 
@@ -90,7 +121,7 @@ try {
 }
 ```
 
-Each `draw` acquires a surface texture, runs the synchronous callback, and presents.
+When a framebuffer is available, `draw` acquires a surface texture, runs the synchronous callback, and presents.
 Native events are pumped separately with `app.pollEvents()` or automatically by
 `app.run()`. Encode and submit commands before returning `undefined`.
 Textures and their views expire when the callback finishes. Failed callbacks
@@ -144,7 +175,7 @@ Stopping does not dispose resources. Use `finally` to dispose the application an
 then caller-owned devices. See [the loop contract](docs/application-loop.md) for
 catch-up limits, interpolation, listener semantics, and custom loops.
 
-Resize handling, input event subscriptions, multiple live windows, and packaged
+Input event subscriptions, multiple live windows, and packaged
 addons remain outside this increment. The former experimental free functions have
 been replaced by `Application`.
 
@@ -227,4 +258,4 @@ The implementation is organized into:
 
 Downloaded dependencies and generated artifacts are ignored and do not become ordinary tracked ts-dawn source files. Application developers would receive **prebuilt native addons**, rather than needing to build Dawn themselves.
 
-This checkout passes JavaScript compute/readback and fixed-size window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The solid-color example was captured and inspected in both runtimes. Physical-monitor pacing, other platforms, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.
+This checkout passes JavaScript compute/readback and configurable/resizable window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The resizable solid-color example was captured and inspected in both runtimes. Resize/minimize/restore and disposal interactions passed under Xvfb/KWin with lavapipe in Node.js and Bun; see the build guide for reproduction and limits. Physical-monitor pacing, other platforms, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.

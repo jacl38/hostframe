@@ -1,26 +1,40 @@
 import { createRequire } from "node:module";
 
 export type WindowOptions = {
+  /** Default: "ts-dawn solid color". */
+  title?: string,
+  /** Initial client size in screen coordinates; positive signed 32-bit integers. Defaults: 320×240. */
+  width?: number,
+  height?: number,
+  /** Default: false. Allows the window manager to resize the window. */
+  resizable?: boolean,
   /** Default: true (FIFO). False prefers Immediate, then Mailbox; throws if neither is supported. */
   vsync?: boolean
 };
 
 export type PresentMode = "fifo" | "immediate" | "mailbox";
 
-export type FixedWindow = {
+export type Window = {
   /** Selected from Dawn surface capabilities at creation. Throws after disposal. */
   readonly presentMode: PresentMode,
   /** Close requests do not dispose the window. Throws after disposal. */
   readonly shouldClose: boolean,
   requestClose(): void,
-  /** Submit before returning; textures/views expire afterward. Async results are rejected. */
+  /**
+   * Submit before returning; textures/views expire afterward. Async results are rejected.
+   * Texture dimensions are framebuffer pixels. Skips the callback while minimized,
+   * at zero framebuffer size, or if acquisition is temporarily unavailable.
+   */
   draw(callback: (texture: GPUTexture) => undefined): void,
   /** Unregisters from the application; forbidden inside draw. Idempotent. */
   dispose(): void
 };
 
+/** @deprecated Use Window. Windows now support optional resizing. */
+export type FixedWindow = Window;
+
 export type NativeApplication = {
-  createWindow(device: GPUDevice, options?: WindowOptions): FixedWindow,
+  createWindow(device: GPUDevice, options?: WindowOptions): Window,
   pollEvents(): boolean,
   readonly hasOpenWindows: boolean,
   readonly disposed: boolean,

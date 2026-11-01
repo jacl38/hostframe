@@ -2,8 +2,10 @@
 
 The optional scheduler supports fixed simulation steps and separate rendering on
 the process main thread. It is built on the same event polling and drawing API
-available to caller-owned loops. Native windows remain fixed at 320×240, with one
-application and one live window at a time.
+available to caller-owned loops. One application and one live window are supported
+at a time. Windows default to fixed 320×240; creation options can customize the
+title, initial screen-coordinate dimensions, and resizability (see the
+[window contract](../README.md)).
 
 ```ts
 const app = new Application();
@@ -57,7 +59,8 @@ exact achieved FPS or change vsync.
 
 ## Presentation settings
 
-`app.createWindow(device, options?: WindowOptions)` accepts `vsync?: boolean`.
+`app.createWindow(device, options?: WindowOptions)` accepts `vsync?: boolean`
+alongside `title`, `width`, `height`, and `resizable`.
 The default is `true`. Dawn surface capabilities are queried for the device's
 adapter before selecting the mode; `window.presentMode` exposes that selection as
 `"fifo"`, `"immediate"`, or `"mailbox"` (the exported `PresentMode` type). It throws
@@ -86,6 +89,16 @@ can explicitly retry with another setting. Invalid option objects or non-boolean
 negative values, `NaN`, and infinities are rejected. A cap above the display's
 refresh rate does not force FIFO to render that fast. Uncapped rendering still
 yields to the host between iterations and remains limited by GPU and display work.
+
+Window resizing and high-DPI framebuffer changes are applied before the next
+surface acquisition, after native events are polled. Size rendering resources from
+`texture.width`/`texture.height` inside `window.draw`. While minimized or at zero
+framebuffer size, `draw` skips its callback; update/render listeners and native
+event polling continue. A render event therefore does not guarantee a presented
+frame. Restoration resumes drawing automatically. Outdated/lost acquisitions are
+retried once, and temporary unavailability skips that draw without stopping the
+loop. Native lifecycle and device-loss errors still reject the run. Presentation
+mode and render-cap settings survive reconfiguration.
 
 ## Fixed-update accounting
 
@@ -151,8 +164,8 @@ application disposal throws.
 ## Caller-owned loops and limits
 
 `app.pollEvents()` processes pending native events and returns whether any window
-remains open. `window.draw()` acquires, invokes the synchronous callback, and
-presents; it no longer polls events implicitly. A custom loop must pump events
+remains open. When a drawable framebuffer is available, `window.draw()` acquires,
+invokes the synchronous callback, and presents; it does not poll events implicitly. A custom loop must pump events
 regularly and yield to the host runtime:
 
 ```ts
