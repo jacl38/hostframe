@@ -2,13 +2,14 @@ import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { assertDependencies } from "./dependencies";
-import { assertGeneratedBindings } from "./generate";
+import { assertGeneratedBindings, prepareNobind } from "./generate";
+import { generateDeclarations } from "./declarations";
 import { generateInputConstants } from "./input-constants";
 import { buildRoot, dawnRoot, getEngine, headers, root } from "./release";
 
 export function checkPrerequisites(forSetup = false) {
   getEngine();
-  const tools = ["git", "cmake", "ninja", process.env.CXX || "c++", process.env.CC || "cc"];
+  const tools = ["git", "cmake", "ninja", "node", process.env.CXX || "c++", process.env.CC || "cc"];
   if(forSetup) tools.push("curl", "tar", "go", "python3", "pkg-config");
   const missing = tools.filter(tool => !Bun.which(tool));
   if(missing.length > 0) {
@@ -48,6 +49,7 @@ export async function buildNative() {
   if(!/^[1-9]\d*$/.test(jobs)) throw new Error("TS_DAWN_JOBS must be a positive integer.");
   await assertDependencies();
   await assertGeneratedBindings();
+  await prepareNobind();
   if(await generateInputConstants()) console.log("Generated GLFW TypeScript input constants from the pinned header.");
   const env = { ...process.env, CCACHE_DIR: resolve(buildRoot, "cache/ccache") };
   await mkdir(env.CCACHE_DIR, { recursive: true });
@@ -65,5 +67,6 @@ export async function buildNative() {
   await $`cmake -S ${resolve(root, "packages/native")} -B ${directory} -G Ninja ${options}`.cwd(root).env(env);
   await checkBuild();
   await $`cmake --build ${directory} --parallel ${jobs}`.cwd(root).env(env);
+  await generateDeclarations();
   console.log(`Native addon: ${resolve(directory, "ts_dawn.node")}`);
 }

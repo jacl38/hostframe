@@ -1,71 +1,92 @@
-// Copyright 2021 The Dawn & Tint Authors
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-// 1. Redistributions of source code must retain the above copyright notice, this
-//    list of conditions and the following disclaimer.
-//
-// 2. Redistributions in binary form must reproduce the above copyright notice,
-//    this list of conditions and the following disclaimer in the documentation
-//    and/or other materials provided with the distribution.
-//
-// 3. Neither the name of the copyright holder nor the names of its
-//    contributors may be used to endorse or promote products derived from
-//    this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#include "binding_maps.h"
 
-#include <string>
-#include <utility>
-#include <vector>
-
-#include "src/dawn/node/binding/Flags.h"
-#include "src/dawn/node/binding/GPU.h"
-#include "application.h"
-
-namespace {
-
-Napi::Value CreateGPU(const Napi::CallbackInfo& info) {
-  std::vector<std::string> arguments;
-  if(info.Length() > 0) {
-    auto result = wgpu::interop::FromJS(info.Env(), info[0], arguments);
-    if(!result) {
-      Napi::TypeError::New(info.Env(), result.error).ThrowAsJavaScriptException();
-      return info.Env().Undefined();
-    }
-  }
-  wgpu::binding::Flags flags;
-  for(const auto& argument : arguments) {
-    const auto separator = argument.find('=');
-    if(separator == std::string::npos) {
-      Napi::TypeError::New(info.Env(), "GPU flags must have key=value form")
-          .ThrowAsJavaScriptException();
-      return info.Env().Undefined();
-    }
-    flags.Set(argument.substr(0, separator), argument.substr(separator + 1));
-  }
-  return wgpu::interop::GPU::Create<wgpu::binding::GPU>(info.Env(), std::move(flags));
+namespace ts_dawn {
+// The variant owns the set of supported input events. Export its discriminants
+// for build-time extraction so TS runtime validation follows the same set.
+template <size_t... Index> auto InputEventTypes(std::index_sequence<Index...>) {
+  return std::vector<std::string>{(std::variant_alternative_t<Index, InputEvent>{}.type.value)...};
 }
 
-Napi::Object Initialize(Napi::Env env, Napi::Object exports) {
-  exports.Set("globals", wgpu::interop::Initialize(env));
-  exports.Set("create", Napi::Function::New<CreateGPU>(env));
-  ts_dawn::InitializeApplication(env, exports);
-  return exports;
+WindowOptions DecodeWindowOptions(WindowOptionsArgument argument) {
+  Napi::Env env(argument.env);
+  WindowOptions options;
+  try {
+    Napi::Value value(env, argument.value);
+    if(value.IsUndefined()) return options;
+    if(!value.IsObject() || value.IsNull() || value.IsArray() || value.IsFunction()) {
+      throw Napi::TypeError::New(env, "Expected window options object");
+    }
+    auto object = value.As<Napi::Object>();
+    std::apply([&](auto... field) {
+      auto read = [&](auto field) {
+        auto value = object.Get(field.name);
+        if(value.IsUndefined()) return;
+        using Type = std::remove_cvref_t<decltype(options.*(field.member))>;
+        if constexpr(std::is_same_v<Type, int>) {
+          if(!value.IsNumber()) throw Napi::TypeError::New(env, std::string(field.name) + " must be a positive integer");
+          auto number = value.template As<Napi::Number>().DoubleValue();
+          if(!std::isfinite(number) || number < 1 || std::floor(number) != number || number > std::numeric_limits<int>::max()) {
+            throw Napi::RangeError::New(env, std::string(field.name) + " must be a positive 32-bit signed integer");
+          }
+        }
+        options.*(field.member) = Nobind::FromJSValue<Type>(value).Get();
+        if constexpr(std::is_same_v<Type, std::string>) {
+          if((options.*(field.member)).find('\0') != std::string::npos) {
+            throw Napi::TypeError::New(env, std::string(field.name) + " must not contain null characters");
+          }
+        }
+      };
+      (read(field), ...);
+    }, Fields<WindowOptions>::Members());
+  } catch(const Napi::Error& error) {
+    error.ThrowAsJavaScriptException();
+  }
+  return options;
 }
 
-}  // namespace
+void InputCallback::Call(const InputState& state, const std::vector<InputEvent>& events) const {
+  Napi::Env environment(env);
+  try {
+    auto callback = Napi::Value(environment, value).As<Napi::Function>();
+    auto result = callback.Call({ToValue(environment, state), ToValue(environment, events)});
+    if(!result.IsUndefined()) throw Napi::TypeError::New(environment, "input callback must return undefined synchronously");
+  } catch(const Napi::Error& error) {
+    error.ThrowAsJavaScriptException();
+  }
+}
+}
 
-// The monolithic engine exports WebGPU's C entry points directly.
-// Do not install Dawn's proc table or use upstream node/Module.cpp here.
-NODE_API_MODULE(ts_dawn, Initialize)
+NOBIND_MODULE(ts_dawn, m) {
+  using namespace ts_dawn;
+  m.Exports().DefineProperty(Napi::PropertyDescriptor::Value("__inputEventTypes",
+      ToValue(m.Env(), InputEventTypes(std::make_index_sequence<std::variant_size_v<InputEvent>>{})), napi_default));
+  // Aliases contain no handwritten object shapes: fields also serialize values.
+  m.typescript_fragment(RecordMap<WindowOptions>::Declaration());
+  m.typescript_fragment(RecordMap<InputState>::Declaration());
+  m.typescript_fragment(RecordMap<KeyEvent>::Declaration());
+  m.typescript_fragment(RecordMap<PointerMoveEvent>::Declaration());
+  m.typescript_fragment(RecordMap<PointerButtonEvent>::Declaration());
+  m.typescript_fragment(RecordMap<ScrollEvent>::Declaration());
+  m.typescript_fragment(RecordMap<FocusEvent>::Declaration());
+  m.typescript_fragment(RecordMap<PointerCaptureEvent>::Declaration());
+  m.typescript_fragment("export type PresentMode = " + Nobind::ToTSType<PresentMode>() + ";\n");
+  m.typescript_fragment("export type InputEvent = " + Nobind::ToTSType<InputEvent>() + ";\n");
+  m.def<Window>("Window")
+      .def<&Window::Draw>("draw")
+      .def<&Window::DispatchInput>("dispatchInput")
+      .def<&Window::SetPointerCapture>("setPointerCapture")
+      .def<&Window::RequestClose>("requestClose")
+      .def<&Window::Dispose>("dispose")
+      .def<&Window::disposed, Nobind::ReadOnly>("disposed")
+      .def<&Window::shouldClose, Nobind::ReadOnly>("shouldClose")
+      .def<&Window::presentMode, Nobind::ReadOnly>("presentMode");
+  m.def<Application>("Application").cons<napi_env>()
+      .def<&Application::CreateWindow>("createWindow")
+      .def<&Application::PollEvents>("pollEvents")
+      .def<&Application::Dispose>("dispose")
+      .def<&Application::hasOpenWindows, Nobind::ReadOnly>("hasOpenWindows")
+      .def<&Application::disposed, Nobind::ReadOnly>("disposed");
+  m.def<&CreateGPU>("create");
+  m.Exports().Set("globals", ToValue(m.Env(), InitializeDawn(m.Env())));
+  m.typescript_fragment(Nobind::GlobalSignature<Nobind::ReadOnly, DawnGlobals>("globals", "export "));
+}

@@ -8,7 +8,7 @@ The implementation combines existing native components with a small integration 
 | **Dawn’s JavaScript binding** | Exposes GPU objects, descriptors, promises, and resource operations through Node-API | Matching source at `vendor/dawn/`, compiled separately |
 | **GLFW** | Creates native windows and delivers input/window events | Selected dependency pinned by Dawn’s manifest |
 | **Dawn–GLFW helper** | Creates a Dawn presentation surface from a GLFW window | Matching source at `vendor/dawn/`, compiled separately |
-| **ts-dawn native integration** | Owns GLFW sessions and window surfaces; manages presentation and lifecycle | `packages/native/` |
+| **ts-dawn native integration** | nobind17 registrations, generated declarations, GLFW sessions, window surfaces, presentation and lifecycle | `packages/native/` |
 | **ts-dawn TypeScript layer** | Provides `Application`, fixed updates, render callbacks, and optional scheduling | `packages/core/` |
 
 Dawn supplies GPU functionality. GLFW supplies interactive windows. `ts-dawn` coordinates their ownership and execution.
@@ -149,7 +149,7 @@ GPU cleanup timeout destroys the stalled device and explicit disposal throws (se
 
 Use `window.on("key" | "pointerMove" | "pointerButton" | "scroll" | "focus" |
 "pointerCapture", listener)` for events and `window.input`, `isKeyDown(Key.W)`,
-`isScancodeDown(scancode)`, and `isButtonDown(PointerButton.Left)` for held state.
+`isScancodeDown(scancode)`, and `isButtonDown(PointerButton.LEFT)` for held state.
 Events are delivered by `app.pollEvents()` and `app.run()`, including while paused.
 Focus loss clears held controls and releases capture. `setPointerCapture(true)`
 hides and locks the cursor for unlimited game-control motion; the optional second
@@ -219,6 +219,13 @@ The project-owned addon entry point initializes upstream interop with `interop::
 
 Stock GPU, adapter, and device creation remains intact. Applications use normal JavaScript WebGPU commands with the acquired textures, followed by native presentation. No engine, texture, command-encoder, or GLFW patches are required. The accessor patch is compiled with the binding and does not require rebuilding the engine.
 
+Project-owned `Application`, `Window`, options, and input bindings use nobind17 typed
+registrations to generate `build/native/generated/native.d.ts` on both setup and
+native builds. The TypeScript bridge imports those declarations. Dawn's existing
+bindings and `@webgpu/types` still own WebGPU objects and types; narrow boundary
+mappings preserve Dawn device/texture wrappers. See [native bindings](docs/native-bindings.md)
+for generation, ownership, and the synchronous Bun compatibility adaptation.
+
 Windowing and presentation implementation stays in ts-dawn’s own files. The application owns the GLFW session and native window state; windows retain their JavaScript devices until disposal. The GPU owner remains rooted for the process lifetime. Native operation guards coordinate drawing, device loss, and disposal.
 
 **Dependency and build setup**
@@ -257,7 +264,9 @@ Bun manages the TypeScript workspace and runs the repository’s TypeScript setu
 1. Download and checksum-verify the pinned engine archive and matching headers for the host OS/architecture. Fail explicitly if no compatible artifact is available.
 2. Extract the matching Dawn source archive and fetch only the required binding, generator, and GLFW dependencies.
 3. Generate `WebGPU.h/.cpp` using upstream’s Go IDL generator and matching IDL/templates, and `ComboLimits.h/.cpp` using upstream’s Python generator. Apply the accessor patch to a separate binding copy. Generated files and libraries must come from reproducible inputs, without depending on files from another checkout or scratch directory.
-4. Use a project-owned CMake target to compile the binding implementations, interop `Core.cpp`, `ManualConstructors.cpp`, generated bridge sources, GLFW/helper, and ts-dawn integration. Import and link the downloaded `libwebgpu_dawn` archive. Do not add Dawn’s top-level CMake project with `add_subdirectory(vendor/dawn)` or invoke its full engine build/dependency fetcher.
+4. Prepare the build-owned nobind17 integration headers, resolve GLFW input constants with the C++ compiler, and use a project-owned CMake target to compile the binding implementations, interop `Core.cpp`, `ManualConstructors.cpp`, generated bridge sources, GLFW/helper, and ts-dawn integration. Import and link the downloaded `libwebgpu_dawn` archive. Do not add Dawn’s top-level CMake project with `add_subdirectory(vendor/dawn)` or invoke its full engine build/dependency fetcher.
+
+5. Extract project-owned TypeScript declarations from the freshly linked addon in a separate Node process.
 
 Setup builds the native addon used by the TypeScript `Application`. Broader window/context APIs remain future work.
 

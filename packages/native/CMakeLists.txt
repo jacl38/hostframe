@@ -43,6 +43,8 @@ add_subdirectory("${DAWN_SOURCE}/third_party/glfw3/src" "${CMAKE_CURRENT_BINARY_
 file(GLOB BINDING_SOURCES CONFIGURE_DEPENDS "${BINDING_ROOT}/src/dawn/node/binding/*.cpp")
 add_library(ts_dawn MODULE
   src/module.cpp
+  src/nobind_runtime.cpp
+  src/dawn_bridge.cpp
   src/application.cpp
   src/window.cpp
   src/input.cpp
@@ -57,6 +59,12 @@ set_target_properties(ts_dawn PROPERTIES
   PREFIX "" SUFFIX ".node"
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
+)
+# nobind uses node-addon-api >=8.3 with exceptions. Its only translation unit
+# has a distinct namespace so Dawn retains its pinned headers and exception ABI.
+set_source_files_properties(src/module.cpp src/nobind_runtime.cpp PROPERTIES
+  INCLUDE_DIRECTORIES "${TS_DAWN_BUILD_ROOT}/nobind;${TS_DAWN_ROOT}/node_modules/node-addon-api"
+  COMPILE_DEFINITIONS "NAPI_CPP_CUSTOM_NAMESPACE=TsDawnBindings;NOBIND_NO_BASIC_FINALIZERS;NOBIND_NO_ASYNC_LOCKING;NOBIND_NO_OBJECT_STORE"
 )
 # Node also embeds Abseil. Keep the engine's bundled implementation local to
 # this addon so ELF symbol interposition cannot mix incompatible Abseil builds.
@@ -75,7 +83,7 @@ target_include_directories(ts_dawn SYSTEM PRIVATE
 target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG DAWN_USE_X11 GLFW_INCLUDE_NONE)
 target_link_libraries(ts_dawn PRIVATE dawn_engine glfw X11::Xfixes Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
-set_source_files_properties(src/module.cpp src/application.cpp src/window.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
+set_source_files_properties(src/module.cpp src/nobind_runtime.cpp src/dawn_bridge.cpp src/application.cpp src/window.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 
 add_library(dawn_glfw STATIC "${DAWN_SOURCE}/src/dawn/glfw/utils.cpp")
 target_include_directories(dawn_glfw PRIVATE "${DAWN_SOURCE}" "${DAWN_SOURCE}/include")

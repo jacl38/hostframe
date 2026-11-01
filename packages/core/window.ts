@@ -40,7 +40,7 @@ export class Window {
   requestClose() { this.#input = freezeInput(this.#native.requestClose()); }
 
   /** Submit synchronously. Textures/views expire on return; unavailable frames skip the callback. */
-  draw(callback: (texture: GPUTexture) => undefined) { this.#native.draw(callback); }
+  draw(callback: Parameters<NativeWindow["draw"]>[0]) { this.#native.draw(callback); }
 
   dispose() {
     try {

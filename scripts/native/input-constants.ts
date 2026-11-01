@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { $ } from "bun";
+import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
 import { glfwInputHeader, inputConstantsPath } from "./release";
 
 const groups = [
@@ -9,74 +11,75 @@ const groups = [
   { name: "Modifier", prefix: "GLFW_MOD_", description: "Bit flags on key and pointer-button events." }
 ] as const;
 
-function publicName(name: string, group: typeof groups[number]["name"]) {
-  if(/^\d+$/.test(name)) return `${group === "Key" ? "Digit" : "Button"}${name}`;
-  return name.split("_").map(part => part.charAt(0) + part.slice(1).toLowerCase()).join("");
-}
+// The only naming overrides. All other suffixes retain GLFW's spelling.
+const digitNames: Readonly<Record<string, string>> = {
+  0: "ZERO",
+  1: "ONE",
+  2: "TWO",
+  3: "THREE",
+  4: "FOUR",
+  5: "FIVE",
+  6: "SIX",
+  7: "SEVEN",
+  8: "EIGHT",
+  9: "NINE"
+};
 
-/** Parse only the integer literals and aliases used by GLFW input definitions; never evaluate C code. */
-export function parseInputConstants(header: string) {
-  const definitions = new Map<string, string>();
-  const source = header.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-  for(const line of source.split(/\r?\n/)) {
-    const match = /^\s*#\s*define\s+(GLFW_(?:KEY_|MOUSE_BUTTON_|MOD_)[A-Z0-9_]+)\b(.*)$/.exec(line);
-    if(!match) continue;
-    const name = match[1]!;
-    const value = match[2]!;
-    if(definitions.has(name)) throw new Error(`Duplicate GLFW definition: ${name}`);
-    definitions.set(name, value.trim());
-  }
-
-  function valueOf(name: string, resolving = new Set<string>()): number {
-    const value = definitions.get(name);
-    if(value === undefined) throw new Error(`Missing GLFW definition: ${name}`);
-    if(resolving.has(name)) throw new Error(`Cyclic GLFW alias: ${name}`);
-    if(/^-?(?:0|[1-9]\d*|0[xX][\da-fA-F]+)$/.test(value)) {
-      const number = value.startsWith("-") ? -Number(value.slice(1)) : Number(value);
-      if(!Number.isSafeInteger(number)) throw new Error(`Unsafe GLFW integer: ${name} = ${value}`);
-      return number;
+/** Discover names with the preprocessor; compile and execute their C++ values. */
+export async function resolveInputConstants(headerPath: string) {
+  const compiler = process.env.CXX || "c++";
+  const header = resolve(headerPath);
+  const definitions = await $`${compiler} -DGLFW_INCLUDE_NONE -dM -E -x c++ ${header}`.text();
+  // This regex selects identifiers only. The compiler owns expression evaluation,
+  // aliases, casts, conditional definitions, integer bases and suffixes.
+  const names = Array.from(definitions.matchAll(/^#define (GLFW_(?:KEY_|MOUSE_BUTTON_|MOD_)[A-Z0-9_]+)\s/gm), match => match[1]!).sort();
+  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn-constants-"));
+  const values = new Map<string, number>();
+  try {
+    const source = resolve(directory, "constants.cpp");
+    const binary = resolve(directory, "constants");
+    const lines = names.map(name => `  static_assert(std::in_range<long long>(${name}), "GLFW value exceeds compiler output range");\n  std::cout << "${name} " << static_cast<long long>(${name}) << "\\n";`);
+    await Bun.write(source, `#define GLFW_INCLUDE_NONE\n#include ${JSON.stringify(header)}\n#include <iostream>\n#include <utility>\nint main() {\n${lines.join("\n")}\n}\n`);
+    await $`${compiler} -std=c++20 ${source} -o ${binary}`.quiet();
+    const output = await $`${binary}`.text();
+    for(const line of output.trim().split("\n").filter(Boolean)) {
+      const [name, text] = line.split(" ");
+      const value = Number(text);
+      if(!name || !Number.isSafeInteger(value)) throw new Error(`Unsafe GLFW integer: ${line}`);
+      values.set(name, value);
     }
-    if(/^GLFW_(?:KEY_|MOUSE_BUTTON_|MOD_)[A-Z0-9_]+$/.test(value)) {
-      resolving.add(name);
-      const number = valueOf(value, resolving);
-      resolving.delete(name);
-      return number;
-    }
-    throw new Error(`Unsupported GLFW definition: ${name} = ${value}`);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
-
-  // Validate even definitions omitted from the public API, including LAST sentinels.
-  for(const name of definitions.keys()) valueOf(name);
   const result: Record<typeof groups[number]["name"], Record<string, number>> = { Key: {}, PointerButton: {}, Modifier: {} };
   for(const group of groups) {
-    const entries = Array.from(definitions.keys()).filter(name => name.startsWith(group.prefix));
-    // Keep the existing Left/Right/Middle API, followed by numbered extra buttons.
-    if(group.name === "PointerButton") entries.sort((a, b) => Number(/\d+$/.test(a)) - Number(/\d+$/.test(b)));
+    const entries = names.filter(name => name.startsWith(group.prefix));
     for(const name of entries) {
       const suffix = name.slice(group.prefix.length);
-      if(suffix === "LAST" || (group.name === "PointerButton" && /^[123]$/.test(suffix))) continue;
-      const key = publicName(suffix, group.name);
+      if(suffix === "LAST") continue;
+      const key = digitNames[suffix] ?? suffix;
       if(Object.hasOwn(result[group.name], key)) throw new Error(`Duplicate public GLFW name: ${group.name}.${key}`);
-      result[group.name][key] = valueOf(name);
+      result[group.name][key] = values.get(name)!;
     }
     if(Object.keys(result[group.name]).length === 0) throw new Error(`Missing GLFW constants: ${group.prefix}`);
   }
   return result;
 }
 
-function renderInputConstants(header: string) {
-  const constants = parseInputConstants(header);
+async function renderInputConstants(headerPath: string) {
+  const header = await Bun.file(headerPath).text();
+  const constants = await resolveInputConstants(headerPath);
   const hash = createHash("sha256").update(header).digest("hex");
   const tables = groups.map(group => {
     const members = Object.entries(constants[group.name]).map(([name, value]) => `  ${name}: ${value}`).join(",\n");
     return `/** ${group.description} */\nexport const ${group.name} = Object.freeze({\n${members}\n} as const);`;
   });
-  return `// Generated by scripts/native/input-constants.ts from the pinned GLFW glfw3.h. Do not edit.\n// Header SHA-256: ${hash}\n\n${tables.join("\n\n")}\n`;
+  return `// Generated by scripts/native/input-constants.ts using compiler-resolved values from the pinned GLFW glfw3.h. Do not edit.\n// Header SHA-256: ${hash}\n\n${tables.join("\n\n")}\n`;
 }
 
 /** Runs on every prepared native build; recreates missing/stale output without rewriting unchanged files. */
 export async function generateInputConstants(headerPath = glfwInputHeader, outputPath = inputConstantsPath) {
-  const content = renderInputConstants(await Bun.file(headerPath).text());
+  const content = await renderInputConstants(headerPath);
   const output = Bun.file(outputPath);
   if(await output.exists() && await output.text() === content) return false;
   await mkdir(dirname(outputPath), { recursive: true });

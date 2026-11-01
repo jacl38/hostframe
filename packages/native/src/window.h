@@ -30,5 +30,4 @@ class WindowState {
   std::unique_ptr<WindowInput> input_;
 };
 
-Napi::Function DefineWindow(Napi::Env env);
 }

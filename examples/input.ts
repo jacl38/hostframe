@@ -30,11 +30,11 @@ try {
   let close = false;
   window.on("key", event => {
     if(event.action !== "press") return; // OS repeat never drives simulation.
-    if(event.key === Key.Escape) capture = false;
+    if(event.key === Key.ESCAPE) capture = false;
     if(event.key === Key.Q) close = true;
   });
   window.on("pointerButton", event => {
-    if(event.button === PointerButton.Left && event.action === "press") capture = !window.input.pointerCaptured;
+    if(event.button === PointerButton.LEFT && event.action === "press") capture = !window.input.pointerCaptured;
   });
   window.on("pointerMove", event => {
     if(event.captured) {
@@ -55,8 +55,8 @@ try {
       if(!capture || window.input.focused) window.setPointerCapture(capture);
       capture = undefined;
     }
-    x += (Number(window.isKeyDown(Key.D) || window.isKeyDown(Key.Right)) - Number(window.isKeyDown(Key.A) || window.isKeyDown(Key.Left))) * dt * 0.5;
-    y += (Number(window.isKeyDown(Key.S) || window.isKeyDown(Key.Down)) - Number(window.isKeyDown(Key.W) || window.isKeyDown(Key.Up))) * dt * 0.5;
+    x += (Number(window.isKeyDown(Key.D) || window.isKeyDown(Key.RIGHT)) - Number(window.isKeyDown(Key.A) || window.isKeyDown(Key.LEFT))) * dt * 0.5;
+    y += (Number(window.isKeyDown(Key.S) || window.isKeyDown(Key.DOWN)) - Number(window.isKeyDown(Key.W) || window.isKeyDown(Key.UP))) * dt * 0.5;
     x = Math.max(0, Math.min(1, x));
     y = Math.max(0, Math.min(1, y));
   });

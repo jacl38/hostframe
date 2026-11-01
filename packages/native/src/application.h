@@ -37,5 +37,4 @@ struct ApplicationOperation {
   ~ApplicationOperation() { active = false; }
 };
 
-void InitializeApplication(Napi::Env env, Napi::Object exports);
 }

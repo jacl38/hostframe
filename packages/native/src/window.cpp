@@ -7,6 +7,8 @@
 #include "application.h"
 #include "presentation.h"
 #include "input.h"
+#include "bindings.h"
+#include "native_boundary.h"
 
 namespace ts_dawn {
 
@@ -54,158 +56,77 @@ const char* WindowState::PresentMode() const {
   return presentation_->PresentMode();
 }
 
-namespace {
-class Window final : public Napi::ObjectWrap<Window> {
- public:
-  static Napi::Function Constructor(Napi::Env env) {
-    return DefineClass(env, "Window", {
-      InstanceMethod("draw", &Window::Draw),
-      InstanceMethod("dispatchInput", &Window::DispatchInput),
-      InstanceMethod("setPointerCapture", &Window::SetPointerCapture),
-      InstanceAccessor("disposed", &Window::Disposed, nullptr),
-      InstanceAccessor("shouldClose", &Window::ShouldClose, nullptr),
-      InstanceAccessor("presentMode", &Window::PresentMode, nullptr),
-      InstanceMethod("requestClose", &Window::RequestClose),
-      InstanceMethod("dispose", &Window::Dispose)
-    });
-  }
+std::shared_ptr<ApplicationState> Window::RequireAvailable() {
+  RequireMainThread(env_);
+  auto application = state_->Owner();
+  if(!application) throw Napi::Error::New(env_, "Window is disposed");
+  application->RequireAvailable(env_);
+  return application;
+}
 
-  explicit Window(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Window>(info) {
-    try {
-      RequireMainThread(info.Env());
-      if(!info[0].IsExternal()) {
-        throw Napi::TypeError::New(info.Env(), "Use Application.createWindow(device)");
-      }
-      state_ = *info[0].As<Napi::External<std::shared_ptr<WindowState>>>().Data();
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-  }
+bool Window::Disposed() {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    return state_->IsDisposed();
+  });
+}
 
- private:
-  Napi::Value Disposed(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      return Napi::Boolean::New(info.Env(), state_->IsDisposed());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
+void Window::Draw(DrawCallback callback) {
+  NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    state_->Draw(env_, Napi::Value(env_, callback.value).As<Napi::Function>());
+  });
+}
 
-  Napi::Value DispatchInput(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
-      application->RequireAvailable(info.Env());
-      if(!info[0].IsFunction()) throw Napi::TypeError::New(info.Env(), "Expected an input callback");
-      ApplicationOperation operation(*application);
-      state_->Input().Dispatch(info.Env(), info[0].As<Napi::Function>());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    } catch(const std::exception& error) {
-      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
+void Window::DispatchInput(InputCallback callback) {
+  NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    state_->Input().Dispatch(callback);
+  });
+}
 
-  Napi::Value SetPointerCapture(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
-      application->RequireAvailable(info.Env());
-      if(!info[0].IsBoolean() || !info[1].IsBoolean()) throw Napi::TypeError::New(info.Env(), "Expected capture and raw-motion booleans");
-      ApplicationOperation operation(*application);
-      state_->Input().SetCapture(info[0].As<Napi::Boolean>().Value(), info[1].As<Napi::Boolean>().Value());
-      return state_->Input().Snapshot(info.Env());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    } catch(const std::exception& error) {
-      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
+InputState Window::SetPointerCapture(bool captured, bool rawMotion) {
+  return NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    state_->Input().SetCapture(captured, rawMotion);
+    return state_->Input().Snapshot();
+  });
+}
 
-  Napi::Value Draw(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
-      application->RequireAvailable(info.Env());
-      if(!info[0].IsFunction()) throw Napi::TypeError::New(info.Env(), "Expected a draw callback");
-      ApplicationOperation operation(*application);
-      state_->Draw(info.Env(), info[0].As<Napi::Function>());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    } catch(const std::exception& error) {
-      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
+InputState Window::RequestClose() {
+  return NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    state_->RequestClose();
+    return state_->Input().Snapshot();
+  });
+}
 
-  Napi::Value Dispose(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) return info.Env().Undefined();
-      application->RequireAvailable(info.Env());
-      ApplicationOperation operation(*application);
-      if(!state_->Close()) throw Napi::Error::New(info.Env(), "GPU cleanup timed out; device was destroyed");
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
+void Window::Dispose() {
+  NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    auto application = state_->Owner();
+    if(!application) return;
+    application->RequireAvailable(env_);
+    ApplicationOperation operation(*application);
+    if(!state_->Close()) throw Napi::Error::New(env_, "GPU cleanup timed out; device was destroyed");
+  });
+}
 
-  Napi::Value ShouldClose(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
-      application->RequireAvailable(info.Env());
-      return Napi::Boolean::New(info.Env(), state_->ShouldClose());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
+bool Window::ShouldClose() {
+  return NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    return state_->ShouldClose();
+  });
+}
 
-  Napi::Value RequestClose(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
-      application->RequireAvailable(info.Env());
-      ApplicationOperation operation(*application);
-      state_->RequestClose();
-      return state_->Input().Snapshot(info.Env());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  Napi::Value PresentMode(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      auto application = state_->Owner();
-      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
-      application->RequireAvailable(info.Env());
-      return Napi::String::New(info.Env(), state_->PresentMode());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  std::shared_ptr<WindowState> state_;
-};
-
-}  // namespace
-
-Napi::Function DefineWindow(Napi::Env env) {
-  return Window::Constructor(env);
+PresentMode Window::GetPresentMode() {
+  return NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    return PresentMode(state_->PresentMode());
+  });
 }
 }  // namespace ts_dawn

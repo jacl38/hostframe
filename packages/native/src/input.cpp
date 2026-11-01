@@ -22,8 +22,9 @@ WindowInput::WindowInput(GLFWwindow* window) : window_(window) {
     } else {
       input.keys_[scancode] = key;
     }
-    input.events_.push_back({.type = "key", .code = key, .scancode = scancode,
-                             .action = action, .modifiers = mods});
+    input.events_.emplace_back(KeyEvent{.type = {}, .key = key, .scancode = scancode,
+        .action = action == GLFW_RELEASE ? "release" : action == GLFW_REPEAT ? "repeat" : "press",
+        .modifiers = mods});
   });
   glfwSetMouseButtonCallback(window_, [](GLFWwindow* window, int button, int action, int mods) {
     auto& input = Get(window);
@@ -33,19 +34,22 @@ WindowInput::WindowInput(GLFWwindow* window) : window_(window) {
     } else {
       input.buttons_[button] = true;
     }
-    input.events_.push_back({.type = "pointerButton", .code = button, .action = action, .modifiers = mods});
+    input.events_.emplace_back(PointerButtonEvent{.type = {}, .button = button,
+        .action = action == GLFW_RELEASE ? "release" : "press", .modifiers = mods});
   });
   glfwSetCursorPosCallback(window_, [](GLFWwindow* window, double x, double y) { Get(window).Position(x, y); });
   glfwSetScrollCallback(window_, [](GLFWwindow* window, double x, double y) {
     auto& input = Get(window);
-    if(input.focused_ && !glfwWindowShouldClose(window)) input.events_.push_back({.type = "scroll", .dx = x, .dy = y});
+    if(input.focused_ && !glfwWindowShouldClose(window)) {
+      input.events_.emplace_back(ScrollEvent{.type = {}, .deltaX = x, .deltaY = y});
+    }
   });
   glfwSetWindowFocusCallback(window_, [](GLFWwindow* window, int focused) {
     auto& input = Get(window);
     input.focused_ = focused;
     if(!focused) input.Reset();
     input.baseline_ = false;
-    input.events_.push_back({.type = "focus", .value = focused != 0});
+    input.events_.emplace_back(FocusEvent{.type = {}, .focused = focused != 0});
   });
   glfwSetWindowCloseCallback(window_, [](GLFWwindow* window) { Get(window).Reset(); });
 }
@@ -69,7 +73,8 @@ void WindowInput::Position(double x, double y) {
   x_ = x;
   y_ = y;
   baseline_ = true;
-  events_.push_back({.type = "pointerMove", .x = x, .y = y, .dx = dx, .dy = dy, .value = captured_});
+  events_.emplace_back(PointerMoveEvent{.type = {}, .x = x, .y = y,
+      .deltaX = dx, .deltaY = dy, .captured = captured_});
 }
 
 void WindowInput::SetCapture(bool captured, bool raw) {
@@ -96,82 +101,49 @@ void WindowInput::Capture(bool captured, bool raw) {
   changing_mode_ = false;
   glfwGetCursorPos(window_, &x_, &y_);
   baseline_ = false;
-  events_.push_back({.type = "pointerCapture", .value = captured_, .raw = raw_});
+  events_.emplace_back(PointerCaptureEvent{.type = {}, .captured = captured_, .rawMotion = raw_});
 }
 
 void WindowInput::Reset() {
   for(const auto& [scancode, key] : keys_) {
-    events_.push_back({.type = "key", .code = key, .scancode = scancode, .action = GLFW_RELEASE, .synthetic = true});
+    events_.emplace_back(KeyEvent{.type = {}, .key = key, .scancode = scancode,
+        .action = "release", .synthetic = true});
   }
   keys_.clear();
   for(const auto& [button, held] : buttons_) {
     (void)held;
-    events_.push_back({.type = "pointerButton", .code = button, .action = GLFW_RELEASE, .synthetic = true});
+    events_.emplace_back(PointerButtonEvent{.type = {}, .button = button,
+        .action = "release", .synthetic = true});
   }
   buttons_.clear();
   Capture(false, false);
   baseline_ = false;
 }
 
-Napi::Object WindowInput::Snapshot(Napi::Env env) const {
-  auto result = Napi::Object::New(env);
-  auto keys = Napi::Array::New(env);
-  auto scancodes = Napi::Array::New(env);
-  auto buttons = Napi::Array::New(env);
-  uint32_t index = 0;
+InputState WindowInput::Snapshot() const {
+  InputState state;
   for(const auto& [scancode, key] : keys_) {
-    keys.Set(index, key);
-    scancodes.Set(index++, scancode);
+    state.keys.push_back(key);
+    state.scancodes.push_back(scancode);
   }
-  index = 0;
   for(const auto& [button, held] : buttons_) {
     (void)held;
-    buttons.Set(index++, button);
+    state.buttons.push_back(button);
   }
-  result.Set("keys", keys);
-  result.Set("scancodes", scancodes);
-  result.Set("buttons", buttons);
-  result.Set("focused", focused_);
-  result.Set("pointerCaptured", captured_);
-  result.Set("rawMotion", raw_);
-  result.Set("x", x_);
-  result.Set("y", y_);
-  return result;
+  state.focused = focused_;
+  state.pointerCaptured = captured_;
+  state.rawMotion = raw_;
+  state.x = x_;
+  state.y = y_;
+  return state;
 }
 
-void WindowInput::Dispatch(Napi::Env env, Napi::Function callback) {
+void WindowInput::Dispatch(InputCallback callback) {
   auto events = std::exchange(events_, {});
-  auto array = Napi::Array::New(env, events.size());
-  uint32_t index = 0;
-  for(const auto& event : events) {
-    auto object = Napi::Object::New(env);
-    const std::string type(event.type);
-    object.Set("type", type);
-    if(type == "key" || type == "pointerButton") {
-      object.Set(type == "key" ? "key" : "button", event.code);
-      if(type == "key") object.Set("scancode", event.scancode);
-      object.Set("action", event.action == GLFW_RELEASE ? "release" : event.action == GLFW_REPEAT ? "repeat" : "press");
-      object.Set("modifiers", event.modifiers);
-      object.Set("synthetic", event.synthetic);
-    } else if(type == "pointerMove") {
-      object.Set("x", event.x);
-      object.Set("y", event.y);
-      object.Set("deltaX", event.dx);
-      object.Set("deltaY", event.dy);
-      object.Set("captured", event.value);
-    } else if(type == "scroll") {
-      object.Set("deltaX", event.dx);
-      object.Set("deltaY", event.dy);
-    } else if(type == "focus") {
-      object.Set("focused", event.value);
-    } else {
-      object.Set("captured", event.value);
-      object.Set("rawMotion", event.raw);
-    }
-    array.Set(index++, object);
-  }
-  callback.Call({Snapshot(env), array});
-  if(!env.IsExceptionPending() && std::exchange(capture_failed_, false)) {
+  callback.Call(Snapshot(), events);
+  bool pending = false;
+  napi_is_exception_pending(callback.env, &pending);
+  if(!pending && std::exchange(capture_failed_, false)) {
     throw std::runtime_error("Could not release pointer capture");
   }
 }

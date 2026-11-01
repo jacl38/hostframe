@@ -1,8 +1,6 @@
 #include "application.h"
 
 #include <algorithm>
-#include <cmath>
-#include <limits>
 #include <stdexcept>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -13,6 +11,8 @@
 #include <X11/extensions/Xfixes.h>
 
 #include "window.h"
+#include "bindings.h"
+#include "native_boundary.h"
 
 namespace ts_dawn {
 
@@ -84,155 +84,75 @@ bool ApplicationState::Close() {
   return drained;
 }
 
-namespace {
-class Application final : public Napi::ObjectWrap<Application> {
- public:
-  static void Initialize(Napi::Env env, Napi::Object exports) {
-    exports.Set("Application", DefineClass(env, "Application", {
-      InstanceMethod("createWindow", &Application::CreateWindow),
-      InstanceMethod("pollEvents", &Application::PollEvents),
-      InstanceAccessor("hasOpenWindows", &Application::HasOpenWindows, nullptr),
-      InstanceAccessor("disposed", &Application::Disposed, nullptr),
-      InstanceMethod("dispose", &Application::Dispose)
-    }));
-  }
-
-  explicit Application(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Application>(info) {
-    try {
-      RequireMainThread(info.Env());
-      state_ = std::make_shared<ApplicationState>();
-      windowConstructor_ = Napi::Persistent(DefineWindow(info.Env()));
-      if(napi_add_env_cleanup_hook(info.Env(), Cleanup, this) != napi_ok) {
-        throw Napi::Error::New(info.Env(), "Could not register application cleanup");
-      }
-      cleanupRegistered_ = true;
-    } catch(const Napi::Error& error) {
+Application::Application(napi_env env) : env_(env) {
+  NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    state_ = std::make_shared<ApplicationState>();
+    if(napi_add_env_cleanup_hook(env_, Cleanup, this) != napi_ok) {
       state_.reset();
-      error.ThrowAsJavaScriptException();
-    } catch(const std::exception& error) {
-      state_.reset();
-      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+      throw Napi::Error::New(env_, "Could not register application cleanup");
     }
-  }
-
-  ~Application() override {
-    if(cleanupRegistered_) napi_remove_env_cleanup_hook(Env(), Cleanup, this);
-  }
-
- private:
-  static void Cleanup(void* data) {
-    // Before JS finalizers: close surfaces and windows while devices are retained,
-    // then terminate GLFW. Window wrappers can safely outlive this operation.
-    auto* application = static_cast<Application*>(data);
-    application->state_->Close();
-    application->cleanupRegistered_ = false;
-  }
-
-  Napi::Value CreateWindow(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      state_->RequireAvailable(info.Env());
-      if(state_->HasWindow()) throw Napi::Error::New(info.Env(), "Only one native window is supported in this increment");
-      ApplicationOperation operation(*state_);
-      WindowOptions options;
-      if(!info[1].IsUndefined()) {
-        if(!info[1].IsObject() || info[1].IsNull() || info[1].IsArray() || info[1].IsFunction()) {
-          throw Napi::TypeError::New(info.Env(), "Expected window options object");
-        }
-        auto object = info[1].As<Napi::Object>();
-        for(const auto name : {"title", "width", "height", "resizable", "vsync"}) {
-          auto value = object.Get(name);
-          if(info.Env().IsExceptionPending()) return info.Env().Undefined();
-          if(value.IsUndefined()) continue;
-          const std::string key(name);
-          if(key == "title") {
-            if(!value.IsString()) throw Napi::TypeError::New(info.Env(), "title must be a string");
-            options.title = value.As<Napi::String>().Utf8Value();
-            if(options.title.find('\0') != std::string::npos) {
-              throw Napi::TypeError::New(info.Env(), "title must not contain null characters");
-            }
-          } else if(key == "width" || key == "height") {
-            if(!value.IsNumber()) throw Napi::TypeError::New(info.Env(), key + " must be a positive integer");
-            const double number = value.As<Napi::Number>().DoubleValue();
-            if(!std::isfinite(number) || number < 1 || std::floor(number) != number ||
-               number > std::numeric_limits<int>::max()) {
-              throw Napi::RangeError::New(info.Env(), key + " must be a positive 32-bit signed integer");
-            }
-            (key == "width" ? options.width : options.height) = static_cast<int>(number);
-          } else {
-            if(!value.IsBoolean()) throw Napi::TypeError::New(info.Env(), key + " must be a boolean");
-            (key == "vsync" ? options.vsync : options.resizable) = value.As<Napi::Boolean>().Value();
-          }
-        }
-      }
-      auto window = std::make_shared<WindowState>(info.Env(), info[0], state_, options);
-      // The external is private to this synchronous constructor call and is copied
-      // by the wrapper. Neither a raw window nor its constructor is exported.
-      auto result = windowConstructor_.New({Napi::External<std::shared_ptr<WindowState>>::New(info.Env(), &window)});
-      if(info.Env().IsExceptionPending()) return info.Env().Undefined();
-      state_->Register(window);
-      return result;
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    } catch(const std::exception& error) {
-      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  Napi::Value Dispose(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      if(state_->executing) throw Napi::Error::New(info.Env(), "An application operation is already in progress");
-      ApplicationOperation operation(*state_);
-      if(!state_->Close()) throw Napi::Error::New(info.Env(), "GPU cleanup timed out; device was destroyed");
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  Napi::Value PollEvents(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      state_->RequireAvailable(info.Env());
-      ApplicationOperation operation(*state_);
-      glfwPollEvents();
-      return Napi::Boolean::New(info.Env(), state_->HasOpenWindows());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  Napi::Value HasOpenWindows(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      if(!state_->IsDisposed()) state_->RequireAvailable(info.Env());
-      return Napi::Boolean::New(info.Env(), state_->HasOpenWindows());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  Napi::Value Disposed(const Napi::CallbackInfo& info) {
-    try {
-      RequireMainThread(info.Env());
-      return Napi::Boolean::New(info.Env(), state_->IsDisposed());
-    } catch(const Napi::Error& error) {
-      error.ThrowAsJavaScriptException();
-    }
-    return info.Env().Undefined();
-  }
-
-  std::shared_ptr<ApplicationState> state_;
-  Napi::FunctionReference windowConstructor_;
-  bool cleanupRegistered_ = false;
-};
+    cleanupRegistered_ = true;
+  });
 }
 
-void InitializeApplication(Napi::Env env, Napi::Object exports) {
-  Application::Initialize(env, exports);
+Application::~Application() {
+  if(cleanupRegistered_) napi_remove_env_cleanup_hook(env_, Cleanup, this);
+}
+
+void Application::Cleanup(void* data) {
+  auto* application = static_cast<Application*>(data);
+  application->state_->Close();
+  application->cleanupRegistered_ = false;
+}
+
+Window* Application::CreateWindow(DawnDevice device, WindowOptionsArgument argument) {
+  return NativeBoundary(env_, [&]() -> Window* {
+    Napi::Env env(env_);
+    RequireMainThread(env);
+    state_->RequireAvailable(env);
+    if(state_->HasWindow()) throw Napi::Error::New(env, "Only one native window is supported in this increment");
+    ApplicationOperation operation(*state_);
+    auto options = DecodeWindowOptions(argument);
+    if(env.IsExceptionPending()) return nullptr;
+    auto state = std::make_shared<WindowState>(env, Napi::Value(env, device.value), state_, options);
+    auto window = std::make_unique<Window>(env, state);
+    state_->Register(state);
+    return window.release();
+  });
+}
+
+void Application::Dispose() {
+  NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    if(state_->executing) throw Napi::Error::New(env_, "An application operation is already in progress");
+    ApplicationOperation operation(*state_);
+    if(!state_->Close()) throw Napi::Error::New(env_, "GPU cleanup timed out; device was destroyed");
+  });
+}
+
+bool Application::PollEvents() {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    state_->RequireAvailable(env_);
+    ApplicationOperation operation(*state_);
+    glfwPollEvents();
+    return state_->HasOpenWindows();
+  });
+}
+
+bool Application::HasOpenWindows() {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    if(!state_->IsDisposed()) state_->RequireAvailable(env_);
+    return state_->HasOpenWindows();
+  });
+}
+
+bool Application::Disposed() {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    return state_->IsDisposed();
+  });
 }
 }

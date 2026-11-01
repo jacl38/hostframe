@@ -35,6 +35,8 @@ async function verify(presentation: boolean, interactions: boolean) {
   if(presentation) {
     checks.push(
       [resolve(buildRoot, "cmake/native_presentation_check")],
+      ["node", resolve(root, "packages/native/test/bindings.ts")],
+      ["bun", resolve(root, "packages/native/test/bindings.ts")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["node", resolve(root, "packages/native/test/loop.ts")],

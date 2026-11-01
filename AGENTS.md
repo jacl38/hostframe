@@ -11,6 +11,14 @@ ts-dawn aims to provide native desktop graphics applications in TypeScript using
 - Keep the public TypeScript API, native resource ownership and presentation, and transport across the TypeScript/native bridge distinct. Make ownership and interfaces at these boundaries explicit.
 - Centralize shared defaults and mappings. Give each an authoritative definition in the subsystem that owns it.
 
+## Derivation and duplication
+
+- Prioritize repetition that can cause behavioral or contract drift, especially across C++ and TypeScript. Prefer existing library definitions and typed registrations over parallel handwritten interfaces, constant values, and runtime registries. For example, [the native bridge](packages/native/bridge.ts) imports generated addon types, and [the input constant generator](scripts/native/input-constants.ts) discovers GLFW constants and obtains their values from the compiler. Keep its small naming override table in one place; do not replace automatic discovery with a per-key inventory.
+- Carry the same typed data through a subsystem when possible. [WindowInput](packages/native/src/input.h) queues the `InputEvent` variant directly rather than maintaining a second generic event record and a conversion switch. [Native extraction](scripts/native/extract-declarations.ts) generates runtime event names from that variant, which [TypeScript listeners](packages/core/input.ts) use instead of a second event-name allowlist.
+- Reuse generated contracts where this is straightforward and prevents drift. [Window.draw](packages/core/window.ts) derives its callback parameter from the generated native method, and [the compute fixture](packages/native/test/compute.ts) uses the generated addon module type. Do not recreate these signatures locally.
+- Leave trivial repetition alone when eliminating it would add more complexity, dependencies, indirection, or maintenance than it removes. Explicit binding member registrations in [record_fields.h](packages/native/src/record_fields.h) are appropriate. The small presentation-mode mappings in [present_mode.h](packages/native/src/present_mode.h) and [binding_types.h](packages/native/src/binding_types.h) do not justify a new reflection or generation system by themselves.
+- Preserve useful independence at boundaries: runtime lifecycle checks are still required alongside static types, and regression tests should assert expected behavior independently of the implementation. Do not deduplicate these merely because values or checks look similar. Keep policy decisions, such as supported presentation modes, explicit rather than automatically exposing every upstream possibility.
+
 ## Resource ownership and execution
 
 - Encode resource ownership and lifecycle in the implementation. Use C++ RAII and appropriate smart pointers for native resources, explicit disposal at the TypeScript boundary, and runtime checks for invalid lifecycle operations.

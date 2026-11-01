@@ -30,7 +30,7 @@ try {
     const deadline = performance.now() + 4000;
     while(!predicate()) {
       if(loopError) throw loopError;
-      assert.ok(performance.now() < deadline, message);
+      assert.ok(performance.now() < deadline, `${message}; recent events: ${JSON.stringify(events.slice(-8))}`);
       // Manual polling first; later the same assertions exercise app.run polling.
       if(!running) app.pollEvents();
       await setTimeout(10);
@@ -53,10 +53,10 @@ try {
     guards++;
   });
   await xdo("keydown", "Shift_L", "a");
-  await until(() => window.isKeyDown(Key.A) && window.isKeyDown(Key.LeftShift), "Held key state missing");
+  await until(() => window.isKeyDown(Key.A) && window.isKeyDown(Key.LEFT_SHIFT), "Held key state missing");
   const a = events.find(event => event.type === "key" && event.key === Key.A && event.action === "press");
   assert.ok(a?.type === "key");
-  assert.ok(a.modifiers & Modifier.Shift);
+  assert.ok(a.modifiers & Modifier.SHIFT);
   assert.equal(window.isScancodeDown(a.scancode), true);
   assert.equal(initial.keys.length, 0, "Retained snapshots must not change");
   await until(() => events.some(event => event.type === "key" && event.key === Key.A && event.action === "repeat"), "OS key repeat missing");
@@ -73,7 +73,7 @@ try {
   await xdo("mousemove", "--sync", "--window", id, "90", "80");
   await until(() => window.input.x === 90 && window.input.y === 80, "Pointer movement missing");
   assert.ok(events.some(event => event.type === "pointerMove" && event.deltaX === 50 && event.deltaY === 30 && !event.captured));
-  for(const [xbutton, button] of [[1, PointerButton.Left], [2, PointerButton.Middle], [3, PointerButton.Right]] as const) {
+  for(const [xbutton, button] of [[1, PointerButton.LEFT], [2, PointerButton.MIDDLE], [3, PointerButton.RIGHT]] as const) {
     await xdo("mousedown", String(xbutton));
     await until(() => window.isButtonDown(button), `Button ${button} not held`);
     await xdo("mouseup", String(xbutton));
@@ -112,7 +112,7 @@ try {
   window.setPointerCapture(true);
   await xdo("keydown", "w");
   await xdo("mousedown", "1");
-  await until(() => window.isKeyDown(Key.W) && window.isButtonDown(PointerButton.Left), "Pre-blur held input missing");
+  await until(() => window.isKeyDown(Key.W) && window.isButtonDown(PointerButton.LEFT), "Pre-blur held input missing");
   events.length = 0;
   await xdo("windowminimize", "--sync", id);
   await until(() => !window.input.focused, "Focus loss missing");

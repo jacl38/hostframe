@@ -1,8 +1,27 @@
 import { expect, test } from "bun:test";
 import { freezeInput, InputListeners } from "../input.ts";
 import type { InputEvent } from "../input.ts";
+import { inputEventTypes } from "../../../build/native/generated/input-events.ts";
 
 const press: InputEvent = { type: "key", key: 65, scancode: 38, action: "press", modifiers: 0, synthetic: false };
+
+test("every native event type can be subscribed to and dispatched without a separate TS allowlist", () => {
+  const events: InputEvent[] = [
+    press,
+    { type: "pointerMove", x: 1, y: 2, deltaX: 3, deltaY: 4, captured: false },
+    { type: "pointerButton", button: 0, action: "press", modifiers: 0, synthetic: false },
+    { type: "scroll", deltaX: -1, deltaY: 1 },
+    { type: "focus", focused: false },
+    { type: "pointerCapture", captured: true, rawMotion: false }
+  ];
+  expect(Object.isFrozen(inputEventTypes)).toBe(true);
+  expect([...inputEventTypes].sort()).toEqual(events.map(event => event.type).sort());
+  const listeners = new InputListeners();
+  const delivered: InputEvent[] = [];
+  for(const type of inputEventTypes) listeners.on(type, event => { delivered.push(event); });
+  listeners.dispatch(events);
+  expect(delivered).toEqual(events);
+});
 
 test("input additions wait until next batch, removals apply immediately, duplicates are independent", () => {
   const listeners = new InputListeners();

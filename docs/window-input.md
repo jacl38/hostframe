@@ -16,23 +16,30 @@ import { Application, Key, PointerButton, Modifier } from "../index.ts";
 
 // After creating app, device, and window:
 const off = window.on("key", event => {
-  if(event.action === "press" && event.key === Key.Space) jump();
-  if(event.modifiers & Modifier.Shift) { /* shift was active for this event */ }
+  if(event.action === "press" && event.key === Key.SPACE) jump();
+  if(event.modifiers & Modifier.SHIFT) { /* shift was active for this event */ }
 });
 app.on("fixedUpdate", ({ dt }) => {
   if(window.isKeyDown(Key.W)) moveForward(dt);
-  if(window.isButtonDown(PointerButton.Left)) fire(dt);
+  if(window.isButtonDown(PointerButton.LEFT)) fire(dt);
 });
 // off() removes just this subscription and is safe to repeat.
 ```
 
-`Key` exports GLFW physical key tokens (`Key.W`, `Key.Escape`, `Key.LeftShift`,
-`Key.Digit1`, `Key.KpEnter`, etc.). They identify positions using the US layout,
-independently of the active text layout. `Key.Unknown` is -1. Every key event
+`Key` exports GLFW physical key tokens (`Key.W`, `Key.ESCAPE`, `Key.LEFT_SHIFT`,
+`Key.ONE`, `Key.KP_ENTER`, etc.). They identify positions using the US layout,
+independently of the active text layout. `Key.UNKNOWN` is -1. Every key event
 also carries a platform-specific `scancode`, including unknown keys. Use
 `isScancodeDown(scancode)` to distinguish unknown keys; scancodes are not portable
 between operating systems. This API provides controls, not characters, IME, or
 text composition.
+
+Names retain GLFW's suffix after removing `GLFW_KEY_`, `GLFW_MOUSE_BUTTON_`, or
+`GLFW_MOD_`. Standalone digits use `ZERO` through `NINE`, so `GLFW_KEY_0` becomes
+`Key.ZERO`; embedded digits stay unchanged (`Key.KP_0`, `Key.F1`). The ten overrides
+are defined once in the TypeScript generator and shared by all three groups.
+`LAST` sentinels are omitted; other aliases are retained. These names replace the
+previous PascalCase and `Digit0`/`Button4` naming conventions.
 
 | Subscription | Event fields (in addition to `type`) |
 | --- | --- |
@@ -43,10 +50,11 @@ text composition.
 | `focus` | `focused` |
 | `pointerCapture` | `captured`, `rawMotion` |
 
-`PointerButton.Left` is 0, **Right is 1, Middle is 2** (GLFW numbering, different
-from DOM numbering). Extra buttons are 3–7 (`Button4`–`Button8`). Wheel input is
-scroll, not held buttons. `modifiers` is a bitmask of `Modifier.Shift`, `Control`,
-`Alt`, `Super`, `CapsLock`, and `NumLock`. Synthetic releases have modifiers 0.
+`PointerButton.LEFT` is 0, **RIGHT is 1, MIDDLE is 2** (GLFW numbering, different
+from DOM numbering). `ONE`, `TWO`, and `THREE` alias these named buttons; extra
+buttons are 3–7 (`FOUR`–`EIGHT`). Wheel input is scroll, not held buttons.
+`modifiers` is a bitmask of `Modifier.SHIFT`, `CONTROL`, `ALT`, `SUPER`, `CAPS_LOCK`,
+and `NUM_LOCK`. Synthetic releases have modifiers 0.
 
 `window.input` is an immutable snapshot containing `keys`, `scancodes`, `buttons`,
 `focused`, `pointerCaptured`, `rawMotion`, `x`, and `y`. Retaining a snapshot does
@@ -84,10 +92,10 @@ listener if a simulation needs per-update scroll totals.
 ```ts
 let capture: boolean | undefined;
 window.on("pointerButton", event => {
-  if(event.button === PointerButton.Left && event.action === "press") capture = true;
+  if(event.button === PointerButton.LEFT && event.action === "press") capture = true;
 });
 window.on("key", event => {
-  if(event.key === Key.Escape && event.action === "press") capture = false;
+  if(event.key === Key.ESCAPE && event.action === "press") capture = false;
 });
 window.on("focus", event => { if(!event.focused) capture = undefined; });
 app.on("fixedUpdate", () => {
@@ -168,3 +176,9 @@ logs, four example screenshots, and the recording are under
 `build/native/input-validation/` (ignored by Git). Input was delivered through
 XTest, with software Vulkan presentation; physical input hardware and hardware
 GPU presentation were not revalidated for this change.
+
+Input event and snapshot declarations are generated from the native typed field
+registrations, then re-exported by the core API. GLFW constant values are resolved
+by compiling the pinned header, including active preprocessor branches and aliases;
+there is no handwritten numeric table or C-expression parser. See
+[native bindings](native-bindings.md).

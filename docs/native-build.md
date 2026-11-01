@@ -5,6 +5,10 @@ fail explicitly before downloading an incompatible engine. This is a source
 contributor workflow; distributing prebuilt addons to application developers is
 still planned.
 
+Project-owned bindings use nobind17 typed registrations; both build commands
+produce `build/native/generated/native.d.ts`. Dawn bindings and `@webgpu/types`
+remain in place. See [native binding generation and runtime integration](native-bindings.md).
+
 ## Commands
 
 ```sh
@@ -19,9 +23,10 @@ bun run native:verify --window-interactions
 
 - `setup`: check prerequisites, download and verify pinned inputs, generate
   bindings, configure CMake, and build the addon and native presentation check.
-- `native:build`: regenerate TypeScript input constants from the pinned GLFW
-  header and rebuild prepared native sources without downloading or regenerating
-  Dawn bindings. Rerun `setup` after changing the pinned inputs or Dawn binding
+- `native:build`: prepare build-owned nobind17 headers, compiler-resolve TypeScript
+  input constants from the pinned GLFW header, rebuild prepared native sources,
+  and extract typed declarations from the freshly linked addon without downloading
+  or regenerating Dawn bindings. Rerun `setup` after changing the pinned inputs or Dawn binding
   generation script.
 - `native:check-build`: inspect `compile_commands.json` and reject unexpected
   sources, including Dawn's engine, Tint, and upstream's proc-table module entry.
@@ -84,14 +89,16 @@ The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and nat
 Every `setup` and `native:build` generates `build/native/generated/glfw-input.ts`
 from `vendor/dawn/third_party/glfw3/src/include/GLFW/glfw3.h`, the same pinned header
 used to compile GLFW and ts-dawn. `packages/core/keys.ts` re-exports its `Key`,
-`PointerButton`, and `Modifier` objects, preserving the public API and literal
-TypeScript types. No numeric input constants are maintained in project source.
+`PointerButton`, and `Modifier` objects with literal TypeScript types. No numeric
+input constants are maintained in project source.
 
-`scripts/native/input-constants.ts` handles integer literals and aliases, preserving
-the public naming conventions (`Key.Digit0`, `Key.KpEnter`, `PointerButton.Left`,
-etc.) and excluding `LAST` sentinels and redundant numbered aliases for the first
-three mouse buttons. Unsupported expressions, unresolved/cyclic aliases, and name
-collisions fail the build instead of silently producing incorrect values.
+`scripts/native/input-constants.ts` discovers names in the compiler's active macro
+list and compiles a temporary C++ program to resolve their values. Names keep their
+GLFW suffixes (`Key.LEFT_SHIFT`, `Key.KP_ENTER`, `PointerButton.LEFT`,
+`Modifier.SHIFT`); a single generator table renames standalone digits to `ZERO`
+through `NINE` for all groups. `LAST` sentinels are excluded, and other aliases
+remain available (`PointerButton.ONE` equals `PointerButton.LEFT`). Invalid or
+unresolved expressions, unsafe integers, and public-name collisions fail the build.
 
 The output is ignored by Git and records the header's SHA-256. Builds compare the
 expected output with the file, recreating missing/stale output and avoiding writes
@@ -399,7 +406,7 @@ or start an isolated Xvfb session and a window manager before running it. For ex
 with the prerequisite tools installed:
 
 ```sh
-xvfb-run -a -s '-screen 0 1280x960x24' dbus-run-session -- sh -eu -c '
+xvfb-run -d -s '-screen 0 1280x960x24' dbus-run-session -- sh -eu -c '
   export QT_QPA_PLATFORM=xcb
   validation_dir=$(mktemp -d)
   export XDG_CONFIG_HOME="$validation_dir/config"
@@ -416,6 +423,10 @@ xvfb-run -a -s '-screen 0 1280x960x24' dbus-run-session -- sh -eu -c '
   bun run native:verify --window-interactions
 '
 ```
+
+The Fedora `xvfb-run -d` option asks Xvfb to allocate a free display with
+`-displayfd`; it avoids stale lock-file collisions from `-a`. Confirm the
+new display has the requested geometry before injecting input.
 
 Select a suitable Vulkan ICD for that environment; the local software run used
 `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json`. X11 requires local

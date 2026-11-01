@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { checkAdapter } from "./adapter.ts";
+import type * as Native from "../../../build/native/generated/native";
 
 const require = createRequire(import.meta.url);
-const addon: {
-  globals: Record<string, unknown>,
-  create(flags: string[]): GPU
-} = require("../../../build/native/cmake/ts_dawn.node");
+const addon: typeof Native = require("../../../build/native/cmake/ts_dawn.node");
 Object.assign(globalThis, addon.globals);
 assert.throws(() => addon.create(["invalid-flag"]), /key=value/);
 
