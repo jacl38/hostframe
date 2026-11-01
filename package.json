@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test scripts packages/core/test",
     "native:verify": "bun scripts/native.ts verify",
-    "example:solid-color": "bun examples/solid-color.ts"
+    "example:solid-color": "bun examples/solid-color.ts",
+    "example:input": "bun examples/input.ts"
   }
 }

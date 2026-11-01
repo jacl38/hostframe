@@ -186,3 +186,7 @@ unmeasured. See [native validation](native-build.md) for exercised runtimes.
 
 The process-lifetime GPU-owner root is unchanged. This scheduler does not solve
 upstream GPU-object lifetime management or alter caller ownership of devices.
+
+Input events are dispatched during polling before fixed updates and rendering,
+including while paused. Read held controls in fixed updates; native mutations
+inside input listeners are guarded. See [window input](window-input.md).

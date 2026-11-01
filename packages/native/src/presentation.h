@@ -17,6 +17,7 @@ class Presentation {
   ~Presentation();
   bool Close();
   void Draw(Napi::Env env, Napi::Function callback);
+  GLFWwindow* NativeWindow() const { return window_.get(); }
   bool ShouldClose() const;
   void RequestClose();
   const char* PresentMode() const;

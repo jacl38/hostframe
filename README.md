@@ -1,6 +1,6 @@
 **ts-dawn is a TypeScript library for building native desktop graphics applications without a browser or WebView.** It aims to provide the same API across Node.js, and Bun.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Input events and multiple windows remain planned.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Keyboard and pointer input include held-state snapshots and game-style pointer capture. Multiple live windows remain planned.
 
 | Piece | Responsibility | Location |
 |---|---|---|
@@ -145,6 +145,22 @@ Window/application cleanup still drains deferred swapchain deletion; a five-seco
 GPU cleanup timeout destroys the stalled device and explicit disposal throws (see
 [the build guide](docs/native-build.md)).
 
+**Keyboard and pointer input**
+
+Use `window.on("key" | "pointerMove" | "pointerButton" | "scroll" | "focus" |
+"pointerCapture", listener)` for events and `window.input`, `isKeyDown(Key.W)`,
+`isScancodeDown(scancode)`, and `isButtonDown(PointerButton.Left)` for held state.
+Events are delivered by `app.pollEvents()` and `app.run()`, including while paused.
+Focus loss clears held controls and releases capture. `setPointerCapture(true)`
+hides and locks the cursor for unlimited game-control motion; the optional second
+argument enables raw motion explicitly. Native mutations must be deferred out of
+input listeners to preserve operation guards.
+
+Run `bun run example:input` or `node examples/input.ts` for an interactive square:
+WASD/arrows move, click toggles capture, Escape releases it, the wheel changes
+size, and Q quits. See [window input](docs/window-input.md) for event types,
+coordinate units, repeat behavior, listener failure semantics, and lifecycle rules.
+
 **Optional fixed-update loop**
 
 Register synchronous callbacks, then explicitly start the loop:
@@ -175,8 +191,7 @@ Stopping does not dispose resources. Use `finally` to dispose the application an
 then caller-owned devices. See [the loop contract](docs/application-loop.md) for
 catch-up limits, interpolation, listener semantics, and custom loops.
 
-Input event subscriptions, multiple live windows, and packaged
-addons remain outside this increment. The former experimental free functions have
+Multiple live windows and packaged addons remain outside this increment. The former experimental free functions have
 been replaced by `Application`.
 
 **Native integration**

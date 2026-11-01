@@ -1,5 +1,6 @@
 import { getProcessGPU, NativeApplication } from "../native/bridge.ts";
 import type { WindowOptions } from "../native/bridge.ts";
+import { Window } from "./window.ts";
 import { ApplicationLoop } from "./loop.ts";
 import type { FixedUpdateEvent, RenderEvent, RunOptions } from "./timing.ts";
 
@@ -18,6 +19,7 @@ export class Application {
   readonly gpu: GPU;
   #native: NativeApplication;
   #loop: ApplicationLoop | undefined;
+  #window: Window | undefined;
   #listeners: Listeners = { fixedUpdate: new Set(), render: new Set() };
 
   constructor() {
@@ -32,12 +34,15 @@ export class Application {
 
   /** One live window (default: fixed 320×240), retaining a caller-owned device obtained through app.gpu. */
   createWindow(device: GPUDevice, options: WindowOptions = {}) {
-    return this.#native.createWindow(device, options);
+    this.#window = new Window(this.#native.createWindow(device, options));
+    return this.#window;
   }
 
   /** Pumps native events without rendering. Returns whether any window is open. */
   pollEvents() {
-    return this.#native.pollEvents();
+    const open = this.#native.pollEvents();
+    this.#window?.dispatchInput();
+    return open;
   }
 
   /** Registers a synchronous listener and returns an idempotent unsubscribe function. */
@@ -56,9 +61,10 @@ export class Application {
     this.#requireAlive();
     if(this.#loop) throw new Error("Application is already running");
     // Enforce the native operation guard before scheduling, including inside draw.
-    this.#native.pollEvents();
+    // Check guards without delivering input until the run promise is active.
+    void this.#native.hasOpenWindows;
     const loop = new ApplicationLoop(options, {
-      pollEvents: () => this.#native.pollEvents(),
+      pollEvents: () => this.pollEvents(),
       fixedUpdate: event => { this.#emit("fixedUpdate", event); },
       render: event => { this.#emit("render", event); }
     });
@@ -95,6 +101,8 @@ export class Application {
       // disposal leaves it alive and must not cancel an otherwise healthy run.
       if(this.#native.disposed) {
         this.stop();
+        this.#window?.dispose();
+        this.#window = undefined;
         this.#listeners.fixedUpdate.clear();
         this.#listeners.render.clear();
       }

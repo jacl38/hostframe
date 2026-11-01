@@ -48,7 +48,9 @@ async function verify(presentation: boolean, interactions: boolean) {
   if(interactions) {
     checks.push(
       ["node", resolve(root, "packages/native/test/resize.ts")],
-      ["bun", resolve(root, "packages/native/test/resize.ts")]
+      ["bun", resolve(root, "packages/native/test/resize.ts")],
+      ["node", resolve(root, "packages/native/test/input.ts")],
+      ["bun", resolve(root, "packages/native/test/input.ts")]
     );
   }
   for(const command of checks) {

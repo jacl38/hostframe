@@ -5,6 +5,8 @@ export { lock };
 export const root = resolve(import.meta.dir, "../..");
 export const buildRoot = resolve(root, "build/native");
 export const dawnRoot = resolve(root, "vendor/dawn");
+export const glfwInputHeader = resolve(dawnRoot, "third_party/glfw3/src/include/GLFW/glfw3.h");
+export const inputConstantsPath = resolve(buildRoot, "generated/glfw-input.ts");
 
 export type Archive = typeof lock.source & { destination: string };
 export const source = { ...lock.source, destination: dawnRoot };

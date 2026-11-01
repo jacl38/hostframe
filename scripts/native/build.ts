@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { assertDependencies } from "./dependencies";
 import { assertGeneratedBindings } from "./generate";
+import { generateInputConstants } from "./input-constants";
 import { buildRoot, dawnRoot, getEngine, headers, root } from "./release";
 
 export function checkPrerequisites(forSetup = false) {
@@ -47,6 +48,7 @@ export async function buildNative() {
   if(!/^[1-9]\d*$/.test(jobs)) throw new Error("TS_DAWN_JOBS must be a positive integer.");
   await assertDependencies();
   await assertGeneratedBindings();
+  if(await generateInputConstants()) console.log("Generated GLFW TypeScript input constants from the pinned header.");
   const env = { ...process.env, CCACHE_DIR: resolve(buildRoot, "cache/ccache") };
   await mkdir(env.CCACHE_DIR, { recursive: true });
   const engine = getEngine();

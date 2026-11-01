@@ -45,6 +45,7 @@ add_library(ts_dawn MODULE
   src/module.cpp
   src/application.cpp
   src/window.cpp
+  src/input.cpp
   src/presentation.cpp
   ${BINDING_SOURCES}
   "${BINDING_ROOT}/src/dawn/node/interop/Core.cpp"
@@ -74,7 +75,7 @@ target_include_directories(ts_dawn SYSTEM PRIVATE
 target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG DAWN_USE_X11 GLFW_INCLUDE_NONE)
 target_link_libraries(ts_dawn PRIVATE dawn_engine glfw X11::Xfixes Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
-set_source_files_properties(src/module.cpp src/application.cpp src/window.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
+set_source_files_properties(src/module.cpp src/application.cpp src/window.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 
 add_library(dawn_glfw STATIC "${DAWN_SOURCE}/src/dawn/glfw/utils.cpp")
 target_include_directories(dawn_glfw PRIVATE "${DAWN_SOURCE}" "${DAWN_SOURCE}/include")

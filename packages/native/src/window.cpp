@@ -6,6 +6,7 @@
 #include "src/dawn/node/binding/GPUDevice.h"
 #include "application.h"
 #include "presentation.h"
+#include "input.h"
 
 namespace ts_dawn {
 
@@ -20,11 +21,13 @@ WindowState::WindowState(Napi::Env env, Napi::Value value,
   if(!binding) throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
   device_ = Napi::Persistent(value.As<Napi::Object>());
   presentation_ = std::make_unique<Presentation>(binding->GetNativeDevice(), options);
+  input_ = std::make_unique<WindowInput>(presentation_->NativeWindow());
 }
 
 WindowState::~WindowState() { Close(); }
 
 bool WindowState::Close() {
+  input_.reset();
   const bool drained = !presentation_ || presentation_->Close();
   presentation_.reset();
   device_.Reset();
@@ -44,6 +47,7 @@ bool WindowState::ShouldClose() const {
 
 void WindowState::RequestClose() {
   presentation_->RequestClose();
+  input_->Reset();
 }
 
 const char* WindowState::PresentMode() const {
@@ -56,6 +60,9 @@ class Window final : public Napi::ObjectWrap<Window> {
   static Napi::Function Constructor(Napi::Env env) {
     return DefineClass(env, "Window", {
       InstanceMethod("draw", &Window::Draw),
+      InstanceMethod("dispatchInput", &Window::DispatchInput),
+      InstanceMethod("setPointerCapture", &Window::SetPointerCapture),
+      InstanceAccessor("disposed", &Window::Disposed, nullptr),
       InstanceAccessor("shouldClose", &Window::ShouldClose, nullptr),
       InstanceAccessor("presentMode", &Window::PresentMode, nullptr),
       InstanceMethod("requestClose", &Window::RequestClose),
@@ -76,6 +83,51 @@ class Window final : public Napi::ObjectWrap<Window> {
   }
 
  private:
+  Napi::Value Disposed(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      return Napi::Boolean::New(info.Env(), state_->IsDisposed());
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value DispatchInput(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      auto application = state_->Owner();
+      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
+      application->RequireAvailable(info.Env());
+      if(!info[0].IsFunction()) throw Napi::TypeError::New(info.Env(), "Expected an input callback");
+      ApplicationOperation operation(*application);
+      state_->Input().Dispatch(info.Env(), info[0].As<Napi::Function>());
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    } catch(const std::exception& error) {
+      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
+  Napi::Value SetPointerCapture(const Napi::CallbackInfo& info) {
+    try {
+      RequireMainThread(info.Env());
+      auto application = state_->Owner();
+      if(!application) throw Napi::Error::New(info.Env(), "Window is disposed");
+      application->RequireAvailable(info.Env());
+      if(!info[0].IsBoolean() || !info[1].IsBoolean()) throw Napi::TypeError::New(info.Env(), "Expected capture and raw-motion booleans");
+      ApplicationOperation operation(*application);
+      state_->Input().SetCapture(info[0].As<Napi::Boolean>().Value(), info[1].As<Napi::Boolean>().Value());
+      return state_->Input().Snapshot(info.Env());
+    } catch(const Napi::Error& error) {
+      error.ThrowAsJavaScriptException();
+    } catch(const std::exception& error) {
+      Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
+  }
+
   Napi::Value Draw(const Napi::CallbackInfo& info) {
     try {
       RequireMainThread(info.Env());
@@ -128,6 +180,7 @@ class Window final : public Napi::ObjectWrap<Window> {
       application->RequireAvailable(info.Env());
       ApplicationOperation operation(*application);
       state_->RequestClose();
+      return state_->Input().Snapshot(info.Env());
     } catch(const Napi::Error& error) {
       error.ThrowAsJavaScriptException();
     }

@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import type { InputEvent, InputState } from "../core/input.ts";
 
 export type WindowOptions = {
   /** Default: "ts-dawn solid color". */
@@ -14,12 +15,15 @@ export type WindowOptions = {
 
 export type PresentMode = "fifo" | "immediate" | "mailbox";
 
-export type Window = {
+export type NativeWindow = {
+  readonly disposed: boolean,
+  dispatchInput(callback: (state: InputState, events: InputEvent[]) => undefined): void,
+  setPointerCapture(captured: boolean, rawMotion: boolean): InputState,
   /** Selected from Dawn surface capabilities at creation. Throws after disposal. */
   readonly presentMode: PresentMode,
   /** Close requests do not dispose the window. Throws after disposal. */
   readonly shouldClose: boolean,
-  requestClose(): void,
+  requestClose(): InputState,
   /**
    * Submit before returning; textures/views expire afterward. Async results are rejected.
    * Texture dimensions are framebuffer pixels. Skips the callback while minimized,
@@ -30,11 +34,8 @@ export type Window = {
   dispose(): void
 };
 
-/** @deprecated Use Window. Windows now support optional resizing. */
-export type FixedWindow = Window;
-
 export type NativeApplication = {
-  createWindow(device: GPUDevice, options?: WindowOptions): Window,
+  createWindow(device: GPUDevice, options?: WindowOptions): NativeWindow,
   pollEvents(): boolean,
   readonly hasOpenWindows: boolean,
   readonly disposed: boolean,

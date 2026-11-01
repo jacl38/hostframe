@@ -19,8 +19,10 @@ bun run native:verify --window-interactions
 
 - `setup`: check prerequisites, download and verify pinned inputs, generate
   bindings, configure CMake, and build the addon and native presentation check.
-- `native:build`: rebuild prepared native sources without downloading or running
-  generators. Rerun `setup` after changing the pinned inputs or generation script.
+- `native:build`: regenerate TypeScript input constants from the pinned GLFW
+  header and rebuild prepared native sources without downloading or regenerating
+  Dawn bindings. Rerun `setup` after changing the pinned inputs or Dawn binding
+  generation script.
 - `native:check-build`: inspect `compile_commands.json` and reject unexpected
   sources, including Dawn's engine, Tint, and upstream's proc-table module entry.
 - `native:verify`: load the same addon in Node.js and Bun, dispatch a compute
@@ -76,6 +78,25 @@ The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and nat
 `Application` exports are internal building blocks. Import the TypeScript
 `Application` from the root `index.ts` entry point (implemented in
 `packages/core/application.ts`).
+
+## Generated input constants
+
+Every `setup` and `native:build` generates `build/native/generated/glfw-input.ts`
+from `vendor/dawn/third_party/glfw3/src/include/GLFW/glfw3.h`, the same pinned header
+used to compile GLFW and ts-dawn. `packages/core/keys.ts` re-exports its `Key`,
+`PointerButton`, and `Modifier` objects, preserving the public API and literal
+TypeScript types. No numeric input constants are maintained in project source.
+
+`scripts/native/input-constants.ts` handles integer literals and aliases, preserving
+the public naming conventions (`Key.Digit0`, `Key.KpEnter`, `PointerButton.Left`,
+etc.) and excluding `LAST` sentinels and redundant numbered aliases for the first
+three mouse buttons. Unsupported expressions, unresolved/cyclic aliases, and name
+collisions fail the build instead of silently producing incorrect values.
+
+The output is ignored by Git and records the header's SHA-256. Builds compare the
+expected output with the file, recreating missing/stale output and avoiding writes
+when unchanged. Run `bun run setup` on a fresh checkout, or `bun run native:build`
+with already prepared dependencies, before typechecking or using these exports.
 
 ## Application ownership and JavaScript presentation
 
@@ -455,3 +476,8 @@ real monitor pacing, frame-time percentiles, input latency, and VRR have not bee
 measured; neither Xvfb/lavapipe nor the virtual KWin/Intel checks are performance
 benchmarks. Xwayland verifies the X11 client path through a Wayland compositor,
 not a native Wayland GLFW backend or physical-monitor scanout.
+
+The `--window-interactions` suite also exercises real keyboard and pointer input
+through xdotool in Node.js and Bun, including focus loss with held controls, OS
+key repeat, scrolling, and game-style pointer capture. It needs repeat enabled
+and an EWMH X11 desktop. See [window input](window-input.md).
