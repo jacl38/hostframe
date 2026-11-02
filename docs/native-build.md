@@ -107,7 +107,7 @@ with already prepared dependencies, before typechecking or using these exports.
 
 ## Application ownership and JavaScript presentation
 
-Run `bun run example:solid-color` or `node examples/solid-color.ts` with an X11
+Run `bun run example:solid-color` or `node examples/vanilla/solid-color.ts` with an X11
 display. The same example uses 120 Hz fixed updates and renders a resizable blue 640×480
 window for three seconds of simulated time. Native close requests stop it normally.
 For a headless check, use `xvfb-run -a bun run native:verify --presentation`.

@@ -1,20 +1,12 @@
-import { Application, Key, PointerButton } from "../index.ts";
+import { Key, PointerButton } from "../../index.ts";
+import { createExample } from "../shared/application.ts";
 
 // WASD/arrows move the square; pointer motion steers it while captured.
 // Left click toggles capture, Escape releases it, wheel changes its size, Q quits.
-const app = new Application();
-let device: GPUDevice | undefined;
+const example = await createExample("vanilla / input", { width: 800, height: 500, escapeQuits: false });
+const { app, device, window } = example;
 try {
-  const adapter = await app.gpu.requestAdapter();
-  if(!adapter) throw new Error("No compatible adapter");
-  device = await adapter.requestDevice();
   const renderingDevice = device;
-  const window = app.createWindow(device, {
-    title: "ts-dawn input: WASD/arrows | click capture | Esc release | wheel size | Q quit",
-    width: 800,
-    height: 500,
-    resizable: true
-  });
   const shader = device.createShaderModule({ code: `
     @vertex fn vertex(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
       let p = array(vec2f(-1,-1), vec2f(1,-1), vec2f(-1,1), vec2f(-1,1), vec2f(1,-1), vec2f(1,1));
@@ -61,7 +53,7 @@ try {
     y = Math.max(0, Math.min(1, y));
   });
   app.on("render", () => {
-    window.draw(texture => {
+    example.draw(texture => {
       pipeline ??= renderingDevice.createRenderPipeline({ layout: "auto", vertex: { module: shader, entryPoint: "vertex" }, fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] } });
       const encoder = renderingDevice.createCommandEncoder();
       const pass = encoder.beginRenderPass({ colorAttachments: [{
@@ -80,7 +72,7 @@ try {
     });
   });
   console.log("WASD/arrows move; left click captures; Escape releases; wheel resizes; Q quits.");
-  await app.run({ updateHz: 120, maxFPS: 60 });
+  await example.run();
 } finally {
-  try { app.dispose(); } finally { device?.destroy(); }
+  await example.dispose();
 }

@@ -165,8 +165,8 @@ process.exitCode = await child.exited;
 
 Under the same display/driver environment, check `xdpyinfo -queryExtensions`,
 `glxinfo -B`, and `vulkaninfo --summary` before interpreting a successful suite as
-hardware evidence. Run `node examples/solid-color.ts` and
-`bun examples/solid-color.ts` with the flags above; locate each visible client
+hardware evidence. Run `node examples/vanilla/solid-color.ts` and
+`bun examples/vanilla/solid-color.ts` with the flags above; locate each visible client
 using `xdotool search --onlyvisible --pid <pid>` and capture it with
 `import -window <id> <output.png>` while it is rendering. For external-close checks,
 run `packages/native/test/loop.ts --external-close`, then send

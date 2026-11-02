@@ -13,14 +13,21 @@ The implementation combines existing native components with a small integration 
 
 Dawn supplies GPU functionality. GLFW supplies interactive windows. `ts-dawn` coordinates their ownership and execution.
 
+**Examples**
+
+The [example gallery](examples/README.md) contains 13 runnable demos grouped by
+rendering source: vanilla WebGPU, webgpu-utils, TypeGPU, and Three.js, including
+Rapier physics. Run `bun run example --list`, then for example
+`bun run example three/shadows`. Every entry also runs directly in Node.js.
+
 **Minimal application API**
 
-After `bun install` and `bun run setup`, run the [solid-color example](examples/solid-color.ts):
+After `bun install` and `bun run setup`, run the [solid-color example](examples/vanilla/solid-color.ts):
 
 ```sh
 bun run example:solid-color
 # The same TypeScript example runs directly in Node.js:
-node examples/solid-color.ts
+node examples/vanilla/solid-color.ts
 ```
 
 The [Application](packages/core/application.ts) owns one native GLFW session and
@@ -79,10 +86,10 @@ does not guarantee a frame rate or bypass GPU/display limits.
 The example supports all four combinations in Bun or Node.js:
 
 ```sh
-bun examples/solid-color.ts                              # FIFO, uncapped scheduler
-bun examples/solid-color.ts --max-fps=30                 # FIFO, capped
-bun examples/solid-color.ts --no-vsync                   # Immediate/Mailbox, uncapped
-bun examples/solid-color.ts --no-vsync --max-fps=144      # Immediate/Mailbox, capped
+bun examples/vanilla/solid-color.ts                              # FIFO, uncapped scheduler
+bun examples/vanilla/solid-color.ts --max-fps=30                 # FIFO, capped
+bun examples/vanilla/solid-color.ts --no-vsync                   # Immediate/Mailbox, uncapped
+bun examples/vanilla/solid-color.ts --no-vsync --max-fps=144      # Immediate/Mailbox, capped
 ```
 
 ```ts
@@ -156,7 +163,7 @@ hides and locks the cursor for unlimited game-control motion; the optional secon
 argument enables raw motion explicitly. Native mutations must be deferred out of
 input listeners to preserve operation guards.
 
-Run `bun run example:input` or `node examples/input.ts` for an interactive square:
+Run `bun run example:input` or `node examples/vanilla/input.ts` for an interactive square:
 WASD/arrows move, click toggles capture, Escape releases it, the wheel changes
 size, and Q quits. See [window input](docs/window-input.md) for event types,
 coordinate units, repeat behavior, listener failure semantics, and lifecycle rules.

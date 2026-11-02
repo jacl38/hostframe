@@ -1,7 +1,7 @@
 # Window input
 
 Input is implemented for the current Linux x64/X11 target in Node.js and Bun.
-Run `bun run example:input` or `node examples/input.ts`. WASD/arrows move the
+Run `bun run example:input` or `node examples/vanilla/input.ts`. WASD/arrows move the
 square, left click toggles capture, Escape releases capture, the wheel changes
 size, and Q closes the window. Losing focus releases held controls and capture.
 
