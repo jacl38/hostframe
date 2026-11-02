@@ -4,6 +4,11 @@ Validated on 2026-10-31. The C++ presentation check, Node.js, and Bun all render
 and presented using the integrated Intel GPU. Software Vulkan was excluded.
 The example's eight captured windows were visually inspected.
 
+The [2026-11-01 follow-up](presentation-performance.md) revalidates the combined
+resize, input and generated-binding implementation on Intel and compares its
+performance with software rendering through the same compositor. The original
+results below remain a record of the earlier implementation.
+
 ## Environment
 
 | Component | Observed value |

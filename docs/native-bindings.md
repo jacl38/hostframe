@@ -114,3 +114,7 @@ file and produced misleading missing-input failures. Allocating a fresh display
 with `-d`/`-displayfd` resolved that environment issue; screen geometry was checked
 before input verification. This migration was not revalidated on hardware GPUs,
 physical monitors, other operating systems or other runtime versions.
+
+The [2026-11-01 hardware follow-up](presentation-performance.md) subsequently
+passed the combined implementation's full interaction and lifecycle suite in
+Node.js and Bun on Intel, including the generated binding boundary checks.

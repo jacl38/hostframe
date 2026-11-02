@@ -435,10 +435,12 @@ KWin configuration/runtime directories when another desktop is active.
 
 Outdated/lost/timeout recovery has deterministic native coverage; real compositor
 interactions do not force each driver status. This run verifies the X11 pixel-size
-path at scale 1. A display with differing logical/framebuffer dimensions, physical
-DPI transitions, zero-size framebuffer events, and hardware-GPU resizing have not
-been exercised. Non-drawable acquisition suspension and recovery sequencing are
-covered deterministically. The existing Intel report predates resize support.
+path at scale 1. These software checks do not exercise displays with differing
+logical/framebuffer dimensions, physical DPI transitions or zero-size framebuffer
+events. Non-drawable acquisition suspension and recovery sequencing are
+covered deterministically. The original Intel report predates resize support;
+the [2026-11-01 hardware follow-up](presentation-performance.md) additionally
+passed resize/minimize/restore and input checks on Intel through Xwayland.
 
 This machine has several Vulkan ICDs installed. Default driver enumeration logs
 failures for unavailable hardware drivers while compute still succeeds. For the

@@ -177,6 +177,10 @@ logs, four example screenshots, and the recording are under
 XTest, with software Vulkan presentation; physical input hardware and hardware
 GPU presentation were not revalidated for this change.
 
+The [2026-11-01 hardware follow-up](presentation-performance.md) subsequently
+passed the same interaction suite and exercised both input examples on Intel
+through Xwayland. Physical input hardware remains unverified.
+
 Input event and snapshot declarations are generated from the native typed field
 registrations, then re-exported by the core API. GLFW constant values are resolved
 by compiling the pinned header, including active preprocessor branches and aliases;
