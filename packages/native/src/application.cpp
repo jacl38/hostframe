@@ -2,13 +2,19 @@
 
 #include <algorithm>
 #include <stdexcept>
+#if defined(__APPLE__)
+#include <pthread.h>
+#else
 #include <sys/syscall.h>
+#endif
 #include <unistd.h>
 
 #include <GLFW/glfw3.h>
+#if !defined(__APPLE__)
 #define GLFW_EXPOSE_NATIVE_X11
 #include <GLFW/glfw3native.h>
 #include <X11/extensions/Xfixes.h>
+#endif
 
 #include "window.h"
 #include "bindings.h"
@@ -17,8 +23,12 @@
 namespace ts_dawn {
 
 void RequireMainThread(Napi::Env env) {
-  // This target is Linux-only. A worker cannot become GLFW's main thread.
-  if(syscall(SYS_gettid) != getpid()) {
+#if defined(__APPLE__)
+  const bool mainThread = pthread_main_np() != 0;
+#else
+  const bool mainThread = syscall(SYS_gettid) == getpid();
+#endif
+  if(!mainThread) {
     throw Napi::Error::New(env, "Native applications require the process main thread");
   }
 }
@@ -29,8 +39,9 @@ class GlfwSession {
     if(active_) throw std::runtime_error("Only one native application is supported in this increment");
     if(!glfwInit()) {
       glfwTerminate();
-      throw std::runtime_error("GLFW initialization failed; check DISPLAY");
+      throw std::runtime_error("GLFW initialization failed; check desktop session");
     }
+#if !defined(__APPLE__)
     // Mesa's Vulkan WSI caches extension data by xcb_connection_t address for
     // the instance lifetime. A new GLFW session can reuse a closed connection's
     // address while our process GPU is still alive, skipping XFixes negotiation.
@@ -38,6 +49,7 @@ class GlfwSession {
     int major = 0;
     int minor = 0;
     XFixesQueryVersion(glfwGetX11Display(), &major, &minor);
+#endif
     active_ = true;
   }
   ~GlfwSession() {

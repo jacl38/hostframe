@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { assertFramebufferSize } from "./framebuffer.ts";
 import { getProcessGPU, NativeApplication } from "../bridge.ts";
 import type * as Native from "../../../build/native/generated/native";
 
@@ -40,7 +41,7 @@ try {
     });
     window.draw(texture => {
       assert.ok(texture instanceof GPUTexture, "Surface texture must retain Dawn's wrapper");
-      assert.equal(texture.width, 320);
+      assertFramebufferSize(texture, 320, 240);
       assert.ok(texture.createView() instanceof GPUTextureView);
       assert.throws(() => window.draw(() => {}), /in progress/);
     });

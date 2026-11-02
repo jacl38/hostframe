@@ -25,12 +25,16 @@ export async function withBuildLock(action: () => Promise<void>) {
 }
 
 async function verify(presentation: boolean, interactions: boolean) {
+  if(interactions && process.platform !== "linux") {
+    throw new Error("--window-interactions requires Linux/X11, xdotool, and xprop.");
+  }
+  const threadCheck = process.platform === "darwin" ? "--thread-only" : "--no-display";
   const checks = [
     [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
     ["node", resolve(root, "packages/native/test/compute.ts")],
     ["bun", resolve(root, "packages/native/test/compute.ts")],
-    ["node", resolve(root, "packages/native/test/window.ts"), "--no-display"],
-    ["bun", resolve(root, "packages/native/test/window.ts"), "--no-display"]
+    ["node", resolve(root, "packages/native/test/window.ts"), threadCheck],
+    ["bun", resolve(root, "packages/native/test/window.ts"), threadCheck]
   ];
   if(presentation) {
     checks.push(

@@ -1,6 +1,7 @@
 # Native build
 
-The initial setup supports **Linux x64 with GLFW/X11 and Vulkan**. Other platforms
+Setup supports **Linux x64 with GLFW/X11 and Vulkan** and **macOS arm64
+with GLFW/Cocoa and Metal**. Other platforms
 fail explicitly before downloading an incompatible engine. This is a source
 contributor workflow; distributing prebuilt addons to application developers is
 still planned.
@@ -35,9 +36,11 @@ bun run native:verify --window-interactions
   timeout. The shared TypeScript fixture is in `packages/native/test/compute.ts`
   so both runtimes execute identical code directly; Node.js uses built-in type
   stripping, and `typecheck` checks it with the standard WebGPU definitions. It also
-  exercises invalid GPU flags and ordinary device cleanup. Both runtimes also run
-  application initialization failure checks with `DISPLAY` cleared, including safe
-  retries and rejection of application construction from a worker thread.
+  exercises invalid GPU flags and ordinary device cleanup. Both runtimes reject
+  application construction from a worker thread. On Linux, they also check
+  initialization failure with `DISPLAY` cleared, including safe retries. macOS
+  has no equivalent DISPLAY switch; partial-initialization recovery after GLFW
+  succeeds is covered by the presentation suite.
   It also runs deterministic native present-mode selection checks without a
   display: FIFO default, Immediate preference, Mailbox fallback, and explicit
   rejection of unsupported policies (including empty capability lists). Deterministic
@@ -65,7 +68,7 @@ bun run native:verify --window-interactions
   and uncapped rendering in both runtimes, checks fixed `dt`, option validation,
   selected modes, and recovery from abandoned frames. Unsupported vsync-off
   requests must fail explicitly and permit a FIFO retry.
-- `native:verify --window-interactions`: includes `--presentation` and additionally
+- `native:verify --window-interactions` (Linux only): includes `--presentation` and additionally
   runs `packages/native/test/resize.ts` in Node.js and Bun. Requires an EWMH X11
   window manager (such as KWin), `xdotool`, and `xprop`. It checks default and
   custom titles/sizes/resizability, repeated large/small framebuffer transitions,
@@ -107,8 +110,8 @@ with already prepared dependencies, before typechecking or using these exports.
 
 ## Application ownership and JavaScript presentation
 
-Run `bun run example:solid-color` or `node examples/vanilla/solid-color.ts` with an X11
-display. The same example uses 120 Hz fixed updates and renders a resizable blue 640×480
+Run `bun run example:solid-color` or `node examples/vanilla/solid-color.ts` from a
+macOS desktop session or with an X11 display on Linux. The same example uses 120 Hz fixed updates and renders a resizable blue 640×480
 window for three seconds of simulated time. Native close requests stop it normally.
 For a headless check, use `xvfb-run -a bun run native:verify --presentation`.
 Xvfb is suitable for software presentation checks; Intel Vulkan presentation
@@ -194,7 +197,7 @@ closed first. The implementation submits an empty command buffer and uses public
 it destroys the stalled device to release the display-dependent resources, and
 explicit disposal throws. This fallback is not exercised by the normal tests.
 
-Each new GLFW session also negotiates XFixes before Vulkan surface use. Mesa
+On Linux, each new GLFW session also negotiates XFixes before Vulkan surface use. Mesa
 26.2.5 cached WSI extension information by connection address across application
 disposal while the process GPU remained alive. Reusing that address skipped
 negotiation and caused fatal XFixes `CreateRegion` errors on Intel. Per-session
@@ -208,7 +211,7 @@ turns for GPU promises and I/O. The render cap is independent of vsync; blocking
 acquisition and OS/JavaScript scheduling affect callback execution times.
 
 Broader window/context APIs, input events, multiple live windows,
-platform expansion, addon distribution, and complete
+further platform expansion, addon distribution, and complete
 GC/shutdown validation are outside this increment. No additional upstream patches are used.
 
 ## Script organization
@@ -246,10 +249,12 @@ Install these through your preferred system/toolchain manager before setup:
 - Go >= 1.26, as required by this Dawn revision's `go.mod`.
 - Python 3 for Dawn's generator. Jinja2 and MarkupSafe come from Dawn's pinned
   dependencies; no global pip installation is needed.
-- Linux X11 development headers/libraries needed by GLFW, including Xrandr,
+- On macOS arm64: Xcode Command Line Tools with the macOS SDK (Cocoa, Metal,
+  QuartzCore, IOSurface, and IOKit). No X11 or Vulkan packages are needed.
+- On Linux: X11 development headers/libraries needed by GLFW, including Xrandr,
   Xinerama, Xcursor, Xi, and Xshape, plus `pkg-config`. ts-dawn also links Xfixes
   for per-session extension negotiation.
-- A Vulkan loader and usable driver for runtime checks. Mesa software Vulkan can
+- On Linux: a Vulkan loader and usable driver for runtime checks. Mesa software Vulkan can
   be useful on machines without a physical GPU, but driver capabilities vary.
 - An X11 display for presentation. A headless machine can use an existing Xvfb
   installation for software-driver checks, for example
@@ -344,6 +349,25 @@ allowlist, regenerate from clean inputs, and rerun build, compute, and presentat
 checks. Never combine a newer source checkout with an older engine.
 
 ## Verified locally
+
+On macOS 27.0.1 arm64 (Apple M4), Node.js 25.5.0, and Bun 1.4.2:
+
+- `setup` and `native:build` built the addon against the pinned macOS engine;
+  the compilation audit passed without building Dawn or Tint.
+- `native:verify --presentation` passed Metal compute/readback, the C++ 60-frame
+  presentation check, and both runtimes' binding, window lifecycle, worker-thread,
+  scheduler, presentation-setting, and shutdown checks. FIFO and Immediate modes
+  both passed with capped and uncapped rendering.
+- Retina textures used twice the window's screen-coordinate dimensions. Shared
+  fixture assertions cover that scale while retaining Linux's pixel-size checks.
+- Linux's DISPLAY failure and X11 socket checks do not run on macOS. Recovery
+  after GPU-global installation fails still runs in both runtimes.
+- Automated resize/minimize/restore and keyboard/mouse interaction checks remain
+  Linux-only. macOS input behavior, monitor pacing, and Intel Macs are unverified.
+
+The desktop/GPU checks required access outside the execution sandbox; sandboxed
+processes could not find a Metal adapter or connect to macOS desktop services.
+
 
 On Fedora 44 x64 with GCC 16.1.1, CMake 4.3.0, Ninja 1.13.2, Go 1.26.10,
 Python 3.14.5, Node.js 26.7.0, and Bun 1.3.14:
@@ -483,7 +507,7 @@ The native presentation executable tests the engine/helper directly; the separat
 JavaScript fixture exercises surface texture wrapping and synchronous presentation.
 Neither establishes multi-window scheduling, thread handoff, complete GC/disposal
 correctness, or broader window/context APIs.
-macOS, Windows, Linux arm64, native Wayland windows, distribution packaging, and performance
+Intel macOS, Windows, Linux arm64, native Wayland windows, distribution packaging, and performance
 remain unverified. High-refresh behavior has deterministic timing coverage, but
 real monitor pacing, frame-time percentiles, input latency, and VRR have not been
 measured; neither Xvfb/lavapipe nor the virtual KWin/Intel checks are performance

@@ -37,8 +37,8 @@ ts-dawn aims to provide native desktop graphics applications in TypeScript using
 - Keep setup/build orchestration in Bun/TypeScript under `scripts/`, with `scripts/native.ts` as the command entry point. Use Bun Shell for command execution and `Bun.spawn` where timeout/signal handling is needed. Use the project-owned CMake targets in `packages/native/`; never invoke Dawn's engine build as a fallback.
 - Maintain pinned inputs in `scripts/native/dawn.lock.json`; keep path resolution and platform selection in `scripts/native/release.ts`. Match source, headers, and engine revisions, verify archive checksums, and keep selected dependency revisions aligned with Dawn's `DEPS`.
 - Treat `vendor/` and `build/` as generated inputs/output. Apply binding changes to the build-owned copy through `scripts/native/generate.ts`.
-- Run `bun run native:build` and `bun run native:verify` for native changes. Exercise `bun run native:verify --presentation` when window/surface behavior changes and an X11/Vulkan environment is available. The build script audits compilation sources before building.
-- The current build configuration supports Linux x64/X11 only. See `docs/native-build.md` for prerequisites, update procedures, verified runtimes, and limitations.
+- Run `bun run native:build` and `bun run native:verify` for native changes. Exercise `bun run native:verify --presentation` when window/surface behavior changes and a macOS desktop or X11/Vulkan environment is available. The build script audits compilation sources before building.
+- The current build configuration supports Linux x64/X11 and macOS arm64/Cocoa with Metal. See `docs/native-build.md` for prerequisites, update procedures, verified runtimes, and limitations.
 
 ## TypeScript style
 

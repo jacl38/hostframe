@@ -4,10 +4,12 @@ import { setTimeout } from "node:timers/promises";
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
 import { Application } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
+import { assertFramebufferSize } from "./framebuffer.ts";
 import { assertDeviceAlive } from "./device.ts";
 
 function processSockets() {
   const sockets = new Set<string>();
+  if(process.platform !== "linux") return sockets;
   for(const descriptor of readdirSync("/proc/self/fd")) {
     try {
       const target = readlinkSync(`/proc/self/fd/${descriptor}`);
@@ -35,7 +37,9 @@ if(!isMainThread) {
   });
   assert.equal(message, "worker rejected");
 
-  if(process.argv.includes("--no-display")) {
+  if(process.argv.includes("--thread-only")) {
+    console.log(`${process.versions.bun ? "Bun" : "Node.js"}: Application main-thread guard passed.`);
+  } else if(process.argv.includes("--no-display")) {
     // The verifier clears DISPLAY before launching: Bun's JS env mutations do
     // not reliably change the environment observed by native GLFW.
     for(let attempt = 0; attempt < 2; attempt++) {
@@ -56,7 +60,7 @@ if(!isMainThread) {
     const beforeApplication = processSockets();
     const app = new Application();
     const sessionSockets = [...processSockets()].filter(socket => !beforeApplication.has(socket));
-    assert.ok(sessionSockets.length > 0, "Application must open an X11 connection");
+    if(process.platform === "linux") assert.ok(sessionSockets.length > 0, "Application must open an X11 connection");
     const gpu = app.gpu;
     assert.throws(() => new Application(), /Only one native application/);
     assert.throws(() => app.createWindow({} as GPUDevice), /GPUDevice/);
@@ -100,8 +104,7 @@ if(!isMainThread) {
           for(let frame = 0; frame < 60; frame++) {
             assert.equal(app.pollEvents(), true);
             window.draw(texture => {
-              assert.equal(texture.width, 320);
-              assert.equal(texture.height, 240);
+              assertFramebufferSize(texture, 320, 240);
               escaped = texture;
               const encoder = device.createCommandEncoder();
               const pass = encoder.beginRenderPass({

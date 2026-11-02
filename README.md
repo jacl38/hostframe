@@ -34,7 +34,7 @@ The [Application](packages/core/application.ts) owns one native GLFW session and
 tracks its window. One application and one live window are supported at a
 time, on the process main thread. The example renders a resizable blue 640×480 window for three
 seconds of simulated time and exits, or stops normally when the window is closed.
-It requires Linux x64, X11, and a compatible Vulkan driver.
+It supports Linux x64 with X11 and Vulkan, and macOS arm64 with Cocoa and Metal.
 
 Window creation preserves the original defaults: title `"ts-dawn solid color"`,
 320×240 client size, non-resizable, and vsync enabled. Override them at creation:
@@ -289,4 +289,6 @@ The implementation is organized into:
 
 Downloaded dependencies and generated artifacts are ignored and do not become ordinary tracked ts-dawn source files. Application developers would receive **prebuilt native addons**, rather than needing to build Dawn themselves.
 
-This checkout passes JavaScript compute/readback and configurable/resizable window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The resizable solid-color example was captured and inspected in both runtimes. Resize/minimize/restore and disposal interactions passed under Xvfb/KWin with lavapipe in Node.js and Bun; see the build guide for reproduction and limits. Physical-monitor pacing, other platforms, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.
+On macOS arm64 (Apple M4), Metal compute/readback and the full presentation suite pass in Node.js 25.5.0 and Bun 1.4.2, including Retina framebuffers, lifecycle, scheduler, and shutdown checks. Automated macOS input and resize/minimize interactions remain unverified.
+
+This checkout passes JavaScript compute/readback and configurable/resizable window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The resizable solid-color example was captured and inspected in both runtimes. Resize/minimize/restore and disposal interactions passed under Xvfb/KWin with lavapipe in Node.js and Bun; see the build guide for reproduction and limits. Physical-monitor pacing, platforms beyond Linux x64 and macOS arm64, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.

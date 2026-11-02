@@ -13,7 +13,7 @@ assert.throws(() => addon.create(["invalid-flag"]), /key=value/);
 const gpu = addon.create([]);
 Object.defineProperty(globalThis, "__tsDawnSmokeOwner", { value: gpu });
 const adapter = await gpu.requestAdapter();
-assert.ok(adapter, "No compatible GPU adapter; check Vulkan drivers and permissions.");
+assert.ok(adapter, "No compatible GPU adapter; check GPU drivers and permissions.");
 checkAdapter(adapter);
 const device = await adapter.requestDevice();
 const failures: string[] = [];

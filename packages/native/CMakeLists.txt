@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(ts_dawn LANGUAGES C CXX)
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
-  message(FATAL_ERROR "The initial prebuilt engine integration supports Linux x64 only.")
+if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$") AND NOT (APPLE AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))
+  message(FATAL_ERROR "Supported targets are Linux x64 and macOS arm64.")
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -29,13 +29,24 @@ set_target_properties(dawn_engine PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${TS_DAWN_HEADERS_INCLUDE}"
 )
 find_package(Threads REQUIRED)
-find_package(X11 REQUIRED COMPONENTS Xfixes)
+if(APPLE)
+  enable_language(OBJC OBJCXX)
+  set(CMAKE_OBJCXX_STANDARD 20)
+  set(PLATFORM_DEFINITIONS DAWN_ENABLE_BACKEND_METAL)
+  set(PLATFORM_LIBRARIES "-framework Metal" "-framework Foundation" "-framework QuartzCore" "-framework IOSurface" "-framework IOKit" "-framework Cocoa")
+else()
+  find_package(X11 REQUIRED COMPONENTS Xfixes)
+  set(PLATFORM_DEFINITIONS DAWN_USE_X11)
+  set(PLATFORM_LIBRARIES X11::Xfixes)
+endif()
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+if(NOT APPLE)
+  set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+endif()
 set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
 add_subdirectory("${DAWN_SOURCE}/third_party/glfw3/src" "${CMAKE_CURRENT_BINARY_DIR}/glfw")
 
@@ -68,7 +79,11 @@ set_source_files_properties(src/module.cpp src/nobind_runtime.cpp PROPERTIES
 )
 # Node also embeds Abseil. Keep the engine's bundled implementation local to
 # this addon so ELF symbol interposition cannot mix incompatible Abseil builds.
-target_link_options(ts_dawn PRIVATE "-Wl,--exclude-libs,ALL")
+if(APPLE)
+  target_link_options(ts_dawn PRIVATE "-undefined" "dynamic_lookup" "-Wl,-exported_symbol,_napi_register_module_v1" "-Wl,-exported_symbol,_node_api_module_get_api_version_v1")
+else()
+  target_link_options(ts_dawn PRIVATE "-Wl,--exclude-libs,ALL")
+endif()
 target_include_directories(ts_dawn PRIVATE
   "${BINDING_ROOT}"
   "${GENERATED_ROOT}"
@@ -80,15 +95,18 @@ target_include_directories(ts_dawn SYSTEM PRIVATE
   "${DAWN_SOURCE}/third_party/node-addon-api"
   "${DAWN_SOURCE}/third_party/node-api-headers/include"
 )
-target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG DAWN_USE_X11 GLFW_INCLUDE_NONE)
-target_link_libraries(ts_dawn PRIVATE dawn_engine glfw X11::Xfixes Threads::Threads ${CMAKE_DL_LIBS})
+target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG ${PLATFORM_DEFINITIONS} GLFW_INCLUDE_NONE)
+target_link_libraries(ts_dawn PRIVATE dawn_engine glfw ${PLATFORM_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
 set_source_files_properties(src/module.cpp src/nobind_runtime.cpp src/dawn_bridge.cpp src/application.cpp src/window.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 
 add_library(dawn_glfw STATIC "${DAWN_SOURCE}/src/dawn/glfw/utils.cpp")
+if(APPLE)
+  target_sources(dawn_glfw PRIVATE "${DAWN_SOURCE}/src/dawn/glfw/utils_metal.mm")
+endif()
 target_include_directories(dawn_glfw PRIVATE "${DAWN_SOURCE}" "${DAWN_SOURCE}/include")
-target_compile_definitions(dawn_glfw PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG DAWN_USE_X11 GLFW_INCLUDE_NONE)
-target_link_libraries(dawn_glfw PUBLIC dawn_engine glfw Threads::Threads ${CMAKE_DL_LIBS})
+target_compile_definitions(dawn_glfw PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG ${PLATFORM_DEFINITIONS} GLFW_INCLUDE_NONE)
+target_link_libraries(dawn_glfw PUBLIC dawn_engine glfw ${PLATFORM_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 target_link_libraries(ts_dawn PRIVATE dawn_glfw)
 
 add_executable(native_presentation_check test/presentation.cpp)

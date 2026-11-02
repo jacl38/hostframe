@@ -31,7 +31,7 @@ export function assertBuildSources(commands: CompileCommand[]) {
     const binding = /^binding\/[^/]+\.cpp$/.test(bindingPath) || ["interop/Core.cpp", "ManualConstructors.cpp"].includes(bindingPath);
     const glfw = relative(resolve(dawnRoot, "third_party/glfw3/src"), path);
     const presentationCheck = path === resolve(root, "packages/native/test/presentation.cpp");
-    const helper = path === resolve(dawnRoot, "src/dawn/glfw/utils.cpp");
+    const helper = ["utils.cpp", "utils_metal.mm"].some(file => path === resolve(dawnRoot, "src/dawn/glfw", file));
     const inside = [own, glfw].some(part => part !== ".." && !part.startsWith("../") && !part.startsWith("/"));
     if(!inside && !generated && !binding && !helper && !presentationCheck) throw new Error(`Unexpected native source (engine/Tint builds are forbidden): ${path}`);
     if(path.endsWith("/src/dawn/node/Module.cpp")) throw new Error("Upstream proc-table module entry point must not be compiled.");

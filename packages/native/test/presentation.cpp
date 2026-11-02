@@ -163,7 +163,11 @@ void CheckPresentation() {
   };
   auto adapterRequest = std::make_shared<AdapterRequest>();
   wgpu::RequestAdapterOptions options;
+#if defined(__APPLE__)
+  options.backendType = wgpu::BackendType::Metal;
+#else
   options.backendType = wgpu::BackendType::Vulkan;
+#endif
   options.compatibleSurface = surface;
   instance.RequestAdapter(&options, wgpu::CallbackMode::AllowProcessEvents,
       [adapterRequest](wgpu::RequestAdapterStatus status, wgpu::Adapter result, wgpu::StringView) {
@@ -172,10 +176,10 @@ void CheckPresentation() {
       });
   ProgressUntil(instance, [&] { return adapterRequest->done; });
   auto adapter = adapterRequest->adapter;
-  if(!adapter) throw std::runtime_error("No Vulkan adapter supports this surface.");
+  if(!adapter) throw std::runtime_error("No adapter supports this surface.");
   wgpu::AdapterInfo info;
   if(adapter.GetInfo(&info) != wgpu::Status::Success) throw std::runtime_error("Adapter information unavailable.");
-  std::cout << "Vulkan adapter: " << std::string_view(info.vendor) << ", "
+  std::cout << "GPU adapter: " << std::string_view(info.vendor) << ", "
             << std::string_view(info.device) << ", " << std::string_view(info.description)
             << "; fallback: " << (info.adapterType == wgpu::AdapterType::CPU ? "true" : "false") << '\n';
   if(const char* expected = std::getenv("TS_DAWN_EXPECT_VENDOR")) {
@@ -210,8 +214,10 @@ void CheckPresentation() {
   wgpu::SurfaceConfiguration configuration;
   configuration.device = device;
   configuration.format = capabilities.formats[0];
-  configuration.width = 320;
-  configuration.height = 240;
+  int framebufferWidth, framebufferHeight;
+  glfwGetFramebufferSize(window.get(), &framebufferWidth, &framebufferHeight);
+  configuration.width = framebufferWidth;
+  configuration.height = framebufferHeight;
   configuration.presentMode = ts_dawn::SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, true);
   configuration.alphaMode = capabilities.alphaModes[0];
   surface.Configure(&configuration);
@@ -252,7 +258,7 @@ void CheckPresentation() {
   device.Destroy();
   instance.ProcessEvents();
   // Surface and GPU references are released before their GLFW window and session.
-  std::cout << "GLFW/X11/Vulkan: 60 frames acquired, rendered, and presented.\n";
+  std::cout << "GLFW presentation: 60 frames acquired, rendered, and presented.\n";
 }
 
 }  // namespace

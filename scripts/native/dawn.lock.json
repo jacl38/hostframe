@@ -23,6 +23,13 @@
       "sha256": "b1805d8b23449343f021f20939d554afd6b4b05618c6abe08d9917a69c8b48eb",
       "strip": 1,
       "sentinel": "lib64/libwebgpu_dawn.a"
+    },
+    "darwin-arm64": {
+      "name": "Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-macos-latest-Release.tar.gz",
+      "url": "https://github.com/google/dawn/releases/download/v20261026.205545/Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-macos-latest-Release.tar.gz",
+      "sha256": "8eed5796e1c3403515c331a098fc9e8b5b738f832d9736be6843db891235c92b",
+      "strip": 1,
+      "sentinel": "lib/libwebgpu_dawn.a"
     }
   },
   "dependencies": {

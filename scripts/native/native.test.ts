@@ -31,6 +31,8 @@ test("unsupported hosts fail instead of selecting an incompatible engine", () =>
   expect(() => getEngine("linux", "arm64")).toThrow("No verified build configuration");
   expect(() => getEngine("win32", "x64")).toThrow("No verified build configuration");
   expect(() => getEngine("linux", "x64")).not.toThrow();
+  expect(() => getEngine("darwin", "arm64")).not.toThrow();
+  expect(() => getEngine("darwin", "x64")).toThrow("No verified build configuration");
 });
 
 test("build audit accepts selected integration sources and rejects engine, Tint, and proc-table entry point", () => {
@@ -39,8 +41,9 @@ test("build audit accepts selected integration sources and rejects engine, Tint,
     { file: resolve(buildRoot, "binding/src/dawn/node/binding/GPU.cpp") },
     { file: resolve(buildRoot, "generated/src/dawn/utils/ComboLimits.cpp") },
     { file: resolve(dawnRoot, "src/dawn/glfw/utils.cpp") },
+    { file: resolve(dawnRoot, "src/dawn/glfw/utils_metal.mm") },
     { file: resolve(dawnRoot, "third_party/glfw3/src/src/window.c") }
-  ])).toBe(5);
+  ])).toBe(6);
   for(const file of [
     resolve(dawnRoot, "src/dawn/native/Device.cpp"),
     resolve(dawnRoot, "src/tint/lang/wgsl/reader/reader.cc"),

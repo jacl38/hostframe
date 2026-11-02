@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Application, type Window } from "../../../index.ts";
+import { assertFramebufferSize } from "./framebuffer.ts";
 import { checkAdapter } from "./adapter.ts";
 
 const app = new Application();
@@ -55,8 +56,7 @@ try {
     let rendered = false;
     window.draw(texture => {
       rendered = true;
-      assert.equal(texture.width, 480);
-      assert.equal(texture.height, 270);
+      assertFramebufferSize(texture, 480, 270);
     });
     assert.ok(rendered);
     window.dispose();
