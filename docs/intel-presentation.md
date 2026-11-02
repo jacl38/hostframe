@@ -118,7 +118,7 @@ Create a temporary session application that records the display selected by KWin
 and keeps the isolated display alive:
 
 ```sh
-mkdir -p build/native/hardware-presentation/{runtime,config}
+mkdir -p build/native/hardware-presentation/{runtime,config,cache}
 chmod 700 build/native/hardware-presentation/runtime
 cat > build/native/hardware-presentation/session.ts <<'EOF'
 await Bun.write(`${import.meta.dir}/display.json`, JSON.stringify({
@@ -133,6 +133,7 @@ EOF
 env -u DISPLAY -u WAYLAND_DISPLAY \
   XDG_RUNTIME_DIR="$PWD/build/native/hardware-presentation/runtime" \
   XDG_CONFIG_HOME="$PWD/build/native/hardware-presentation/config" \
+  XDG_CACHE_HOME="$PWD/build/native/hardware-presentation/cache" \
   KWIN_COMPOSE=O2 \
   dbus-run-session -- kwin_wayland \
     --virtual --width 1280 --height 720 --scale 1 --output-count 1 \
@@ -173,6 +174,13 @@ run `packages/native/test/loop.ts --external-close`, then send
 `xdotool windowquit <id>`. Global shortcuts are disabled in this session, so
 Alt+F4 is not a valid close-test driver. Stop the temporary compositor with Ctrl+C
 after all client processes have exited.
+
+Always isolate `XDG_CACHE_HOME` together with `XDG_CONFIG_HOME`. The original
+instructions omitted it; the [example performance investigation](example-performance.md#resolved-cause-shared-kde-service-cache)
+found that sharing the desktop's KDE service cache causes repeated synchronous
+cache rebuilds in the private compositor and severe presentation stalls. The
+[hardware display launcher](../scripts/benchmarks/display.ts) applies this isolation
+and saves the selected display environment and command logs automatically.
 
 ## Remaining limits
 

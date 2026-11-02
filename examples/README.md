@@ -116,9 +116,12 @@ not a hardware performance measurement. Generated evidence is ignored under
 `desktop4/` and `desktop5/`, and Node.js Three.js captures are in `three-node2/`.
 
 The [hardware performance investigation](../docs/example-performance.md) additionally
-measured the physics example on Intel in Bun and Node.js. It found much higher
-throughput than the software showcase, along with intermittent long waits before
-draw callback entry. Consistently smooth hardware presentation remains unverified.
+measured the physics example on Intel in Bun and Node.js and traced recurring
+presentation stalls to a KDE service cache shared by the private compositor and
+desktop. Isolating the compositor's cache removed those recurring stalls. The
+showcase clips under `build/examples/showcase/clips/` were subsequently re-recorded
+on Intel at 60 FPS, with frame timing and encoded frame counts checked. Physical
+monitor scanout pacing remains unmeasured.
 
 TypeGPU 0.12.9 currently prints an `external-omitted` warning for `in.color` in
 the WGSL fragment templates. The generated shaders still receive that varying;

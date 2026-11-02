@@ -1,5 +1,13 @@
 # Hardware presentation follow-up and benchmark
 
+**Performance correction (2026-11-02):** this session isolated KWin configuration
+but shared the desktop's cache. The [example performance investigation](example-performance.md#resolved-cause-shared-kde-service-cache)
+identified repeated KDE service-cache rebuilds blocking the compositor as the
+cause of the recurring long draws. The timing results below are historical
+measurements of that contaminated environment, not a clean frame-pacing baseline.
+Use the corrected [display launcher](../scripts/benchmarks/display.ts) for new
+measurements. The correctness checks below remain records of exercised behavior.
+
 The current implementation at `7eb24b7` was checked on 2026-11-01 using Intel
 Alder Lake-N UHD graphics (`8086:46d1`), Mesa ANV 26.2.5, Node.js 26.7.0, and
 Bun 1.3.14. A private KWin 6.6.5 virtual compositor used Intel OpenGL/EGL and
