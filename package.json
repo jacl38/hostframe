@@ -10,8 +10,11 @@
     "@types/three": "^0.187.0",
     "@webgpu/types": "^0.1.74",
     "nobind17": "2.0.1",
+    "oidn-web": "0.4.0",
     "oxlint": "^1.90.0",
     "three": "^0.187.0",
+    "three-gpu-pathtracer": "0.0.27",
+    "three-mesh-bvh": "0.9.17",
     "typegpu": "^0.12.9",
     "webgpu-utils": "^2.1.1"
   },

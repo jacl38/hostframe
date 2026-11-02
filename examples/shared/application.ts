@@ -5,7 +5,8 @@ export async function createExample(title: string, options: {
   width?: number,
   height?: number,
   maxFPS?: number,
-  escapeQuits?: boolean
+  escapeQuits?: boolean,
+  optionalFeatures?: GPUFeatureName[]
 } = {}) {
   const defaults = { width: 960, height: 640, maxFPS: 60, escapeQuits: true, ...options };
   const args = process.argv.slice(2);
@@ -32,7 +33,8 @@ export async function createExample(title: string, options: {
   try {
     const adapter = await app.gpu.requestAdapter();
     if(!adapter) throw new Error("No compatible GPU adapter");
-    device = await adapter.requestDevice();
+    const requiredFeatures = defaults.optionalFeatures?.filter(feature => adapter.features.has(feature));
+    device = await adapter.requestDevice({ requiredFeatures });
     const renderingDevice = device;
     device.onuncapturederror = event => {
       failure ??= new Error(event.error.message);

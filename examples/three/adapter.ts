@@ -1,23 +1,23 @@
-import { LinearSRGBColorSpace, UnsignedByteType, WebGPURenderer } from "three/webgpu";
+import { HalfFloatType, LinearSRGBColorSpace, WebGPURenderer } from "three/webgpu";
 import type { PerspectiveCamera, Scene } from "three/webgpu";
 import { createExample } from "../shared/application.ts";
 
 /** A frame-scoped canvas facade. GLFW owns configuration, acquisition and presentation. */
-export async function createThreeExample(title: string) {
-  const example = await createExample(`three / ${title}`);
+export async function createThreeExample(title: string, options: Parameters<typeof createExample>[1] = {}) {
+  const example = await createExample(`three / ${title}`, options);
   try {
     let currentTexture: GPUTexture | undefined;
-    const canvas = { width: 960, height: 640 };
+    const canvas = { width: options.width ?? 960, height: options.height ?? 640 };
     let output = example.device.createTexture({
-      size: [canvas.width, canvas.height], format: "bgra8unorm",
+      size: [canvas.width, canvas.height], format: "rgba16float",
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
     });
     example.defer(() => output.destroy());
     let blit: GPURenderPipeline | undefined;
     const context = {
       configure(configuration: GPUCanvasConfiguration) {
-        if(configuration.device !== example.device || configuration.format !== "bgra8unorm") {
-          throw new Error("The Three.js adapter requires the native device and bgra8unorm output");
+        if(configuration.device !== example.device || configuration.format !== "rgba16float") {
+          throw new Error("The Three.js adapter requires the native device and rgba16float output");
         }
       },
       getCurrentTexture() {
@@ -31,11 +31,11 @@ export async function createThreeExample(title: string) {
       device: example.device,
       canvas: canvas as unknown as NonNullable<ConstructorParameters<typeof WebGPURenderer>[0]>["canvas"],
       context,
-      outputType: UnsignedByteType,
+      outputType: HalfFloatType,
       antialias: true
     });
     example.defer(() => renderer.dispose());
-    // Three writes linear color to the owned unorm target; the native sRGB target
+    // Keep linear color in half floats to preserve dark gradients. The native sRGB target
     // performs the output transfer once during composition.
     renderer.outputColorSpace = LinearSRGBColorSpace;
     // Three captures self during init for its internal frame bookkeeping. Feed that
@@ -56,12 +56,14 @@ export async function createThreeExample(title: string) {
     return {
       ...example,
       renderer,
-      render(scene: Scene, camera: PerspectiveCamera) {
+      // Custom rendering stays inside the same acquisition/composition scope.
+      // This supports progressive tracers, post-processing and native HUDs.
+      render(scene: Scene, camera: PerspectiveCamera, draw?: () => undefined) {
         example.draw(texture => {
           if(output.width !== texture.width || output.height !== texture.height) {
             output.destroy();
             output = example.device.createTexture({
-              size: [texture.width, texture.height], format: "bgra8unorm",
+              size: [texture.width, texture.height], format: "rgba16float",
               usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
             });
           }
@@ -73,7 +75,13 @@ export async function createThreeExample(title: string) {
             camera.aspect = texture.width / texture.height;
             camera.updateProjectionMatrix();
             nextFrame?.(performance.now());
-            renderer.render(scene, camera);
+            if(draw) {
+              const result: unknown = draw();
+              if(result !== undefined) {
+                void Promise.resolve(result).catch(() => {});
+                throw new TypeError("Three.js rendering callbacks must return undefined synchronously");
+              }
+            } else renderer.render(scene, camera);
             if(!blit) {
               const shader = example.device.createShaderModule({ code: `
               @group(0) @binding(0) var source: texture_2d<f32>;

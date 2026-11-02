@@ -53,6 +53,8 @@ if(first === "--child") {
   // KWin parses this argument into a command; Bun.spawn itself uses no shell.
   function quote(value: string) { return `'${value.replaceAll("'", "'\\''")}'`; }
   const session = [process.execPath, import.meta.path, "--child", directory].map(quote).join(" ");
+  const timeout = Number(process.env.TS_DAWN_DISPLAY_TIMEOUT_MS ?? 120_000);
+  assert.ok(Number.isSafeInteger(timeout) && timeout > 0, "TS_DAWN_DISPLAY_TIMEOUT_MS must be a positive integer");
   console.log(`Diagnostic display evidence: ${directory}`);
   const compositor = Bun.spawn([
     "dbus-run-session", "--", "kwin_wayland",
@@ -65,7 +67,7 @@ if(first === "--child") {
     env,
     stdout: Bun.file(join(directory, "compositor.log")),
     stderr: Bun.file(join(directory, "compositor.stderr")),
-    timeout: 120_000
+    timeout
   });
   const code = await compositor.exited;
   const resultFile = Bun.file(join(directory, "result.json"));

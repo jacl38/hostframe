@@ -12,5 +12,8 @@ export const examples = [
   "three/materials",
   "three/shadows",
   "three/instancing",
-  "three/physics"
+  "three/physics",
+  "three/cornell-box",
+  "three/kinetic",
+  "three/flow"
 ] as const;
