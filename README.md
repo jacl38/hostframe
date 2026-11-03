@@ -18,6 +18,10 @@ Dawn supplies GPU functionality. GLFW supplies interactive windows. `hostframe` 
 
 **Linux x64 package**
 
+[GitHub Releases](docs/github-releases.md) is the initial distribution flow:
+version tags build and verify the tarball, then create an unpublished draft.
+The same build job runs locally with `gh act` or manually on GitHub.
+
 The npm package build includes ESM JavaScript, TypeScript declarations, and a
 prebuilt native addon. Consumers need no native build tools or install scripts:
 

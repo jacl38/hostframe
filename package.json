@@ -47,7 +47,10 @@
     "example:input": "bun examples/vanilla/input.ts",
     "build": "bun scripts/package.ts",
     "prepack": "bun run build",
-    "package:verify": "bun scripts/package/verify.ts"
+    "package:verify": "bun scripts/package/verify.ts",
+    "release:check": "bun scripts/release.ts check-tag",
+    "release:prepare": "bun scripts/release.ts prepare",
+    "release:draft": "bun scripts/release.ts draft"
   },
   "dependencies": {
     "@webgpu/types": "^0.1.74"

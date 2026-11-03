@@ -1,5 +1,8 @@
 # Linux x64 packaging
 
+Start with [GitHub Releases](github-releases.md) for the release workflow,
+local `gh act` verification, draft creation, and installation from release assets.
+
 The initial package is one `hostframe` tarball containing ESM JavaScript,
 bundled TypeScript declarations, a Linux x64/glibc native addon, native
 third-party notices, and documentation. No install script downloads or builds
