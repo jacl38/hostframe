@@ -6,12 +6,12 @@ export type NativeWindow = Native.Window;
 export type NativeApplication = Native.Application;
 
 const require = createRequire(import.meta.url);
-const addon: typeof Native = require("../../build/native/cmake/ts_dawn.node");
+const addon: typeof Native = require("../../build/native/cmake/hostframe.node");
 
 // Experimental bridge: upstream child objects do not retain their GPU owner.
 // Keep one owner rooted through callbacks, GC, and runtime teardown in both runtimes.
 // This deliberately lasts until process exit, independently of window disposal.
-const ownerKey = Symbol.for("ts-dawn.experimental.gpu");
+const ownerKey = Symbol.for("hostframe.experimental.gpu");
 
 export function getProcessGPU() {
   Object.assign(globalThis, addon.globals);

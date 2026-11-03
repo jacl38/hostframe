@@ -4,14 +4,14 @@ import { checkAdapter } from "./adapter.ts";
 import type * as Native from "../../../build/native/generated/native";
 
 const require = createRequire(import.meta.url);
-const addon: typeof Native = require("../../../build/native/cmake/ts_dawn.node");
+const addon: typeof Native = require("../../../build/native/cmake/hostframe.node");
 Object.assign(globalThis, addon.globals);
 assert.throws(() => addon.create(["invalid-flag"]), /key=value/);
 
 // The upstream binding does not retain its originating GPU through child objects.
 // Pin it for the process lifetime, including queued callbacks and runtime teardown.
 const gpu = addon.create([]);
-Object.defineProperty(globalThis, "__tsDawnSmokeOwner", { value: gpu });
+Object.defineProperty(globalThis, "__hostframeSmokeOwner", { value: gpu });
 const adapter = await gpu.requestAdapter();
 assert.ok(adapter, "No compatible GPU adapter; check GPU drivers and permissions.");
 checkAdapter(adapter);

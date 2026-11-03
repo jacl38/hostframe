@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ts-dawn",
+      "name": "hostframe",
       "devDependencies": {
         "@dimforge/rapier3d-compat": "^0.21.0",
         "@stylistic/eslint-plugin": "^5.10.0",

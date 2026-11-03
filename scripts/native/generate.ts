@@ -150,8 +150,8 @@ template <class T> constexpr size_t InputCount() {
       content = content.replace(signature, "    types_text += \"arg\"s + std::to_string(i) + (optional[i] ? \"?: \"s : \": \"s) + types[i];");
     }
     // napi_set_instance_data is already owned by Dawn's interop constructors.
-    content = content.replace(/(\w+)\.GetInstanceData<([^>]+)>\(\)/g, "static_cast<$2*>(ts_dawn::NobindData($1))");
-    content = content.replace("    env.SetInstanceData(instance);", "    ts_dawn::InstallNobindData(env, instance, [](void* data) { delete static_cast<Nobind::EnvInstanceData<INSTANCE_DATA_TYPE>*>(data); });");
+    content = content.replace(/(\w+)\.GetInstanceData<([^>]+)>\(\)/g, "static_cast<$2*>(hostframe::NobindData($1))");
+    content = content.replace("    env.SetInstanceData(instance);", "    hostframe::InstallNobindData(env, instance, [](void* data) { delete static_cast<Nobind::EnvInstanceData<INSTANCE_DATA_TYPE>*>(data); });");
     const output = Bun.file(resolve(destination, name));
     if(!await output.exists() || await output.text() !== content) await Bun.write(output, content);
   }

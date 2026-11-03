@@ -41,7 +41,7 @@ export async function createExample(title: string, options: {
       app.stop();
     };
     const window = app.createWindow(device, {
-      title: `ts-dawn ${title}`,
+      title: `hostframe ${title}`,
       width: defaults.width,
       height: defaults.height,
       resizable: true,

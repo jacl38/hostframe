@@ -30,7 +30,7 @@
 #include "src/dawn/node/binding/Flags.h"
 #include "src/dawn/node/binding/GPU.h"
 
-namespace ts_dawn {
+namespace hostframe {
 DawnGPU CreateGPU(napi_env raw, std::vector<std::string> arguments) {
   Napi::Env env(raw);
   return NativeBoundary(raw, [&]() -> DawnGPU {

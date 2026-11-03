@@ -75,14 +75,14 @@ bun run native:verify --window-interactions
   minimizing/restoring without callbacks while minimized, abandoned-frame recovery,
   retained texture/view expiration, native reentrancy guards, minimized window and
   application disposal, caller device survival through write/readback, and destroyed
-  device rejection while minimized. Set `TS_DAWN_CAPTURE_DIRECTORY` to an output
+  device rejection while minimized. Set `HOSTFRAME_CAPTURE_DIRECTORY` to an output
   directory to capture initial/resized/restored windows; this also requires
   ImageMagick's `import`. These interaction checks require a window manager;
   plain `xvfb-run` alone cannot provide minimize/restore semantics.
 - `lint`, `typecheck`, `test`: check project code, setup regression tests, and
   deterministic clock/scheduler behavior at low and high render rates.
 
-The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and native
+The addon is `build/native/cmake/hostframe.node`. Its `create`, `globals`, and native
 `Application` exports are internal building blocks. Import the TypeScript
 `Application` from the root `index.ts` entry point (implemented in
 `packages/core/application.ts`).
@@ -91,7 +91,7 @@ The addon is `build/native/cmake/ts_dawn.node`. Its `create`, `globals`, and nat
 
 Every `setup` and `native:build` generates `build/native/generated/glfw-input.ts`
 from `vendor/dawn/third_party/glfw3/src/include/GLFW/glfw3.h`, the same pinned header
-used to compile GLFW and ts-dawn. `packages/core/keys.ts` re-exports its `Key`,
+used to compile GLFW and hostframe. `packages/core/keys.ts` re-exports its `Key`,
 `PointerButton`, and `Modifier` objects with literal TypeScript types. No numeric
 input constants are maintained in project source.
 
@@ -133,7 +133,7 @@ The former experimental free functions have been removed.
   application construction. Use devices obtained through this GPU for windows.
 - `app.createWindow(device, options?: WindowOptions)`: creates one window. Options
   `title`, `width`, `height`, `resizable`, and `vsync` default to
-  `"ts-dawn solid color"`, `320`, `240`, `false`, and `true`. Dimensions must be
+  `"hostframe solid color"`, `320`, `240`, `false`, and `true`. Dimensions must be
   positive signed 32-bit integers in GLFW screen coordinates; title must be a string
   without embedded null characters, and flags must be booleans. Omitted/undefined
   fields use defaults. Only one live window
@@ -252,7 +252,7 @@ Install these through your preferred system/toolchain manager before setup:
 - On macOS arm64: Xcode Command Line Tools with the macOS SDK (Cocoa, Metal,
   QuartzCore, IOSurface, and IOKit). No X11 or Vulkan packages are needed.
 - On Linux: X11 development headers/libraries needed by GLFW, including Xrandr,
-  Xinerama, Xcursor, Xi, and Xshape, plus `pkg-config`. ts-dawn also links Xfixes
+  Xinerama, Xcursor, Xi, and Xshape, plus `pkg-config`. hostframe also links Xfixes
   for per-session extension negotiation.
 - On Linux: a Vulkan loader and usable driver for runtime checks. Mesa software Vulkan can
   be useful on machines without a physical GPU, but driver capabilities vary.
@@ -270,7 +270,7 @@ select another compiler. When changing compilers, remove `build/native/cmake/`
 first. The initial configuration builds Release native code with C++20.
 
 `ccache` is optional and used automatically when present. Its cache, and Go's
-module/build caches, live under `build/native/cache/`. Set `TS_DAWN_JOBS` to a
+module/build caches, live under `build/native/cache/`. Set `HOSTFRAME_JOBS` to a
 positive integer to change build parallelism (default: 2, to limit binding compile
 memory use). Formatting and static analysis tooling for C++ are not configured yet.
 
@@ -437,7 +437,7 @@ xvfb-run -d -s '-screen 0 1280x960x24' dbus-run-session -- sh -eu -c '
   export XDG_RUNTIME_DIR="$validation_dir/runtime"
   mkdir -p "$XDG_CONFIG_HOME" "$XDG_RUNTIME_DIR"
   chmod 700 "$XDG_RUNTIME_DIR"
-  kwin_x11 --replace > /tmp/ts-dawn-kwin.log 2>&1 &
+  kwin_x11 --replace > /tmp/hostframe-kwin.log 2>&1 &
   manager_pid=$!
   trap "kill $manager_pid 2>/dev/null || true" EXIT
   for attempt in 1 2 3 4 5 6 7 8 9 10; do

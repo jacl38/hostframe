@@ -46,20 +46,20 @@ if(first === "--child") {
     KWIN_COMPOSE: "O2",
     DAWNNODE_BACKEND: process.env.DAWNNODE_BACKEND ?? "vulkan",
     VK_DRIVER_FILES: process.env.VK_DRIVER_FILES ?? "/usr/share/vulkan/icd.d/intel_icd.x86_64.json",
-    TS_DAWN_EXPECT_VENDOR: process.env.TS_DAWN_EXPECT_VENDOR ?? "intel"
+    HOSTFRAME_EXPECT_VENDOR: process.env.HOSTFRAME_EXPECT_VENDOR ?? "intel"
   };
   Reflect.deleteProperty(env, "DISPLAY");
   Reflect.deleteProperty(env, "WAYLAND_DISPLAY");
   // KWin parses this argument into a command; Bun.spawn itself uses no shell.
   function quote(value: string) { return `'${value.replaceAll("'", "'\\''")}'`; }
   const session = [process.execPath, import.meta.path, "--child", directory].map(quote).join(" ");
-  const timeout = Number(process.env.TS_DAWN_DISPLAY_TIMEOUT_MS ?? 120_000);
-  assert.ok(Number.isSafeInteger(timeout) && timeout > 0, "TS_DAWN_DISPLAY_TIMEOUT_MS must be a positive integer");
+  const timeout = Number(process.env.HOSTFRAME_DISPLAY_TIMEOUT_MS ?? 120_000);
+  assert.ok(Number.isSafeInteger(timeout) && timeout > 0, "HOSTFRAME_DISPLAY_TIMEOUT_MS must be a positive integer");
   console.log(`Diagnostic display evidence: ${directory}`);
   const compositor = Bun.spawn([
     "dbus-run-session", "--", "kwin_wayland",
     "--virtual", "--width", "1280", "--height", "960", "--scale", "1", "--output-count", "1",
-    "--xwayland", "--socket", "ts-dawn-benchmark",
+    "--xwayland", "--socket", "hostframe-benchmark",
     "--no-lockscreen", "--no-global-shortcuts", "--no-kactivities",
     "--exit-with-session", session
   ], {

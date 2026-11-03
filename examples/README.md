@@ -60,7 +60,7 @@ explicitly if unsupported. The scheduler cap and presentation mode are separate.
 | | [flow](three/flow.ts) | 65,536 GPU-computed streamline particles, smooth winding morphs, three palettes and HDR bloom |
 
 All Three.js scenes support left drag to orbit and the wheel to zoom, using
-native ts-dawn input rather than browser controls. Examples generate their assets
+native hostframe input rather than browser controls. Examples generate their assets
 locally; they do not fetch models, images or shaders from a network.
 
 ## Polished studies
@@ -103,13 +103,13 @@ study, run (substitute `flow` or `cornell-box`):
 ```sh
 bun scripts/benchmarks/display.ts bun scripts/examples/capture.ts kinetic
 # Allow time for both cornell-box convergence sequences on an integrated GPU:
-TS_DAWN_DISPLAY_TIMEOUT_MS=180000 bun scripts/benchmarks/display.ts bun scripts/examples/capture.ts cornell-box
+HOSTFRAME_DISPLAY_TIMEOUT_MS=180000 bun scripts/benchmarks/display.ts bun scripts/examples/capture.ts cornell-box
 # Exercise controls, resize and minimize/restore in either runtime:
 bun scripts/benchmarks/display.ts bun scripts/examples/capture.ts kinetic node verify
 ```
 
 The display launcher defaults to this host's Intel Vulkan ICD; override
-`VK_DRIVER_FILES` and `TS_DAWN_EXPECT_VENDOR` on other hardware. Captures reject
+`VK_DRIVER_FILES` and `HOSTFRAME_EXPECT_VENDOR` on other hardware. Captures reject
 software fallback. If a Node version-manager shim tries to provision a different
 release, put the installed Node binary's directory first on PATH.
 
@@ -148,7 +148,7 @@ videos are protected from overwrite.
   configuration. The facade only exposes a texture while rendering; native frame
   textures and their views are never retained. Framebuffer dimensions drive the
   output texture, Three.js attachments and camera aspect ratio.
-  Three's internal animation bookkeeping is driven by ts-dawn; a temporary `self`
+  Three's internal animation bookkeeping is driven by hostframe; a temporary `self`
   facade is restored immediately after initialization. Browser image loaders,
   DOM controls, WebXR and arbitrary Three.js plugins are outside these examples.
 

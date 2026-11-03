@@ -4,7 +4,7 @@
 #include <memory>
 #include <mutex>
 
-namespace ts_dawn {
+namespace hostframe {
 namespace {
 std::mutex environmentsMutex;
 std::map<napi_env, void*> environments;

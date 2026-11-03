@@ -4,7 +4,7 @@
 
 #include <webgpu/webgpu_cpp.h>
 
-namespace ts_dawn {
+namespace hostframe {
 // Keep recovery bounded and release any unusable texture before reconfiguration.
 // Callers provide native operations; the same sequence can be tested without a compositor race.
 template <typename Prepare, typename Acquire, typename Recover>

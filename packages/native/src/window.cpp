@@ -10,7 +10,7 @@
 #include "bindings.h"
 #include "native_boundary.h"
 
-namespace ts_dawn {
+namespace hostframe {
 
 WindowState::WindowState(Napi::Env env, Napi::Value value,
                          const std::shared_ptr<ApplicationState>& application, const WindowOptions& options) : application_(application) {
@@ -129,4 +129,4 @@ PresentMode Window::GetPresentMode() {
     return PresentMode(state_->PresentMode());
   });
 }
-}  // namespace ts_dawn
+}  // namespace hostframe

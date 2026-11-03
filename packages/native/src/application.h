@@ -5,7 +5,7 @@
 
 #include "src/dawn/node/interop/NodeAPI.h"
 
-namespace ts_dawn {
+namespace hostframe {
 class GlfwSession;
 class WindowState;
 

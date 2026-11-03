@@ -5,7 +5,7 @@
 #include <GLFW/glfw3.h>
 #include "binding_types.h"
 
-namespace ts_dawn {
+namespace hostframe {
 // GLFW callbacks only record data. No JavaScript runs on the GLFW callback stack.
 // Owned by WindowState and detached before Presentation destroys the GLFW window.
 class WindowInput {

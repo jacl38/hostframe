@@ -42,7 +42,7 @@ async function installDirectory(destination: string, sentinel: string, populate:
   });
   if(entries.length > 0) throw new Error(`Refusing to overwrite ${destination}; move it aside before setup.`);
   await mkdir(dirname(destination), { recursive: true });
-  const staging = await mkdtemp(resolve(dirname(destination), ".ts-dawn-install-"));
+  const staging = await mkdtemp(resolve(dirname(destination), ".hostframe-install-"));
   try {
     await populate(staging);
     if(!await Bun.file(resolve(staging, sentinel)).exists()) throw new Error(`Dependency is missing ${sentinel}.`);
@@ -56,7 +56,7 @@ async function installDirectory(destination: string, sentinel: string, populate:
 }
 
 async function assertArchive(archive: Archive) {
-  const marker = Bun.file(resolve(archive.destination, ".ts-dawn-archive"));
+  const marker = Bun.file(resolve(archive.destination, ".hostframe-archive"));
   if(!await marker.exists() || (await marker.text()).trim() !== archive.sha256 || !await Bun.file(resolve(archive.destination, archive.sentinel)).exists()) {
     throw new Error(`Missing or mismatched dependency at ${archive.destination}. Run bun run setup; move stale dependencies aside first if needed.`);
   }
@@ -64,7 +64,7 @@ async function assertArchive(archive: Archive) {
 
 export async function installArchive(archive: Archive) {
   const path = await download(archive);
-  if(await Bun.file(resolve(archive.destination, ".ts-dawn-archive")).exists()) {
+  if(await Bun.file(resolve(archive.destination, ".hostframe-archive")).exists()) {
     await assertArchive(archive);
     return;
   }
@@ -74,7 +74,7 @@ export async function installArchive(archive: Archive) {
   }
   await installDirectory(archive.destination, archive.sentinel, async staging => {
     await $`tar -xzf ${path} --strip-components=${archive.strip} -C ${staging}`;
-    await Bun.write(resolve(staging, ".ts-dawn-archive"), `${archive.sha256}\n`);
+    await Bun.write(resolve(staging, ".hostframe-archive"), `${archive.sha256}\n`);
   });
 }
 

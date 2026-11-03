@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 test("checksum verification detects corrupt or substituted downloads", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn-checksum-"));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe-checksum-"));
   temporary.push(directory);
   const path = resolve(directory, "archive");
   await Bun.write(path, "pinned archive");
@@ -58,7 +58,7 @@ test("build audit accepts selected integration sources and rejects engine, Tint,
 });
 
 test("archive installation is reusable, rejects corrupt cache, and preserves existing directories", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn install with spaces-"));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe install with spaces-"));
   temporary.push(directory);
   const fixture = resolve(directory, "fixture");
   await mkdir(fixture);
@@ -90,7 +90,7 @@ test("archive installation is reusable, rejects corrupt cache, and preserves exi
 });
 
 test("a rejected download leaves no partial or installed archive", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn-reject-"));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe-reject-"));
   temporary.push(directory);
   const source = resolve(directory, "source");
   await Bun.write(source, "untrusted content");
@@ -112,7 +112,7 @@ test("a rejected download leaves no partial or installed archive", async () => {
 });
 
 test("Git dependencies use pinned commits, reuse clean checkouts, and preserve stale or modified checkouts", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn git with spaces-"));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe git with spaces-"));
   temporary.push(directory);
   const repository = resolve(directory, "repository");
   await $`git init --quiet ${repository}`;
@@ -136,7 +136,7 @@ test("Git dependencies use pinned commits, reuse clean checkouts, and preserve s
   await expect(installGitDependency(dependency)).rejects.toThrow();
   expect(await Bun.file(resolve(dependency.destination, "dependency.txt")).text()).toBe("local edits");
   await expect(installGitDependency({ ...dependency, destination: resolve(directory, "failed"), revision: "0".repeat(40) })).rejects.toThrow();
-  expect((await readdir(directory)).some(name => name.startsWith(".ts-dawn-install-"))).toBe(false);
+  expect((await readdir(directory)).some(name => name.startsWith(".hostframe-install-"))).toBe(false);
 });
 
 test("the single CLI rejects invalid commands and flags before running tools", async () => {

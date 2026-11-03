@@ -1,6 +1,6 @@
 #include "binding_maps.h"
 
-namespace ts_dawn {
+namespace hostframe {
 // The variant owns the set of supported input events. Export its discriminants
 // for build-time extraction so TS runtime validation follows the same set.
 template <size_t... Index> auto InputEventTypes(std::index_sequence<Index...>) {
@@ -56,8 +56,8 @@ void InputCallback::Call(const InputState& state, const std::vector<InputEvent>&
 }
 }
 
-NOBIND_MODULE(ts_dawn, m) {
-  using namespace ts_dawn;
+NOBIND_MODULE(hostframe, m) {
+  using namespace hostframe;
   m.Exports().DefineProperty(Napi::PropertyDescriptor::Value("__inputEventTypes",
       ToValue(m.Env(), InputEventTypes(std::make_index_sequence<std::variant_size_v<InputEvent>>{})), napi_default));
   // Aliases contain no handwritten object shapes: fields also serialize values.

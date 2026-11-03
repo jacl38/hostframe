@@ -5,7 +5,7 @@ import { getProcessGPU, NativeApplication } from "../bridge.ts";
 import type * as Native from "../../../build/native/generated/native";
 
 const require = createRequire(import.meta.url);
-const addon: typeof Native = require("../../../build/native/cmake/ts_dawn.node");
+const addon: typeof Native = require("../../../build/native/cmake/hostframe.node");
 assert.throws(() => Reflect.construct(addon.Window, []), TypeError);
 assert.equal(Object.getOwnPropertyDescriptor(addon, "__typescript")?.writable, false);
 const app = new NativeApplication();

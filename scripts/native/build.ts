@@ -45,8 +45,8 @@ export async function checkBuild() {
 }
 
 export async function buildNative() {
-  const jobs = process.env.TS_DAWN_JOBS || "2";
-  if(!/^[1-9]\d*$/.test(jobs)) throw new Error("TS_DAWN_JOBS must be a positive integer.");
+  const jobs = process.env.HOSTFRAME_JOBS || "2";
+  if(!/^[1-9]\d*$/.test(jobs)) throw new Error("HOSTFRAME_JOBS must be a positive integer.");
   await assertDependencies();
   await assertGeneratedBindings();
   await prepareNobind();
@@ -57,9 +57,9 @@ export async function buildNative() {
   const launcher = Bun.which("ccache") || "";
   const options = [
     "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-    `-DTS_DAWN_BUILD_ROOT=${buildRoot}`,
-    `-DTS_DAWN_ENGINE_LIBRARY=${resolve(engine.destination, engine.sentinel)}`,
-    `-DTS_DAWN_HEADERS_INCLUDE=${resolve(headers.destination, headers.includeDirectory)}`,
+    `-DHOSTFRAME_BUILD_ROOT=${buildRoot}`,
+    `-DHOSTFRAME_ENGINE_LIBRARY=${resolve(engine.destination, engine.sentinel)}`,
+    `-DHOSTFRAME_HEADERS_INCLUDE=${resolve(headers.destination, headers.includeDirectory)}`,
     `-DCMAKE_C_COMPILER_LAUNCHER=${launcher}`,
     `-DCMAKE_CXX_COMPILER_LAUNCHER=${launcher}`
   ];
@@ -68,5 +68,5 @@ export async function buildNative() {
   await checkBuild();
   await $`cmake --build ${directory} --parallel ${jobs}`.cwd(root).env(env);
   await generateDeclarations();
-  console.log(`Native addon: ${resolve(directory, "ts_dawn.node")}`);
+  console.log(`Native addon: ${resolve(directory, "hostframe.node")}`);
 }

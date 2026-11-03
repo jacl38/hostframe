@@ -51,7 +51,7 @@ try {
   }
 
   for(const resizable of [false, true]) {
-    const window = app.createWindow(device, { title: "Custom title — ts-dawn", width: 480, height: 270, resizable });
+    const window = app.createWindow(device, { title: "Custom title — hostframe", width: 480, height: 270, resizable });
     app.pollEvents();
     let rendered = false;
     window.draw(texture => {

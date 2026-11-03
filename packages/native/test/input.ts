@@ -20,8 +20,8 @@ try {
   assert.ok(adapter);
   checkAdapter(adapter);
   device = await adapter.requestDevice();
-  const window = app.createWindow(device, { title: "ts-dawn input verification", width: 480, height: 300 });
-  const id = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^ts-dawn input verification$")).split("\n")[0]!;
+  const window = app.createWindow(device, { title: "hostframe input verification", width: 480, height: 300 });
+  const id = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe input verification$")).split("\n")[0]!;
   const events: InputEvent[] = [];
   for(const name of ["key", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"] as const) {
     window.on(name, event => { events.push(event); });
@@ -180,7 +180,7 @@ try {
   const replacement = app.createWindow(device);
   assert.deepEqual(replacement.input.keys, []);
   assert.deepEqual(replacement.input.buttons, []);
-  const replacementId = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^ts-dawn solid color$")).split("\n")[0]!;
+  const replacementId = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe solid color$")).split("\n")[0]!;
   await xdo("windowactivate", "--sync", replacementId);
   await until(() => replacement.input.focused, "Replacement window not focused");
   replacement.setPointerCapture(true);

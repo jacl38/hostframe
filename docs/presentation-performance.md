@@ -36,7 +36,7 @@ close in both runtimes; before/after images were inspected. Resized/restored fra
 captures were also inspected.
 
 Intel checks forced `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/intel_icd.x86_64.json`,
-`DAWNNODE_BACKEND=vulkan`, and `TS_DAWN_EXPECT_VENDOR=intel`. GLX and KWin reported
+`DAWNNODE_BACKEND=vulkan`, and `HOSTFRAME_EXPECT_VENDOR=intel`. GLX and KWin reported
 Intel acceleration; Vulkan enumerated the integrated Intel device. Example and
 benchmark process mappings confirmed `libvulkan_intel.so` without
 `libvulkan_lvp.so`. Negative controls forced lavapipe and confirmed the hardware
@@ -74,13 +74,13 @@ Example single-case reproduction, inside the prepared hardware display:
 
 ```sh
 VK_DRIVER_FILES=/usr/share/vulkan/icd.d/intel_icd.x86_64.json \
-DAWNNODE_BACKEND=vulkan TS_DAWN_EXPECT_VENDOR=intel \
+DAWNNODE_BACKEND=vulkan HOSTFRAME_EXPECT_VENDOR=intel \
 node scripts/benchmarks/presentation.ts shader off uncapped 3000
 ```
 
 Use `bun` for the other runtime, `clear` for the simpler workload, `on` for FIFO,
 and `60` instead of `uncapped` for a cap. To compare lavapipe in the same display,
-select `lvp_icd.x86_64.json` and unset `TS_DAWN_EXPECT_VENDOR`. Driver paths are
+select `lvp_icd.x86_64.json` and unset `HOSTFRAME_EXPECT_VENDOR`. Driver paths are
 host-specific. The [Intel environment guide](intel-presentation.md#reproduce-the-hardware-environment)
 describes starting a private compositor; use the environment it records.
 

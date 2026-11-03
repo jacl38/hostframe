@@ -10,7 +10,7 @@
 #include "present_mode.h"
 #include "surface_acquisition.h"
 
-namespace ts_dawn {
+namespace hostframe {
 Presentation::Presentation(wgpu::Device device, const WindowOptions& options) : device_(std::move(device)) {
   instance_ = device_.GetAdapter().GetInstance();
   if(DeviceLost()) throw std::runtime_error("GPU device is lost or destroyed");

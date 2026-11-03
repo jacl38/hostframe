@@ -3,7 +3,7 @@
 #include "binding_types.h"
 #include "window_options.h"
 
-namespace ts_dawn {
+namespace hostframe {
 // Each field registration drives both object conversion and its declaration.
 template <class Owner, class Value> struct Field {
   const char* name;

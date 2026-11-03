@@ -52,7 +52,7 @@ There is no per-key registration list or matching C++ naming table.
 
 Dawn's pinned node-addon-api 8.0.0 disables automatic C++ exceptions. nobind requires
 newer headers with exceptions. Only the nobind translation units use the workspace
-node-addon-api headers, in the distinct `Napi::TsDawnBindings` namespace. The native
+node-addon-api headers, in the distinct `Napi::HostframeBindings` namespace. The native
 facades exchange borrowed raw Node-API handles, C++ records, and resource ownership
 with Dawn-facing implementation files. `NativeBoundary` preserves pending JS
 exceptions instead of transporting C++ exceptions between these configurations.

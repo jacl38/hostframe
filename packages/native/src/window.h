@@ -5,7 +5,7 @@
 #include "src/dawn/node/interop/NodeAPI.h"
 #include "window_options.h"
 
-namespace ts_dawn {
+namespace hostframe {
 class ApplicationState;
 class Presentation;
 class WindowInput;

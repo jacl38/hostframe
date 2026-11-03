@@ -10,7 +10,7 @@ import { assertDeviceAlive } from "./device.ts";
 
 const execute = promisify(execFile);
 const runtime = process.versions.bun ? "bun" : "node";
-const captureDirectory = process.env.TS_DAWN_CAPTURE_DIRECTORY;
+const captureDirectory = process.env.HOSTFRAME_CAPTURE_DIRECTORY;
 const vsync = !process.argv.includes("--no-vsync");
 
 async function xdo(...args: string[]) {
@@ -72,8 +72,8 @@ try {
   for(const options of [undefined, { title: "Configured fixed window", width: 400, height: 280, resizable: false }]) {
     const window = app.createWindow(device, options);
     app.pollEvents();
-    const id = await findWindow(options?.title ?? "ts-dawn solid color");
-    assert.equal(await xdo("getwindowname", id), options?.title ?? "ts-dawn solid color");
+    const id = await findWindow(options?.title ?? "hostframe solid color");
+    assert.equal(await xdo("getwindowname", id), options?.title ?? "hostframe solid color");
     const hints = (await execute("xprop", ["-id", id, "WM_NORMAL_HINTS"])).stdout;
     const size = `${options?.width ?? 320} by ${options?.height ?? 240}`;
     assert.ok(hints.includes(`minimum size: ${size}`));
@@ -85,8 +85,8 @@ try {
     window.dispose();
   }
 
-  let window: Window = app.createWindow(device, { title: "ts-dawn resize interactions", width: 480, height: 300, resizable: true, vsync });
-  const id = await findWindow("ts-dawn resize interactions");
+  let window: Window = app.createWindow(device, { title: "hostframe resize interactions", width: 480, height: 300, resizable: true, vsync });
+  const id = await findWindow("hostframe resize interactions");
   const mode = window.presentMode;
   let frames = 0;
   let ticks = 0;
@@ -196,8 +196,8 @@ try {
   await assertDeviceAlive(device);
 
   // Application disposal with a live device and a minimized presentation.
-  window = app.createWindow(device, { title: "ts-dawn minimized disposal", width: 420, height: 260, resizable: true, vsync });
-  const replacementId = await findWindow("ts-dawn minimized disposal");
+  window = app.createWindow(device, { title: "hostframe minimized disposal", width: 420, height: 260, resizable: true, vsync });
+  const replacementId = await findWindow("hostframe minimized disposal");
   app.pollEvents();
   window.draw(() => {});
   await xdo("windowminimize", "--sync", replacementId);
@@ -212,9 +212,9 @@ try {
   // Minimized draws still reject destroyed devices before deciding to skip a frame.
   const next = new Application();
   try {
-    const lostWindow = next.createWindow(device, { title: "ts-dawn minimized lost device", resizable: true });
+    const lostWindow = next.createWindow(device, { title: "hostframe minimized lost device", resizable: true });
     lostWindow.draw(() => {});
-    const lostId = await findWindow("ts-dawn minimized lost device");
+    const lostId = await findWindow("hostframe minimized lost device");
     await xdo("windowminimize", "--sync", lostId);
     next.pollEvents();
     device.destroy();

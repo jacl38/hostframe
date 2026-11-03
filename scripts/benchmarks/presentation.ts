@@ -20,8 +20,8 @@ let device: GPUDevice | undefined;
 try {
   const adapter = await app.gpu.requestAdapter();
   assert.ok(adapter);
-  if(process.env.TS_DAWN_EXPECT_VENDOR) {
-    assert.equal(adapter.info.vendor, process.env.TS_DAWN_EXPECT_VENDOR);
+  if(process.env.HOSTFRAME_EXPECT_VENDOR) {
+    assert.equal(adapter.info.vendor, process.env.HOSTFRAME_EXPECT_VENDOR);
     assert.equal(adapter.info.isFallbackAdapter, false);
   }
   device = await adapter.requestDevice();
@@ -29,7 +29,7 @@ try {
   const errors: string[] = [];
   device.addEventListener("uncapturederror", event => { errors.push(event.error.message); });
   const window = app.createWindow(device, {
-    title: "ts-dawn presentation benchmark",
+    title: "hostframe presentation benchmark",
     width: 960,
     height: 540,
     vsync: vsyncArgument === "on"

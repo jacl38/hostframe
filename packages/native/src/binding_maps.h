@@ -10,7 +10,7 @@
 #include "bindings.h"
 #include "record_fields.h"
 
-namespace ts_dawn {
+namespace hostframe {
 template <class T> Napi::Value ToValue(Napi::Env env, T value) {
   return Nobind::ToJS<T, Nobind::ReturnDefault>(env, value).Get();
 }
@@ -57,12 +57,12 @@ template <> class FromJS<napi_env> {
   static std::string TSType() { return ""; }
 };
 
-template <ts_dawn::Text... Values, const ReturnAttribute& Ret>
-class ToJS<ts_dawn::Token<Values...>, Ret> {
+template <hostframe::Text... Values, const ReturnAttribute& Ret>
+class ToJS<hostframe::Token<Values...>, Ret> {
   Napi::Env env_;
-  ts_dawn::Token<Values...> value_;
+  hostframe::Token<Values...> value_;
  public:
-  ToJS(Napi::Env env, ts_dawn::Token<Values...> value) : env_(env), value_(std::move(value)) {}
+  ToJS(Napi::Env env, hostframe::Token<Values...> value) : env_(env), value_(std::move(value)) {}
   Napi::Value Get() { return Napi::String::New(env_, value_.value); }
   static std::string TSType() {
     std::string result;
@@ -76,7 +76,7 @@ template <class... Types, const ReturnAttribute& Ret> class ToJS<std::variant<Ty
   std::variant<Types...> value_;
  public:
   ToJS(Napi::Env env, std::variant<Types...> value) : env_(env), value_(std::move(value)) {}
-  Napi::Value Get() { return std::visit([&](auto value) { return ts_dawn::ToValue(env_, value); }, value_); }
+  Napi::Value Get() { return std::visit([&](auto value) { return hostframe::ToValue(env_, value); }, value_); }
   static std::string TSType() {
     std::string result;
     ((result += (result.empty() ? "" : " | ") + ToTSType<Types>()), ...);
@@ -85,8 +85,8 @@ template <class... Types, const ReturnAttribute& Ret> class ToJS<std::variant<Ty
 };
 
 #define TS_RECORD_MAP(T) \
-  template <const ReturnAttribute& Ret> class ToJS<ts_dawn::T, Ret> : public ts_dawn::RecordMap<ts_dawn::T> { \
-   public: using ts_dawn::RecordMap<ts_dawn::T>::RecordMap; \
+  template <const ReturnAttribute& Ret> class ToJS<hostframe::T, Ret> : public hostframe::RecordMap<hostframe::T> { \
+   public: using hostframe::RecordMap<hostframe::T>::RecordMap; \
   }
 TS_RECORD_MAP(WindowOptions);
 TS_RECORD_MAP(InputState);
@@ -101,25 +101,25 @@ TS_RECORD_MAP(PointerCaptureEvent);
 // A computed read-only member lets nobind's property registration generate the
 // property signature while its conversion executes the normal lifecycle guards.
 template <class Owner, auto Method, const ReturnAttribute& Ret>
-class ToJS<ts_dawn::Computed<Owner, Method>, Ret> {
+class ToJS<hostframe::Computed<Owner, Method>, Ret> {
   Napi::Env env_;
-  ts_dawn::Computed<Owner, Method> value_;
+  hostframe::Computed<Owner, Method> value_;
  public:
-  ToJS(Napi::Env env, ts_dawn::Computed<Owner, Method> value) : env_(env), value_(value) {}
-  Napi::Value Get() { return ts_dawn::ToValue(env_, value_.Get()); }
+  ToJS(Napi::Env env, hostframe::Computed<Owner, Method> value) : env_(env), value_(value) {}
+  Napi::Value Get() { return hostframe::ToValue(env_, value_.Get()); }
   static std::string TSType() { return ToTSType<decltype((std::declval<Owner>().*Method)())>() ; }
 };
 
 template <class Owner, auto Method, const ReturnAttribute& Ret>
-class ToJS<ts_dawn::Computed<Owner, Method>&, Ret> : public ToJS<ts_dawn::Computed<Owner, Method>, Ret> {
+class ToJS<hostframe::Computed<Owner, Method>&, Ret> : public ToJS<hostframe::Computed<Owner, Method>, Ret> {
  public:
-  using ToJS<ts_dawn::Computed<Owner, Method>, Ret>::ToJS;
+  using ToJS<hostframe::Computed<Owner, Method>, Ret>::ToJS;
 };
 
 // The native object is borrowed only for this call. WindowState retains the
 // original Dawn JS device, and Presentation wraps textures with Dawn's interop.
-template <> class FromJS<ts_dawn::DawnDevice> {
-  ts_dawn::DawnDevice value_;
+template <> class FromJS<hostframe::DawnDevice> {
+  hostframe::DawnDevice value_;
  public:
   explicit FromJS(const Napi::Value& value) : value_{value.Env(), value} {
     if(!value.IsObject()) throw Napi::TypeError::New(value.Env(), "Expected a Dawn GPUDevice");
@@ -128,8 +128,8 @@ template <> class FromJS<ts_dawn::DawnDevice> {
   static std::string TSType() { return "GPUDevice"; }
 };
 
-template <> class FromJS<ts_dawn::WindowOptionsArgument> {
-  ts_dawn::WindowOptionsArgument value_;
+template <> class FromJS<hostframe::WindowOptionsArgument> {
+  hostframe::WindowOptionsArgument value_;
  public:
   static constexpr bool IsOptional = true;
   explicit FromJS(const Napi::Value& value) : value_{value.Env(), value} {}
@@ -141,49 +141,49 @@ template <class Callback> class CallbackMap {
   Callback value_;
  public:
   explicit CallbackMap(const Napi::Value& value) : value_{value.Env(), value} {
-    if(!value.IsFunction()) throw Napi::TypeError::New(value.Env(), std::is_same_v<Callback, ts_dawn::DrawCallback> ? "Expected a draw callback" : "Expected an input callback");
+    if(!value.IsFunction()) throw Napi::TypeError::New(value.Env(), std::is_same_v<Callback, hostframe::DrawCallback> ? "Expected a draw callback" : "Expected an input callback");
   }
   auto Get() { return value_; }
 };
-template <> class FromJS<ts_dawn::DrawCallback> : public CallbackMap<ts_dawn::DrawCallback> {
+template <> class FromJS<hostframe::DrawCallback> : public CallbackMap<hostframe::DrawCallback> {
  public:
   using CallbackMap::CallbackMap;
   static std::string TSType() { return "(texture: GPUTexture) => undefined"; }
 };
-template <> class FromJS<ts_dawn::InputCallback> : public CallbackMap<ts_dawn::InputCallback> {
+template <> class FromJS<hostframe::InputCallback> : public CallbackMap<hostframe::InputCallback> {
  public:
   using CallbackMap::CallbackMap;
-  static std::string TSType() { return "(state: " + ToTSType<ts_dawn::InputState>() + ", events: (" + ToTSType<ts_dawn::InputEvent>() + ")[]) => undefined"; }
+  static std::string TSType() { return "(state: " + ToTSType<hostframe::InputState>() + ", events: (" + ToTSType<hostframe::InputEvent>() + ")[]) => undefined"; }
 };
 
-template <const ReturnAttribute& Ret> class ToJS<ts_dawn::DawnGPU, Ret> {
+template <const ReturnAttribute& Ret> class ToJS<hostframe::DawnGPU, Ret> {
   Napi::Env env_;
-  ts_dawn::DawnGPU value_;
+  hostframe::DawnGPU value_;
  public:
-  ToJS(Napi::Env env, ts_dawn::DawnGPU value) : env_(env), value_(value) {}
+  ToJS(Napi::Env env, hostframe::DawnGPU value) : env_(env), value_(value) {}
   Napi::Value Get() { return value_.value ? Napi::Value(env_, value_.value) : env_.Undefined(); }
   static std::string TSType() { return "GPU"; }
 };
-template <const ReturnAttribute& Ret> class ToJS<ts_dawn::DawnGlobals, Ret> {
+template <const ReturnAttribute& Ret> class ToJS<hostframe::DawnGlobals, Ret> {
   Napi::Env env_;
-  ts_dawn::DawnGlobals value_;
+  hostframe::DawnGlobals value_;
  public:
-  ToJS(Napi::Env env, ts_dawn::DawnGlobals value) : env_(env), value_(value) {}
+  ToJS(Napi::Env env, hostframe::DawnGlobals value) : env_(env), value_(value) {}
   Napi::Value Get() { return value_.value ? Napi::Value(env_, value_.value) : env_.Undefined(); }
   static std::string TSType() { return "Record<string, unknown>"; }
 };
 }
 
 namespace Nobind::TypemapOverrides {
-template <const ReturnAttribute& Ret> class ToJS<ts_dawn::Window*, Ret> {
+template <const ReturnAttribute& Ret> class ToJS<hostframe::Window*, Ret> {
   Napi::Env env_;
-  std::unique_ptr<ts_dawn::Window> value_;
+  std::unique_ptr<hostframe::Window> value_;
  public:
-  ToJS(Napi::Env env, ts_dawn::Window* value) : env_(env), value_(value) {}
+  ToJS(Napi::Env env, hostframe::Window* value) : env_(env), value_(value) {}
   Napi::Value Get() {
     if(env_.IsExceptionPending()) return env_.Undefined();
-    return NoObjectWrap<ts_dawn::Window>::New<true>(env_, value_.release());
+    return NoObjectWrap<hostframe::Window>::New<true>(env_, value_.release());
   }
-  static std::string TSType() { return NoObjectWrap<ts_dawn::Window>::GetName(); }
+  static std::string TSType() { return NoObjectWrap<hostframe::Window>::GetName(); }
 };
 }

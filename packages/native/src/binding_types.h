@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-namespace ts_dawn {
+namespace hostframe {
 // Raw Node-API handles keep Dawn's node-addon-api ABI/exception configuration
 // separate from nobind's. All handles are borrowed for the synchronous call.
 struct DawnDevice { napi_env env; napi_value value; };

@@ -6,7 +6,7 @@
 
 #include <webgpu/webgpu_cpp.h>
 
-namespace ts_dawn {
+namespace hostframe {
 
 // Only choose advertised modes: an unsupported request must not silently become FIFO.
 inline wgpu::PresentMode SelectPresentMode(std::span<const wgpu::PresentMode> modes, bool vsync) {

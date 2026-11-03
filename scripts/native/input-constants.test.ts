@@ -31,7 +31,7 @@ afterEach(async () => {
 });
 
 async function resolveFixture(header: string) {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn GLFW compiler "));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe GLFW compiler "));
   temporary.push(directory);
   const path = resolve(directory, "glfw3.h");
   await Bun.write(path, header);
@@ -115,7 +115,7 @@ test("unresolvable, unsafe or inconsistent definitions fail instead of producing
 });
 
 test("generation recreates missing/stale output, tracks header changes and leaves unchanged output untouched", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn GLFW constants "));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe GLFW constants "));
   temporary.push(directory);
   const header = resolve(directory, "glfw3.h");
   const output = resolve(directory, "generated/input.ts");
@@ -168,7 +168,7 @@ await writeFile(process.argv[3]!, JSON.stringify(values));
 });
 
 test("invalid headers leave existing generated output intact", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn GLFW invalid "));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe GLFW invalid "));
   temporary.push(directory);
   const header = resolve(directory, "glfw3.h");
   const output = resolve(directory, "input.ts");

@@ -39,7 +39,7 @@ export async function createThreeExample(title: string, options: Parameters<type
     // performs the output transfer once during composition.
     renderer.outputColorSpace = LinearSRGBColorSpace;
     // Three captures self during init for its internal frame bookkeeping. Feed that
-    // scheduler from ts-dawn, with no extra timer loop and no persistent global shim.
+    // scheduler from hostframe, with no extra timer loop and no persistent global shim.
     let nextFrame: ((time: number) => void) | undefined;
     const previousSelf = Object.getOwnPropertyDescriptor(globalThis, "self");
     try {

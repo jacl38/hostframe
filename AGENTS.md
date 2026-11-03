@@ -1,6 +1,6 @@
 # Project guidance
 
-ts-dawn aims to provide native desktop graphics applications in TypeScript using Dawn for WebGPU and GLFW for windows and input, across Node.js and Bun. Read `README.md` for the proposed architecture and API. Distinguish intended behavior from implemented and verified behavior.
+hostframe aims to provide native desktop graphics applications in TypeScript using Dawn for WebGPU and GLFW for windows and input, across Node.js and Bun. Read `README.md` for the proposed architecture and API. Distinguish intended behavior from implemented and verified behavior.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ ts-dawn aims to provide native desktop graphics applications in TypeScript using
 ## Upstream integration
 
 - Prefer public Dawn and GLFW interfaces. Establish the need for upstream changes through a prototype before introducing patches.
-- Keep necessary upstream patches small, localized, and documented. Keep ts-dawn windowing and presentation implementation in its own source files.
+- Keep necessary upstream patches small, localized, and documented. Keep hostframe windowing and presentation implementation in its own source files.
 
 ## Native build tooling
 

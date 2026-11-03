@@ -3,7 +3,7 @@
 #include <memory>
 #include "binding_types.h"
 
-namespace ts_dawn {
+namespace hostframe {
 class ApplicationState;
 class WindowState;
 class Window;

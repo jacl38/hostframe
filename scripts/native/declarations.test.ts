@@ -8,9 +8,9 @@ import { buildRoot } from "./release";
 // Runtime integration tests run under native:verify. This test covers extraction
 // and recovery from stale/missing build output using the actual compiled addon.
 test("declarations and runtime event names are extracted and regenerated together", async () => {
-  const addon = resolve(buildRoot, "cmake/ts_dawn.node");
+  const addon = resolve(buildRoot, "cmake/hostframe.node");
   if(!await Bun.file(addon).exists()) throw new Error("Run bun run setup before declaration regression tests.");
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn declarations "));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe declarations "));
   const output = resolve(directory, "native.d.ts");
   const eventsOutput = resolve(directory, "input-events.ts");
   try {

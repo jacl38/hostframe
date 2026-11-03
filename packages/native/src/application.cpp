@@ -20,7 +20,7 @@
 #include "bindings.h"
 #include "native_boundary.h"
 
-namespace ts_dawn {
+namespace hostframe {
 
 void RequireMainThread(Napi::Env env) {
 #if defined(__APPLE__)

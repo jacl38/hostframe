@@ -3,7 +3,7 @@
 **Resolved on 2026-11-02:** the recurring hardware hiccups came from the private
 KDE test environment sharing its service cache with the desktop while using a
 different configuration directory. Isolating `XDG_CACHE_HOME` removes the
-repeated compositor stalls with the original ts-dawn native code. See the
+repeated compositor stalls with the original hostframe native code. See the
 [causal investigation below](#resolved-cause-shared-kde-service-cache). The slow
 software-rendered recording was a separate problem.
 
@@ -74,7 +74,7 @@ exceed the scheduler's eight-step catch-up budget and cause simulation time to
 be discarded, despite each physics callback receiving a fixed timestep.
 
 This established a real frame-pacing problem alongside the slow software capture.
-At this stage it did not distinguish ts-dawn's native checks/wrapping, Dawn/Mesa
+At this stage it did not distinguish hostframe's native checks/wrapping, Dawn/Mesa
 surface acquisition and the virtual X11/compositor environment. High average
 throughput alone did not establish smooth hardware presentation.
 
@@ -202,7 +202,7 @@ runtime, configuration **and cache** directories and stops its KWin session when
 the command finishes, with a 120-second session timeout. It requires installed
 KWin/Xwayland and D-Bus, plus access
 to the Intel render node; its default ICD path is specific to this Linux host.
-Override `VK_DRIVER_FILES` and `TS_DAWN_EXPECT_VENDOR` for another supported driver.
+Override `VK_DRIVER_FILES` and `HOSTFRAME_EXPECT_VENDOR` for another supported driver.
 
 ```sh
 bun scripts/benchmarks/display.ts bun scripts/benchmarks/physics.ts
@@ -214,7 +214,7 @@ bun scripts/benchmarks/display.ts bun scripts/benchmarks/presentation.ts clear o
 The [physics profiler](../scripts/benchmarks/physics.ts) imports the actual example
 without duplicating its scene. It sends Space through X11 at two seconds, asserts
 that the example receives the press, excludes the first three seconds, and runs
-for 15 seconds by default (`TS_DAWN_PROFILE_MS` overrides the duration). It reports
+for 15 seconds by default (`HOSTFRAME_PROFILE_MS` overrides the duration). It reports
 completion intervals, CPU draw stages, dropped time, and every interval over
 30 ms. It requires `xdotool`; its hooks run only in the diagnostic process.
 Use an installed Node binary directly if a version-manager shim changes versions

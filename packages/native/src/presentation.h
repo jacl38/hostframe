@@ -8,7 +8,7 @@
 #include "src/dawn/node/interop/NodeAPI.h"
 #include "window_options.h"
 
-namespace ts_dawn {
+namespace hostframe {
 // Members release in reverse order: surface/device before the native window.
 // The application's GLFW session outlives all presentation resources.
 class Presentation {

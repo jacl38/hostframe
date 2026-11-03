@@ -5,9 +5,9 @@ import { Application, Key } from "../../index.ts";
 
 // Load the real example after installing timing hooks. Flags are the example's
 // usual --no-vsync and --max-fps options; measurements are CPU wall times.
-const duration = Number(process.env.TS_DAWN_PROFILE_MS ?? "15000");
+const duration = Number(process.env.HOSTFRAME_PROFILE_MS ?? "15000");
 const warmup = 3000;
-assert.ok(Number.isFinite(duration) && duration >= 6000, "TS_DAWN_PROFILE_MS must be at least 6000");
+assert.ok(Number.isFinite(duration) && duration >= 6000, "HOSTFRAME_PROFILE_MS must be at least 6000");
 const intervals: number[] = [];
 const draws: Array<{ beforeCallback: number, callback: number, afterCallback: number, total: number }> = [];
 const stalls: Array<{ at: number, interval: number, draw: (typeof draws)[number] | undefined }> = [];
@@ -69,8 +69,8 @@ const run = Application.prototype.run;
 Application.prototype.run = async function profileRun(options) {
   const adapter = await this.gpu.requestAdapter();
   assert.ok(adapter);
-  if(process.env.TS_DAWN_EXPECT_VENDOR) {
-    assert.equal(adapter.info.vendor, process.env.TS_DAWN_EXPECT_VENDOR);
+  if(process.env.HOSTFRAME_EXPECT_VENDOR) {
+    assert.equal(adapter.info.vendor, process.env.HOSTFRAME_EXPECT_VENDOR);
     assert.equal(adapter.info.isFallbackAdapter, false);
   }
   this.on("fixedUpdate", () => {

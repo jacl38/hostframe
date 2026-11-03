@@ -32,15 +32,15 @@ void CheckPresentModes() {
   auto require = [](bool condition) {
     if(!condition) throw std::runtime_error("Present mode selection regression");
   };
-  require(ts_dawn::SelectPresentMode(all, true) == Mode::Fifo);
-  require(ts_dawn::SelectPresentMode(all, false) == Mode::Immediate);
-  require(ts_dawn::SelectPresentMode(fifo, true) == Mode::Fifo);
-  require(ts_dawn::SelectPresentMode(mailbox, false) == Mode::Mailbox);
-  require(ts_dawn::SelectPresentMode(immediate, false) == Mode::Immediate);
+  require(hostframe::SelectPresentMode(all, true) == Mode::Fifo);
+  require(hostframe::SelectPresentMode(all, false) == Mode::Immediate);
+  require(hostframe::SelectPresentMode(fifo, true) == Mode::Fifo);
+  require(hostframe::SelectPresentMode(mailbox, false) == Mode::Mailbox);
+  require(hostframe::SelectPresentMode(immediate, false) == Mode::Immediate);
   for(auto modes : {std::span<const Mode>{}, std::span<const Mode>{relaxed}, std::span<const Mode>{fifo}}) {
     bool rejected = false;
     try {
-      ts_dawn::SelectPresentMode(modes, false);
+      hostframe::SelectPresentMode(modes, false);
     } catch(const std::runtime_error& error) {
       rejected = std::string_view(error.what()).find("vsync: false") != std::string_view::npos;
     }
@@ -49,15 +49,15 @@ void CheckPresentModes() {
   for(auto modes : {std::span<const Mode>{}, std::span<const Mode>{relaxed}, std::span<const Mode>{immediate}}) {
     bool rejected = false;
     try {
-      ts_dawn::SelectPresentMode(modes, true);
+      hostframe::SelectPresentMode(modes, true);
     } catch(const std::runtime_error& error) {
       rejected = std::string_view(error.what()).find("vsync: true") != std::string_view::npos;
     }
     require(rejected);
   }
-  require(std::string_view(ts_dawn::PresentModeName(Mode::Fifo)) == "fifo");
-  require(std::string_view(ts_dawn::PresentModeName(Mode::Immediate)) == "immediate");
-  require(std::string_view(ts_dawn::PresentModeName(Mode::Mailbox)) == "mailbox");
+  require(std::string_view(hostframe::PresentModeName(Mode::Fifo)) == "fifo");
+  require(std::string_view(hostframe::PresentModeName(Mode::Immediate)) == "immediate");
+  require(std::string_view(hostframe::PresentModeName(Mode::Mailbox)) == "mailbox");
   std::cout << "Present mode capability selection and unsupported requests passed.\n";
 }
 
@@ -87,7 +87,7 @@ void CheckSurfaceAcquisition() {
     bool failed = false;
     Frame result;
     try {
-      result = ts_dawn::AcquireSurfaceTexture(
+      result = hostframe::AcquireSurfaceTexture(
           [&] { return prepared++ < preparations; },
           [&] {
             require(acquired < static_cast<int>(statuses.size()));
@@ -150,7 +150,7 @@ void CheckPresentation() {
   GlfwSession session;
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> window(
-      glfwCreateWindow(320, 240, "ts-dawn presentation check", nullptr, nullptr), glfwDestroyWindow);
+      glfwCreateWindow(320, 240, "hostframe presentation check", nullptr, nullptr), glfwDestroyWindow);
   if(!window) throw std::runtime_error("GLFW window creation failed.");
 
   auto instance = wgpu::CreateInstance();
@@ -182,7 +182,7 @@ void CheckPresentation() {
   std::cout << "GPU adapter: " << std::string_view(info.vendor) << ", "
             << std::string_view(info.device) << ", " << std::string_view(info.description)
             << "; fallback: " << (info.adapterType == wgpu::AdapterType::CPU ? "true" : "false") << '\n';
-  if(const char* expected = std::getenv("TS_DAWN_EXPECT_VENDOR")) {
+  if(const char* expected = std::getenv("HOSTFRAME_EXPECT_VENDOR")) {
     if(std::string_view(info.vendor) != expected || info.adapterType == wgpu::AdapterType::CPU) {
       throw std::runtime_error("Unexpected GPU vendor or software adapter during hardware verification.");
     }
@@ -218,7 +218,7 @@ void CheckPresentation() {
   glfwGetFramebufferSize(window.get(), &framebufferWidth, &framebufferHeight);
   configuration.width = framebufferWidth;
   configuration.height = framebufferHeight;
-  configuration.presentMode = ts_dawn::SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, true);
+  configuration.presentMode = hostframe::SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, true);
   configuration.alphaMode = capabilities.alphaModes[0];
   surface.Configure(&configuration);
 

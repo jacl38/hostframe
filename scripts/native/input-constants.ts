@@ -33,7 +33,7 @@ export async function resolveInputConstants(headerPath: string) {
   // This regex selects identifiers only. The compiler owns expression evaluation,
   // aliases, casts, conditional definitions, integer bases and suffixes.
   const names = Array.from(definitions.matchAll(/^#define (GLFW_(?:KEY_|MOUSE_BUTTON_|MOD_)[A-Z0-9_]+)\s/gm), match => match[1]!).sort();
-  const directory = await mkdtemp(resolve(tmpdir(), "ts-dawn-constants-"));
+  const directory = await mkdtemp(resolve(tmpdir(), "hostframe-constants-"));
   const values = new Map<string, number>();
   try {
     const source = resolve(directory, "constants.cpp");

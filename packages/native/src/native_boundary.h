@@ -2,7 +2,7 @@
 
 #include "src/dawn/node/interop/NodeAPI.h"
 
-namespace ts_dawn {
+namespace hostframe {
 // Never transport a node-addon-api C++ exception across the Dawn/nobind ABI
 // boundary. Keep the actual JS exception pending, including arbitrary thrown values.
 template <class Function> auto NativeBoundary(napi_env raw, Function&& function) {

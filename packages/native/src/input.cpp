@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace ts_dawn {
+namespace hostframe {
 WindowInput& WindowInput::Get(GLFWwindow* window) {
   return *static_cast<WindowInput*>(glfwGetWindowUserPointer(window));
 }

@@ -74,7 +74,7 @@ if(!isMainThread) {
     if(process.argv.includes("--shutdown")) {
       app.createWindow(device).draw(() => {});
       // Only retain the application: it owns the window even if its JS wrapper is collected.
-      Object.defineProperty(globalThis, "__tsDawnShutdownApplication", { value: app });
+      Object.defineProperty(globalThis, "__hostframeShutdownApplication", { value: app });
       (globalThis as { gc?: () => void }).gc?.();
       console.log(`${process.versions.bun ? "Bun" : "Node.js"}: Application shutdown fixture ready.`);
     } else {

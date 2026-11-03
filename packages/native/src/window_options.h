@@ -2,9 +2,9 @@
 
 #include <string>
 
-namespace ts_dawn {
+namespace hostframe {
 struct WindowOptions {
-  std::string title = "ts-dawn solid color";
+  std::string title = "hostframe solid color";
   int width = 320;
   int height = 240;
   bool resizable = false;

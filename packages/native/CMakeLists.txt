@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(ts_dawn LANGUAGES C CXX)
+project(hostframe LANGUAGES C CXX)
 
 if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$") AND NOT (APPLE AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64"))
   message(FATAL_ERROR "Supported targets are Linux x64 and macOS arm64.")
@@ -9,24 +9,24 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-get_filename_component(TS_DAWN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
-set(TS_DAWN_BUILD_ROOT "${TS_DAWN_ROOT}/build/native" CACHE PATH "Downloaded and generated native inputs")
-set(DAWN_SOURCE "${TS_DAWN_ROOT}/vendor/dawn")
-set(BINDING_ROOT "${TS_DAWN_BUILD_ROOT}/binding")
-set(GENERATED_ROOT "${TS_DAWN_BUILD_ROOT}/generated")
+get_filename_component(HOSTFRAME_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+set(HOSTFRAME_BUILD_ROOT "${HOSTFRAME_ROOT}/build/native" CACHE PATH "Downloaded and generated native inputs")
+set(DAWN_SOURCE "${HOSTFRAME_ROOT}/vendor/dawn")
+set(BINDING_ROOT "${HOSTFRAME_BUILD_ROOT}/binding")
+set(GENERATED_ROOT "${HOSTFRAME_BUILD_ROOT}/generated")
 
 # Artifact layout comes from dawn.lock.json through the TypeScript build script.
-set(TS_DAWN_ENGINE_LIBRARY "" CACHE FILEPATH "Pinned prebuilt Dawn engine")
-set(TS_DAWN_HEADERS_INCLUDE "" CACHE PATH "Matching Dawn headers")
-if(NOT EXISTS "${TS_DAWN_ENGINE_LIBRARY}" OR NOT IS_DIRECTORY "${TS_DAWN_HEADERS_INCLUDE}")
+set(HOSTFRAME_ENGINE_LIBRARY "" CACHE FILEPATH "Pinned prebuilt Dawn engine")
+set(HOSTFRAME_HEADERS_INCLUDE "" CACHE PATH "Matching Dawn headers")
+if(NOT EXISTS "${HOSTFRAME_ENGINE_LIBRARY}" OR NOT IS_DIRECTORY "${HOSTFRAME_HEADERS_INCLUDE}")
   message(FATAL_ERROR "Missing pinned Dawn artifacts. Configure through bun run setup or bun run native:build.")
 endif()
 
 # Import only the downloaded archive. Never add Dawn's top-level CMake project.
 add_library(dawn_engine STATIC IMPORTED)
 set_target_properties(dawn_engine PROPERTIES
-  IMPORTED_LOCATION "${TS_DAWN_ENGINE_LIBRARY}"
-  INTERFACE_INCLUDE_DIRECTORIES "${TS_DAWN_HEADERS_INCLUDE}"
+  IMPORTED_LOCATION "${HOSTFRAME_ENGINE_LIBRARY}"
+  INTERFACE_INCLUDE_DIRECTORIES "${HOSTFRAME_HEADERS_INCLUDE}"
 )
 find_package(Threads REQUIRED)
 if(APPLE)
@@ -52,7 +52,7 @@ add_subdirectory("${DAWN_SOURCE}/third_party/glfw3/src" "${CMAKE_CURRENT_BINARY_
 
 # The pinned binding directory contains implementation files only; exclude upstream Module.cpp.
 file(GLOB BINDING_SOURCES CONFIGURE_DEPENDS "${BINDING_ROOT}/src/dawn/node/binding/*.cpp")
-add_library(ts_dawn MODULE
+add_library(hostframe MODULE
   src/module.cpp
   src/nobind_runtime.cpp
   src/dawn_bridge.cpp
@@ -66,7 +66,7 @@ add_library(ts_dawn MODULE
   "${GENERATED_ROOT}/src/dawn/node/interop/WebGPU.cpp"
   "${GENERATED_ROOT}/src/dawn/utils/ComboLimits.cpp"
 )
-set_target_properties(ts_dawn PROPERTIES
+set_target_properties(hostframe PROPERTIES
   PREFIX "" SUFFIX ".node"
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN YES
@@ -74,29 +74,29 @@ set_target_properties(ts_dawn PROPERTIES
 # nobind uses node-addon-api >=8.3 with exceptions. Its only translation unit
 # has a distinct namespace so Dawn retains its pinned headers and exception ABI.
 set_source_files_properties(src/module.cpp src/nobind_runtime.cpp PROPERTIES
-  INCLUDE_DIRECTORIES "${TS_DAWN_BUILD_ROOT}/nobind;${TS_DAWN_ROOT}/node_modules/node-addon-api"
-  COMPILE_DEFINITIONS "NAPI_CPP_CUSTOM_NAMESPACE=TsDawnBindings;NOBIND_NO_BASIC_FINALIZERS;NOBIND_NO_ASYNC_LOCKING;NOBIND_NO_OBJECT_STORE"
+  INCLUDE_DIRECTORIES "${HOSTFRAME_BUILD_ROOT}/nobind;${HOSTFRAME_ROOT}/node_modules/node-addon-api"
+  COMPILE_DEFINITIONS "NAPI_CPP_CUSTOM_NAMESPACE=HostframeBindings;NOBIND_NO_BASIC_FINALIZERS;NOBIND_NO_ASYNC_LOCKING;NOBIND_NO_OBJECT_STORE"
 )
 # Node also embeds Abseil. Keep the engine's bundled implementation local to
 # this addon so ELF symbol interposition cannot mix incompatible Abseil builds.
 if(APPLE)
-  target_link_options(ts_dawn PRIVATE "-undefined" "dynamic_lookup" "-Wl,-exported_symbol,_napi_register_module_v1" "-Wl,-exported_symbol,_node_api_module_get_api_version_v1")
+  target_link_options(hostframe PRIVATE "-undefined" "dynamic_lookup" "-Wl,-exported_symbol,_napi_register_module_v1" "-Wl,-exported_symbol,_node_api_module_get_api_version_v1")
 else()
-  target_link_options(ts_dawn PRIVATE "-Wl,--exclude-libs,ALL")
+  target_link_options(hostframe PRIVATE "-Wl,--exclude-libs,ALL")
 endif()
-target_include_directories(ts_dawn PRIVATE
+target_include_directories(hostframe PRIVATE
   "${BINDING_ROOT}"
   "${GENERATED_ROOT}"
   "${GENERATED_ROOT}/src"
   "${DAWN_SOURCE}"
   "${DAWN_SOURCE}/include"
 )
-target_include_directories(ts_dawn SYSTEM PRIVATE
+target_include_directories(hostframe SYSTEM PRIVATE
   "${DAWN_SOURCE}/third_party/node-addon-api"
   "${DAWN_SOURCE}/third_party/node-api-headers/include"
 )
-target_compile_definitions(ts_dawn PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG ${PLATFORM_DEFINITIONS} GLFW_INCLUDE_NONE)
-target_link_libraries(ts_dawn PRIVATE dawn_engine glfw ${PLATFORM_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
+target_compile_definitions(hostframe PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG ${PLATFORM_DEFINITIONS} GLFW_INCLUDE_NONE)
+target_link_libraries(hostframe PRIVATE dawn_engine glfw ${PLATFORM_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
 set_source_files_properties(src/module.cpp src/nobind_runtime.cpp src/dawn_bridge.cpp src/application.cpp src/window.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 
@@ -107,7 +107,7 @@ endif()
 target_include_directories(dawn_glfw PRIVATE "${DAWN_SOURCE}" "${DAWN_SOURCE}/include")
 target_compile_definitions(dawn_glfw PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG ${PLATFORM_DEFINITIONS} GLFW_INCLUDE_NONE)
 target_link_libraries(dawn_glfw PUBLIC dawn_engine glfw ${PLATFORM_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
-target_link_libraries(ts_dawn PRIVATE dawn_glfw)
+target_link_libraries(hostframe PRIVATE dawn_glfw)
 
 add_executable(native_presentation_check test/presentation.cpp)
 target_include_directories(native_presentation_check PRIVATE "${DAWN_SOURCE}/include")

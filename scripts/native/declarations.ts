@@ -11,7 +11,7 @@ async function writeChanged(path: string, content: string) {
 }
 
 /** Extract from the just-linked binary in a fresh process; never reuse a cached addon. */
-export async function generateDeclarations(addon = resolve(buildRoot, "cmake/ts_dawn.node"), output = resolve(buildRoot, "generated/native.d.ts")) {
+export async function generateDeclarations(addon = resolve(buildRoot, "cmake/hostframe.node"), output = resolve(buildRoot, "generated/native.d.ts")) {
   await mkdir(resolve(output, ".."), { recursive: true });
   const temporary = await mkdtemp(resolve(output, "../.declarations-"));
   let declarations: string;

@@ -41,12 +41,12 @@ Every GPU check ran with:
 ```sh
 VK_DRIVER_FILES=/usr/share/vulkan/icd.d/intel_icd.x86_64.json
 DAWNNODE_BACKEND=vulkan
-TS_DAWN_EXPECT_VENDOR=intel
+HOSTFRAME_EXPECT_VENDOR=intel
 ```
 
 The ICD path is host-specific. The first setting excludes lavapipe and other
 Vulkan ICDs; the second explicitly selects Dawn's Vulkan backend. The verifier
-logs each fixture's adapter identity, and `TS_DAWN_EXPECT_VENDOR` additionally
+logs each fixture's adapter identity, and `HOSTFRAME_EXPECT_VENDOR` additionally
 requires the expected vendor and rejects CPU/fallback adapters in the JavaScript
 and C++ checks. The example logs vendor/device and fallback status. Captured
 example processes loaded `libvulkan_intel.so` and did not load `libvulkan_lvp.so`.
@@ -100,7 +100,7 @@ created regions without negotiating XFixes on the new connection. Its Vulkan WSI
 connection cache lives with the retained GPU instance and is keyed by connection
 address; see the [Mesa WSI implementation](https://chromium.googlesource.com/external/gitlab.freedesktop.org/mesa/mesa/+/e0abbc613dce5df23b245dc3d8486e5d144c0dfa/src/vulkan/wsi/wsi_common_x11.c).
 
-ts-dawn now calls the public
+hostframe now calls the public
 [`XFixesQueryVersion`](https://xorg.freedesktop.org/archive/current/doc/man/man3/Xfixes.3.xhtml)
 on every new GLFW session before surface use. This initializes the new connection
 even when Mesa reuses its cached entry. Xfixes is now an explicit native build
@@ -137,7 +137,7 @@ env -u DISPLAY -u WAYLAND_DISPLAY \
   KWIN_COMPOSE=O2 \
   dbus-run-session -- kwin_wayland \
     --virtual --width 1280 --height 720 --scale 1 --output-count 1 \
-    --xwayland --socket ts-dawn-hardware \
+    --xwayland --socket hostframe-hardware \
     --no-lockscreen --no-global-shortcuts --no-kactivities \
     --exit-with-session "$(command -v bun) $PWD/build/native/hardware-presentation/session.ts"
 ```
@@ -155,7 +155,7 @@ const child = Bun.spawn(["bun", "run", "native:verify", "--presentation"], {
     ...display,
     VK_DRIVER_FILES: "/usr/share/vulkan/icd.d/intel_icd.x86_64.json",
     DAWNNODE_BACKEND: "vulkan",
-    TS_DAWN_EXPECT_VENDOR: "intel"
+    HOSTFRAME_EXPECT_VENDOR: "intel"
   },
   stdout: "inherit",
   stderr: "inherit"
