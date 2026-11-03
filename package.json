@@ -1,25 +1,37 @@
 {
   "name": "hostframe",
-  "module": "index.ts",
-  "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@dimforge/rapier3d-compat": "^0.21.0",
-    "@stylistic/eslint-plugin": "^5.10.0",
-    "@types/bun": "latest",
-    "@types/three": "^0.187.0",
-    "@webgpu/types": "^0.1.74",
-    "nobind17": "2.0.1",
-    "oidn-web": "0.4.0",
-    "oxlint": "^1.90.0",
-    "three": "^0.187.0",
-    "three-gpu-pathtracer": "0.0.27",
-    "three-mesh-bvh": "0.9.17",
-    "typegpu": "^0.12.9",
-    "webgpu-utils": "^2.1.1"
+  "version": "0.1.0-alpha.0",
+  "description": "Native desktop WebGPU applications with Dawn and GLFW for Node.js and Bun.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jacl38/ts-dawn.git"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "docs/"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "engines": {
+    "node": ">=22.18.0"
   },
   "scripts": {
     "setup": "bun scripts/native.ts setup",
@@ -32,6 +44,28 @@
     "example": "bun scripts/examples.ts",
     "examples:verify": "bun scripts/examples.ts --verify",
     "example:solid-color": "bun examples/vanilla/solid-color.ts",
-    "example:input": "bun examples/vanilla/input.ts"
+    "example:input": "bun examples/vanilla/input.ts",
+    "build": "bun scripts/package.ts",
+    "prepack": "bun run build",
+    "package:verify": "bun scripts/package/verify.ts"
+  },
+  "dependencies": {
+    "@webgpu/types": "^0.1.74"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/bun": "latest",
+    "@types/three": "^0.187.0",
+    "nobind17": "2.0.1",
+    "oidn-web": "0.4.0",
+    "oxlint": "^1.90.0",
+    "three": "^0.187.0",
+    "three-gpu-pathtracer": "0.0.27",
+    "three-mesh-bvh": "0.9.17",
+    "tsdown": "^0.23.4",
+    "typegpu": "^0.12.9",
+    "typescript": "^5.9.3",
+    "webgpu-utils": "^2.1.1"
   }
 }

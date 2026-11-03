@@ -6,7 +6,11 @@ export type NativeWindow = Native.Window;
 export type NativeApplication = Native.Application;
 
 const require = createRequire(import.meta.url);
-const addon: typeof Native = require("../../build/native/cmake/hostframe.node");
+// tsdown replaces this path when the bridge is bundled into dist/index.js.
+declare const __HOSTFRAME_ADDON__: string;
+const addon: typeof Native = require(typeof __HOSTFRAME_ADDON__ === "string"
+  ? __HOSTFRAME_ADDON__
+  : "../../build/native/cmake/hostframe.node");
 
 // Experimental bridge: upstream child objects do not retain their GPU owner.
 // Keep one owner rooted through callbacks, GC, and runtime teardown in both runtimes.

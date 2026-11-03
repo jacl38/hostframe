@@ -3,8 +3,8 @@
 Setup supports **Linux x64 with GLFW/X11 and Vulkan** and **macOS arm64
 with GLFW/Cocoa and Metal**. Other platforms
 fail explicitly before downloading an incompatible engine. This is a source
-contributor workflow; distributing prebuilt addons to application developers is
-still planned.
+contributor workflow; see [Linux x64 packaging](packaging.md) for the initial
+prebuilt addon package.
 
 Project-owned bindings use nobind17 typed registrations; both build commands
 produce `build/native/generated/native.d.ts`. Dawn bindings and `@webgpu/types`
@@ -210,8 +210,8 @@ an optional scheduler with bounded catch-up and pause/resume/stop controls. See
 turns for GPU promises and I/O. The render cap is independent of vsync; blocking surface
 acquisition and OS/JavaScript scheduling affect callback execution times.
 
-Broader window/context APIs, input events, multiple live windows,
-further platform expansion, addon distribution, and complete
+Broader window/context APIs, multiple live windows,
+further platform expansion, and complete
 GC/shutdown validation are outside this increment. No additional upstream patches are used.
 
 ## Script organization
@@ -507,7 +507,7 @@ The native presentation executable tests the engine/helper directly; the separat
 JavaScript fixture exercises surface texture wrapping and synchronous presentation.
 Neither establishes multi-window scheduling, thread handoff, complete GC/disposal
 correctness, or broader window/context APIs.
-Intel macOS, Windows, Linux arm64, native Wayland windows, distribution packaging, and performance
+Intel macOS, Windows, Linux arm64, native Wayland windows, broader distribution compatibility, and performance
 remain unverified. High-refresh behavior has deterministic timing coverage, but
 real monitor pacing, frame-time percentiles, input latency, and VRR have not been
 measured; neither Xvfb/lavapipe nor the virtual KWin/Intel checks are performance

@@ -1,5 +1,5 @@
 {
-  "exclude": ["node_modules", "vendor", "build"],
+  "exclude": ["node_modules", "vendor", "build", "dist", "scripts/package/fixtures"],
   "compilerOptions": {
     // Environment setup & latest features
     "lib": ["ESNext"],

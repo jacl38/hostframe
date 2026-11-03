@@ -1,5 +1,8 @@
 **hostframe is a TypeScript library for building native desktop graphics applications without a browser or WebView.** It aims to provide the same API across Node.js, and Bun.
 
+Licensed under [Apache-2.0](LICENSE). Third-party components retain their own
+licenses; the package includes their notices in `dist/THIRD_PARTY_NOTICES.txt`.
+
 The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Keyboard and pointer input include held-state snapshots and game-style pointer capture. Multiple live windows remain planned.
 
 | Piece | Responsibility | Location |
@@ -12,6 +15,27 @@ The implementation combines existing native components with a small integration 
 | **hostframe TypeScript layer** | Provides `Application`, fixed updates, render callbacks, and optional scheduling | `packages/core/` |
 
 Dawn supplies GPU functionality. GLFW supplies interactive windows. `hostframe` coordinates their ownership and execution.
+
+**Linux x64 package**
+
+The npm package build includes ESM JavaScript, TypeScript declarations, and a
+prebuilt native addon. Consumers need no native build tools or install scripts:
+
+```sh
+npm install ./hostframe-0.1.0-alpha.0.tgz
+# or: bun add ./hostframe-0.1.0-alpha.0.tgz
+```
+
+```ts
+import { Application, Key, PointerButton } from "hostframe";
+```
+
+This first package targets the current Linux x64/glibc system with X11 and
+Vulkan. The locally built addon requires glibc 2.43 and GLIBCXX 3.4.32;
+compatibility with older distributions is unverified. macOS source builds
+remain supported, but are not included in this package. See
+[packaging](docs/packaging.md) for build, consumer verification, runtime
+prerequisites, and release limitations.
 
 **Examples**
 
@@ -93,7 +117,7 @@ bun examples/vanilla/solid-color.ts --no-vsync --max-fps=144      # Immediate/Ma
 ```
 
 ```ts
-import { Application } from "./index.ts";
+import { Application } from "hostframe";
 
 const app = new Application();
 let device: GPUDevice | undefined;
@@ -198,7 +222,7 @@ Stopping does not dispose resources. Use `finally` to dispose the application an
 then caller-owned devices. See [the loop contract](docs/application-loop.md) for
 catch-up limits, interpolation, listener semantics, and custom loops.
 
-Multiple live windows and packaged addons remain outside this increment. The former experimental free functions have
+Multiple live windows remain outside this increment. The former experimental free functions have
 been replaced by `Application`.
 
 **Native integration**
@@ -287,8 +311,8 @@ The implementation is organized into:
 - [Build audit](scripts/native/build.ts), [runtime verification](scripts/native.ts), and [native presentation check](packages/native/test/presentation.cpp): compilation boundary and runtime checks.
 - [Build guide](docs/native-build.md): prerequisites, platform status, dependency updates, and verification commands. The pinned starting release is [v20261026.205545](https://github.com/google/dawn/releases/tag/v20261026.205545), revision `5fbd545292cb7a4a9a275e322abec6007ffe2ae8`.
 
-Downloaded dependencies and generated artifacts are ignored and do not become ordinary tracked hostframe source files. Application developers would receive **prebuilt native addons**, rather than needing to build Dawn themselves.
+Downloaded dependencies and generated artifacts are ignored and do not become ordinary tracked hostframe source files. The initial Linux x64 package includes a **prebuilt native addon**; see [packaging](docs/packaging.md).
 
 On macOS arm64 (Apple M4), Metal compute/readback and the full presentation suite pass in Node.js 25.5.0 and Bun 1.4.2, including Retina framebuffers, lifecycle, scheduler, and shutdown checks. Automated macOS input and resize/minimize interactions remain unverified.
 
-This checkout passes JavaScript compute/readback and configurable/resizable window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The resizable solid-color example was captured and inspected in both runtimes. Resize/minimize/restore and disposal interactions passed under Xvfb/KWin with lavapipe in Node.js and Bun; see the build guide for reproduction and limits. Physical-monitor pacing, platforms beyond Linux x64 and macOS arm64, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs and addon distribution still require implementation; broader compatibility and lifecycle validation are required before making release guarantees.
+This checkout passes JavaScript compute/readback and configurable/resizable window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The resizable solid-color example was captured and inspected in both runtimes. Resize/minimize/restore and disposal interactions passed under Xvfb/KWin with lavapipe in Node.js and Bun; see the build guide for reproduction and limits. Physical-monitor pacing, platforms beyond Linux x64 and macOS arm64, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs still require implementation; broader package compatibility and lifecycle validation are required before making release guarantees.
