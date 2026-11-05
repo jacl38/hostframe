@@ -8,7 +8,7 @@ import { sha256 } from "./assets.ts";
 test("draft CLI keeps releases unpublished and rejects corrupt assets before invoking gh", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "hostframe-draft-"));
   try {
-    for(const file of ["scripts/release.ts", "scripts/release/assets.ts", "scripts/native/release.ts", "scripts/native/dawn.lock.json"]) {
+    for(const file of ["scripts/release/assets.ts", "scripts/native/release.ts", "scripts/native/dawn.lock.json"]) {
       const destination = resolve(directory, file);
       await mkdir(dirname(destination), { recursive: true });
       await copyFile(resolve(root, file), destination);
@@ -42,7 +42,7 @@ test("draft CLI keeps releases unpublished and rejects corrupt assets before inv
       HOSTFRAME_TEST_GH_ARGS: capture
     };
     async function invoke() {
-      const child = Bun.spawn([process.execPath, "scripts/release.ts", "draft"], {
+      const child = Bun.spawn([process.execPath, "scripts/release/assets.ts", "draft"], {
         cwd: directory, env, stdout: "pipe", stderr: "pipe", timeout: 10_000
       });
       const stderr = await new Response(child.stderr).text();

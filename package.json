@@ -48,9 +48,10 @@
     "build": "bun scripts/package.ts",
     "prepack": "bun run build",
     "package:verify": "bun scripts/package/verify.ts",
-    "release:check": "bun scripts/release.ts check-tag",
-    "release:prepare": "bun scripts/release.ts prepare",
-    "release:draft": "bun scripts/release.ts draft"
+    "release": "bun scripts/release.ts",
+    "release:check": "bun scripts/release/assets.ts check-tag",
+    "release:prepare": "bun scripts/release/assets.ts prepare",
+    "release:draft": "bun scripts/release/assets.ts draft"
   },
   "dependencies": {
     "@webgpu/types": "^0.1.74"

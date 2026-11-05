@@ -85,6 +85,26 @@ API call is made by that test. Hosted release creation has not been exercised.
 
 ## Create a release
 
+With a clean checkout and an authenticated GitHub CLI (`gh auth login`), run:
+
+```sh
+bun run release --version 0.1.0-alpha.1
+```
+
+The command requires a version greater than the current `package.json` version,
+using Bun's semantic version ordering. It configures GitHub CLI credentials for
+Git, checks that the tag is unused locally and on `origin`, updates `package.json`,
+commits the version bump, pushes the current branch to `origin`, then creates
+and pushes the matching tag. The tag push triggers the workflow below; review
+and publish the resulting draft on GitHub. Existing code changes must be
+committed before running the command. Nothing is published to npm.
+
+Commands stop at the first failure without undoing completed steps. If a push
+fails, inspect the local commit/tag and remote state before retrying that push;
+rerunning the release command with the same version will fail its version check.
+
+To perform those steps manually:
+
 1. Commit the code and set `package.json` to the intended release version.
 2. Run the workflow manually on GitHub and inspect the build artifact.
 3. Create and push the matching tag. For the initial version:

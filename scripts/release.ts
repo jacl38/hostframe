@@ -1,88 +1,54 @@
 import { $ } from "bun";
-import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import manifest from "../package.json";
-import { lock, root } from "./native/release.ts";
-import { assertDraftEnvironment, releaseTag, sha256, symbolRequirements } from "./release/assets.ts";
+import { parseArgs } from "node:util";
 
-const directory = resolve(root, "build/release");
-const filename = `${manifest.name}-${manifest.version}-linux-x64.tgz`;
-const tarball = resolve(directory, filename);
-
-async function prepare() {
-  const tag = releaseTag(manifest.version, process.env.GITHUB_REF);
-  if(process.platform !== "linux" || process.arch !== "x64") throw new Error("Release assets require Linux x64.");
-  const packed = resolve(root, `build/package/${manifest.name}-${manifest.version}.tgz`);
-  const metadata = JSON.parse(await $`tar -xOf ${packed} package/package.json`.text());
-  if(metadata.name !== manifest.name || metadata.version !== manifest.version || metadata.license !== manifest.license) {
-    throw new Error("Packed package metadata does not match package.json. Run package:verify first.");
-  }
-  // Inspect the packaged binary itself, so notes cannot describe another local build.
-  const temporary = resolve(root, "build/release-addon.node");
-  let requirements: ReturnType<typeof symbolRequirements>;
-  try {
-    await $`tar -xOf ${packed} package/dist/hostframe.node > ${Bun.file(temporary)}`.quiet();
-    requirements = symbolRequirements(await $`objdump -T ${temporary}`.text());
-  } finally {
-    await rm(temporary, { force: true });
-  }
-  const bytes = new Uint8Array(await Bun.file(packed).arrayBuffer());
-  await rm(directory, { recursive: true, force: true });
-  await mkdir(directory, { recursive: true });
-  await copyFile(packed, tarball);
-  await Bun.write(resolve(directory, "SHA256SUMS"), `${sha256(bytes)}  ${filename}\n`);
-  const repository = manifest.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
-  const url = `${repository}/releases/download/${tag}/${filename}`;
-  // Bun's process.versions.node is a compatibility value, not the installed Node.
-  const nodeVersion = (await $`node --version`.text()).trim();
-  await Bun.write(resolve(directory, "release-notes.md"), `# hostframe ${manifest.version}
-
-Linux x64/glibc package with ESM JavaScript, TypeScript declarations, the native addon, Apache-2.0 license, and third-party notices. No native build or install scripts are needed by consumers.
-
-## Install after publishing this draft
-
-\`\`\`sh
-bun add hostframe@${url}
-# Or download the tarball, verify SHA256SUMS, then install the local file.
-\`\`\`
-
-## Runtime requirements and validation
-
-- Linux x64 with glibc >= ${requirements.GLIBC} and libstdc++ providing GLIBCXX_${requirements.GLIBCXX}.
-- X11 (including Xwayland), X11/Xfixes runtime libraries, and a usable Vulkan loader/driver.
-- Verified in this build using Node.js ${nodeVersion} and Bun ${Bun.version}.
-- Native presentation and clean npm/Bun consumer checks use Xvfb and Mesa lavapipe. Physical GPU presentation, older Linux distributions, and other platforms are not established by this release build.
-- Dawn ${lock.release}, revision ${lock.revision}; engine archive SHA-256 ${lock.engines["linux-x64"].sha256}.
-
-This is a GitHub Releases distribution; no package has been published to the npm registry. Versioned release URLs pin installs to this release; update the URL to upgrade.
-`);
-  console.log(`Release assets prepared in ${directory}`);
-}
-
-async function draft() {
-  const { tag, repository } = assertDraftEnvironment(manifest.version, process.env);
-  const expected = `${sha256(new Uint8Array(await Bun.file(tarball).arrayBuffer()))}  ${filename}\n`;
-  if(await Bun.file(resolve(directory, "SHA256SUMS")).text() !== expected) throw new Error("Release checksum mismatch.");
-  const flags = manifest.version.includes("-") ? ["--prerelease"] : [];
-  await $`gh release create ${tag} ${tarball} ${resolve(directory, "SHA256SUMS")} --repo ${repository} --verify-tag --draft --title ${`${manifest.name} ${tag}`} --notes-file ${resolve(directory, "release-notes.md")} ${flags}`.cwd(root);
-}
+const root = resolve(import.meta.dir, "..");
+const shell = $.cwd(root);
 
 async function main() {
-  const [command, ...rest] = process.argv.slice(2);
-  if(rest.length > 0) throw new Error("Usage: bun scripts/release.ts <check-tag|prepare|draft>");
-  switch(command) {
-    case "check-tag":
-      console.log(`Release version: ${releaseTag(manifest.version, process.env.GITHUB_REF)}`);
-      break;
-    case "prepare":
-      await prepare();
-      break;
-    case "draft":
-      await draft();
-      break;
-    default:
-      throw new Error("Usage: bun scripts/release.ts <check-tag|prepare|draft>");
+  const { values } = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      version: { type: "string" },
+      help: { type: "boolean", short: "h" }
+    },
+    strict: true,
+    allowPositionals: false
+  });
+  if(values.help) {
+    console.log("Usage: bun run release --version <version>");
+    return;
   }
+  const version = values.version;
+  if(!version) throw new Error("Usage: bun run release --version <version>");
+  if(!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) || !Bun.semver.satisfies(version, `=${version}`)) {
+    throw new Error(`Invalid release version: ${version}`);
+  }
+  const tag = `v${version}`;
+  const file = Bun.file(resolve(root, "package.json"));
+  const manifest = await file.json();
+  if(Bun.semver.order(version, manifest.version) !== 1) {
+    throw new Error(`Release version ${version} must be greater than ${manifest.version}.`);
+  }
+  if((await shell`git status --porcelain --untracked-files=all`.text()).trim()) {
+    throw new Error("Commit or stash your changes before releasing.");
+  }
+  const branch = (await shell`git symbolic-ref --quiet --short HEAD`.text()).trim();
+  await shell`gh auth setup-git`;
+  const localTag = await shell`git show-ref --verify --quiet ${`refs/tags/${tag}`}`.quiet().nothrow();
+  if(localTag.exitCode === 0) throw new Error(`Tag ${tag} already exists locally.`);
+  if(localTag.exitCode !== 1) throw new Error("Could not check local tags.");
+  const remoteTag = await shell`git ls-remote --tags origin ${`refs/tags/${tag}`}`.text();
+  if(remoteTag.trim()) throw new Error(`Tag ${tag} already exists on origin.`);
+
+  manifest.version = version;
+  await Bun.write(file, `${JSON.stringify(manifest, null, 2)}\n`);
+  await shell`git add -- package.json`;
+  await shell`git commit -m ${`Release ${version}`}`;
+  await shell`git push origin ${`HEAD:refs/heads/${branch}`}`;
+  await shell`git tag ${tag}`;
+  await shell`git push origin ${`refs/tags/${tag}`}`;
+  console.log(`Pushed ${tag}. GitHub Actions will build and create a draft release.`);
 }
 
 if(import.meta.main) {
