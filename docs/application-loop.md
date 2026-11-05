@@ -1,16 +1,19 @@
 # Application loops
 
 The optional scheduler supports fixed simulation steps and separate rendering on
-the process main thread. It is built on the same event polling and drawing API
-available to caller-owned loops. One application and one live window are supported
+the process main thread. The application owns scheduling and native polling; windows own rendering. One application and one live window are supported
 at a time. Windows default to fixed 320×240; creation options can customize the
 title, initial screen-coordinate dimensions, and resizability (see the
 [window contract](../README.md)).
 
 ```ts
 const app = new Application();
-// Request an adapter/device through app.gpu, then create a window as usual.
-const window = app.createWindow(device);
+const window = app.createWindow();
+const context = window.getContext("webgpu");
+const adapter = await context.requestAdapter();
+if(!adapter) throw new Error("No compatible adapter");
+const device = await adapter.requestDevice();
+context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
 let previous = 0;
 let position = 0;
 
@@ -18,11 +21,10 @@ const unsubscribe = app.on("fixedUpdate", ({ dt }) => {
   previous = position;
   position += dt * 2;
 });
-app.on("render", ({ alpha }) => {
+window.on("render", ({ alpha }) => {
   const interpolated = previous + (position - previous) * alpha;
-  window.draw(texture => {
-    // Encode and submit synchronously using texture and interpolated.
-  });
+  const texture = context.getCurrentTexture();
+  // Encode and submit synchronously using texture and interpolated.
 });
 
 try {
@@ -59,12 +61,12 @@ exact achieved FPS or change vsync.
 
 ## Presentation settings
 
-`app.createWindow(device, options?: WindowOptions)` accepts `vsync?: boolean`
+`app.createWindow(options?: WindowOptions)` accepts `vsync?: boolean`
 alongside `title`, `width`, `height`, and `resizable`.
-The default is `true`. Dawn surface capabilities are queried for the device's
-adapter before selecting the mode; `window.presentMode` exposes that selection as
+The default is `true`. At context configuration, Dawn surface capabilities are
+queried for the device's adapter before selecting the mode; `window.presentMode` exposes that selection as
 `"fifo"`, `"immediate"`, or `"mailbox"` (the exported `PresentMode` type). It throws
-after window disposal, like `window.shouldClose`. Settings are fixed for the
+after window disposal, like `window.shouldClose`. Read it only after context configuration. Settings are fixed for the
 window's lifetime; dispose and recreate the window to change vsync.
 
 | Window option | `run()` option | Behavior |
@@ -78,25 +80,22 @@ FIFO queues frames for display refresh and can throttle acquisition. Immediate
 allows tearing. Mailbox replaces pending frames with newer ones while displaying
 at refresh; this fallback permits rendering without FIFO queue pacing but does
 not disable synchronization of displayed frames. Only advertised modes are used;
-FIFO-relaxed is not used for either policy. `vsync: false` throws during creation
+FIFO-relaxed is not used for either policy. `vsync: false` throws during context configuration
 if neither Immediate nor Mailbox is available. A surface without FIFO also rejects
-`vsync: true`. These failures release the partially created window, so the caller
-can explicitly retry with another setting. Invalid option objects or non-boolean
+`vsync: true`. Failed configuration leaves the window available for disposal or retry. Invalid option objects or non-boolean
 `vsync` values throw `TypeError`; no truthiness coercion is performed.
 
-`maxFPS` applies only to `app.run()` render events; it does not throttle manual
-`window.draw()` calls or set the surface mode. Omission means uncapped; `0`,
+`maxFPS` limits render scheduling in `app.run()`; it does not set the surface mode. Omission means uncapped; `0`,
 negative values, `NaN`, and infinities are rejected. A cap above the display's
 refresh rate does not force FIFO to render that fast. Uncapped rendering still
 yields to the host between iterations and remains limited by GPU and display work.
 
 Window resizing and high-DPI framebuffer changes are applied before the next
 surface acquisition, after native events are polled. Size rendering resources from
-`texture.width`/`texture.height` inside `window.draw`. While minimized or at zero
-framebuffer size, `draw` skips its callback; update/render listeners and native
-event polling continue. A render event therefore does not guarantee a presented
-frame. Restoration resumes drawing automatically. Outdated/lost acquisitions are
-retried once, and temporary unavailability skips that draw without stopping the
+`texture.width`/`texture.height` during window render dispatch. While minimized or at zero
+framebuffer size, window render events are skipped; fixed updates and native polling continue. Window render events
+require a configured context and a successfully acquired texture. Restoration resumes drawing automatically. Outdated/lost acquisitions are
+retried once, and temporary unavailability skips window render dispatch without stopping the
 loop. Native lifecycle and device-loss errors still reject the run. Presentation
 mode and render-cap settings survive reconfiguration.
 
@@ -141,14 +140,15 @@ toward its render-rate limit.
   and removes listeners, releasing windows before GLFW. Devices remain caller-owned.
 
 Stop, pause, window closure/disposal, and application disposal prevent remaining
-listeners from running. Disposal and event polling inside `window.draw()` remain
-forbidden by native reentrancy guards. A rejected disposal inside a draw callback
-does not cancel a healthy run. Draw callbacks still expire their texture/views,
-recover from callback failures, and reject asynchronous results.
+listeners from running. Configuration, disposal, and event polling inside window render listeners remain
+forbidden by native reentrancy guards. A rejected disposal inside a render listener
+does not cancel a healthy run. Frame textures/views expire after dispatch, including on failure. Failed listeners
+abandon the frame and reject the run; a later run can recover after removing the
+failing listener.
 
 ## Listener semantics
 
-`app.on("fixedUpdate", callback)` and `app.on("render", callback)` return idempotent
+`app.on("fixedUpdate", callback)` and `window.on("render", callback)` return idempotent
 unsubscribe functions. Each registration is independent, including repeated
 registration of the same callback. Listeners run in registration order. A listener
 added during dispatch begins with the next event; removing a listener before its
@@ -161,21 +161,12 @@ awaited. A listener failure stops scheduling and rejects the run; resources rema
 available for explicit cleanup or recovery. Registering or starting a run after
 application disposal throws.
 
-## Caller-owned loops and limits
+## Event polling and execution limits
 
-`app.pollEvents()` processes pending native events and returns whether any window
-remains open. When a drawable framebuffer is available, `window.draw()` acquires,
-invokes the synchronous callback, and presents; it does not poll events implicitly. A custom loop must pump events
-regularly and yield to the host runtime:
-
-```ts
-import { setImmediate } from "node:timers/promises";
-
-while(app.pollEvents()) {
-  // Advance caller-owned simulation and render with window.draw(...).
-  await setImmediate();
-}
-```
+`app.pollEvents()` processes native window/input events without rendering and
+returns whether any window remains open. `app.run()` defines render event scopes:
+Hostframe acquires the frame, dispatches window listeners, then presents once.
+See [window contexts](window-context.md).
 
 The default native presentation policy is FIFO/vsync. Omitting `maxFPS` does not
 disable vsync. All presentation modes can block the main thread and

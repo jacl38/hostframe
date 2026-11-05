@@ -13,7 +13,9 @@ if(process.argv.includes("--no-display")) {
   const app = new Application();
   let device: GPUDevice | undefined;
   try {
-    const adapter = await app.gpu.requestAdapter();
+    const window = app.createWindow({ title: "hostframe package verification", width: 320, height: 240 });
+    const context = window.getContext("webgpu");
+    const adapter = await context.requestAdapter();
     assert.ok(adapter, "No compatible GPU adapter");
     device = await adapter.requestDevice();
     const renderingDevice = device;
@@ -47,38 +49,37 @@ if(process.argv.includes("--no-display")) {
       storage.destroy();
       readback.destroy();
     }
-    const window = app.createWindow(device, { title: "hostframe package verification", width: 320, height: 240 });
+    context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
     assert.equal(window.presentMode, "fifo");
     let frames = 0;
-    app.on("render", () => {
-      window.draw(texture => {
-        assert.equal(texture.width, 320);
-        assert.equal(texture.height, 240);
-        const encoder = renderingDevice.createCommandEncoder();
-        const pass = encoder.beginRenderPass({ colorAttachments: [{
-          view: texture.createView(),
-          clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
-          loadOp: "clear",
-          storeOp: "store"
-        }] });
-        pass.end();
-        renderingDevice.queue.submit([encoder.finish()]);
-        frames++;
-      });
+    window.on("render", () => {
+      const texture = context.getCurrentTexture();
+      assert.equal(texture.width, 320);
+      assert.equal(texture.height, 240);
+      const encoder = renderingDevice.createCommandEncoder();
+      const pass = encoder.beginRenderPass({ colorAttachments: [{
+        view: texture.createView(),
+        clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
+        loadOp: "clear",
+        storeOp: "store"
+      }] });
+      pass.end();
+      renderingDevice.queue.submit([encoder.finish()]);
+      frames++;
       if(frames === 3) app.stop();
     });
     await app.run({ maxFPS: 30 });
     assert.equal(frames, 3);
     window.dispose();
     window.dispose();
-    assert.throws(() => window.draw(() => {}), /disposed/);
-    const replacement = app.createWindow(device);
+    assert.throws(() => context.getCurrentTexture(), /disposed/);
+    const replacement = app.createWindow();
     replacement.dispose();
     await device.queue.onSubmittedWorkDone();
     assert.deepEqual(errors, []);
     app.dispose();
     app.dispose();
-    assert.throws(() => app.createWindow(renderingDevice), /disposed/);
+    assert.throws(() => app.createWindow(), /disposed/);
   } finally {
     app.dispose();
     device?.destroy();

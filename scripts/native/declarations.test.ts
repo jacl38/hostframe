@@ -20,7 +20,8 @@ test("declarations and runtime event names are extracted and regenerated togethe
     const runtime = await import(eventsOutput);
     expect(runtime.inputEventTypes).toEqual(["key", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"]);
     expect(Object.isFrozen(runtime.inputEventTypes)).toBe(true);
-    expect(content).toContain("GPUDevice");
+    expect(content).toContain("GPUCanvasConfiguration");
+    expect(content).toContain("GPURequestAdapterOptions");
     expect(content).toContain("GPUTexture");
     expect(content).toContain("arg1?: WindowOptions");
     const modified = (await stat(output, { bigint: true })).mtimeNs;

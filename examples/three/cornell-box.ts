@@ -107,7 +107,7 @@ try {
     if(event.key === Key.D) clean = !clean;
     if(event.key === Key.B) requestedBounces = requestedBounces === 6 ? 1 : 6;
   });
-  example.app.on("render", () => {
+  example.window.on("render", () => {
     example.render(scene, camera, () => {
       if(tracer.maxBounces !== requestedBounces) {
         tracer.maxBounces = requestedBounces;

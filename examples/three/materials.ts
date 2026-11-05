@@ -24,7 +24,7 @@ try {
       scene.add(mesh);
     }
   }
-  example.app.on("render", () => {
+  example.window.on("render", () => {
     example.render(scene, camera);
   });
   await example.run();

@@ -13,22 +13,21 @@ try {
     @fragment fn fragment(v: Vertex) -> @location(0) vec4f { return vec4f(v.color, 1); }
   ` });
   let pipeline: GPURenderPipeline | undefined;
-  example.app.on("render", () => {
-    example.draw(texture => {
-      pipeline ??= device.createRenderPipeline({
-        layout: "auto",
-        vertex: { module: shader, entryPoint: "vertex" },
-        fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] }
-      });
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({ colorAttachments: [{
-        view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1], loadOp: "clear", storeOp: "store"
-      }] });
-      pass.setPipeline(pipeline);
-      pass.draw(3);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    pipeline ??= device.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: shader, entryPoint: "vertex" },
+      fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] }
     });
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{
+      view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1], loadOp: "clear", storeOp: "store"
+    }] });
+    pass.setPipeline(pipeline);
+    pass.draw(3);
+    pass.end();
+    device.queue.submit([encoder.finish()]);
   });
   await example.run();
 } finally {

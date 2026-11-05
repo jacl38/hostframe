@@ -19,7 +19,7 @@ class Application {
   ~Application();
   Application(const Application&) = delete;
   Application& operator=(const Application&) = delete;
-  Window* CreateWindow(DawnDevice device, WindowOptionsArgument options);
+  Window* CreateWindow(DawnGPU gpu, WindowOptionsArgument options);
   bool PollEvents();
   bool HasOpenWindows();
   bool Disposed();
@@ -39,13 +39,18 @@ class Window {
   Window(napi_env env, std::shared_ptr<WindowState> state) : env_(env), state_(std::move(state)) {}
   bool Disposed();
   bool ShouldClose();
+  bool Configured();
   PresentMode GetPresentMode();
-  void Draw(DrawCallback callback);
+  void RenderFrame(FrameCallback callback);
+  DawnAdapterRequest RequestAdapter(AdapterOptionsArgument options);
+  CanvasConfiguration Configure(CanvasConfiguration configuration);
+  void Unconfigure();
   void DispatchInput(InputCallback callback);
   InputState SetPointerCapture(bool captured, bool rawMotion);
   InputState RequestClose();
   void Dispose();
   Computed<Window, &Window::Disposed> disposed{this};
+  Computed<Window, &Window::Configured> configured{this};
   Computed<Window, &Window::ShouldClose> shouldClose{this};
   Computed<Window, &Window::GetPresentMode> presentMode{this};
 

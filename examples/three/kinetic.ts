@@ -116,7 +116,7 @@ try {
     if(event.key === Key.M) mode = (mode + 1) % modes.length;
   });
   example.app.on("fixedUpdate", ({ dt }) => { if(!paused) time += dt; });
-  example.app.on("render", () => {
+  example.window.on("render", () => {
     sculpture.rotation.y = time * 0.11;
     for(let i = 0; i < count; i++) {
       const angle = i / count * Math.PI * 2;

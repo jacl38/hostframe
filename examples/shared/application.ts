@@ -31,7 +31,15 @@ export async function createExample(title: string, options: {
   let failure: unknown;
   let frames = 0;
   try {
-    const adapter = await app.gpu.requestAdapter();
+    const window = app.createWindow({
+      title: `hostframe ${title}`,
+      width: defaults.width,
+      height: defaults.height,
+      resizable: true,
+      vsync: !args.includes("--no-vsync")
+    });
+    const context = window.getContext("webgpu");
+    const adapter = await context.requestAdapter();
     if(!adapter) throw new Error("No compatible GPU adapter");
     const requiredFeatures = defaults.optionalFeatures?.filter(feature => adapter.features.has(feature));
     device = await adapter.requestDevice({ requiredFeatures });
@@ -40,13 +48,7 @@ export async function createExample(title: string, options: {
       failure ??= new Error(event.error.message);
       app.stop();
     };
-    const window = app.createWindow(device, {
-      title: `hostframe ${title}`,
-      width: defaults.width,
-      height: defaults.height,
-      resizable: true,
-      vsync: !args.includes("--no-vsync")
-    });
+    context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
     let quit = false;
     window.on("key", event => {
       if(event.action === "press" && ((defaults.escapeQuits && event.key === Key.ESCAPE) || event.key === Key.Q)) quit = true;
@@ -57,19 +59,18 @@ export async function createExample(title: string, options: {
       app,
       device,
       window,
+      context,
       defer(callback: () => void | Promise<void>) { cleanup.push(callback); },
-      /** The callback and all GPU submission must finish before the surface expires. */
-      draw(callback: (texture: GPUTexture) => undefined) {
-        window.draw(texture => {
-          const result = callback(texture);
+      async run() {
+        const offCount = window.on("render", () => {
           frames++;
           if(frameLimit !== undefined && frames >= frameLimit) app.stop();
-          // Preserve the native runtime rejection of accidentally async callbacks.
-          return result;
         });
-      },
-      async run() {
-        await app.run({ updateHz: 120, maxFPS });
+        try {
+          await app.run({ updateHz: 120, maxFPS });
+        } finally {
+          offCount();
+        }
         await renderingDevice.queue.onSubmittedWorkDone();
         if(failure) throw failure;
         if(frameLimit !== undefined && frames < frameLimit) throw new Error(`Stopped after ${frames}/${frameLimit} frames`);

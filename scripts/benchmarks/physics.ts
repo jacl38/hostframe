@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { Application, Key } from "../../index.ts";
+import { Application, Key, type Window } from "../../index.ts";
 
 // Load the real example after installing timing hooks. Flags are the example's
 // usual --no-vsync and --max-fps options; measurements are CPU wall times.
@@ -41,19 +41,22 @@ function percentile(values: number[], fraction: number) {
 }
 
 const createWindow = Application.prototype.createWindow;
-Application.prototype.createWindow = function profileWindow(device, options) {
-  const window = createWindow.call(this, device, options);
+let capturedWindow: Window;
+Application.prototype.createWindow = function profileWindow(options) {
+  const window = createWindow.call(this, options);
+  capturedWindow = window;
   window.on("key", event => {
     if(event.key === Key.SPACE && event.action === "press") scatterPresses++;
   });
-  const originalDraw = window.draw.bind(window);
-  window.draw = function profileDraw(callback) {
+  const context = window.getContext("webgpu");
+  const originalRender = context.render.bind(context);
+  context.render = function profileRender(callback) {
     const before = performance.now();
     let entered: number | undefined;
     let exited = before;
-    originalDraw(texture => {
+    originalRender(() => {
       entered = performance.now();
-      const result = callback(texture);
+      const result = callback();
       exited = performance.now();
       return result;
     });
@@ -80,7 +83,7 @@ Application.prototype.run = async function profileRun(options) {
     }
     if(elapsed >= warmup) updates++;
   });
-  this.on("render", event => {
+  capturedWindow.on("render", event => {
     const now = performance.now();
     if(now - started >= warmup) {
       measuredFrom ||= now;

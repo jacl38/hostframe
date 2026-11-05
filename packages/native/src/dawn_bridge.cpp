@@ -27,10 +27,20 @@
 
 #include "binding_types.h"
 #include "native_boundary.h"
+#include "dawn_bridge.h"
 #include "src/dawn/node/binding/Flags.h"
 #include "src/dawn/node/binding/GPU.h"
 
 namespace hostframe {
+wgpu::binding::GPU& RequireGPU(Napi::Env env, Napi::Value value) {
+  wgpu::interop::Interface<wgpu::interop::GPU> interface;
+  auto result = wgpu::interop::FromJS(env, value, interface);
+  if(!result) throw Napi::TypeError::New(env, result.error);
+  auto* gpu = dynamic_cast<wgpu::binding::GPU*>(*interface);
+  if(!gpu) throw Napi::TypeError::New(env, "Expected a Dawn GPU");
+  return *gpu;
+}
+
 DawnGPU CreateGPU(napi_env raw, std::vector<std::string> arguments) {
   Napi::Env env(raw);
   return NativeBoundary(raw, [&]() -> DawnGPU {

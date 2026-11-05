@@ -15,21 +15,22 @@ try {
   const adapter = await gpu.requestAdapter();
   assert.ok(adapter);
   device = await adapter.requestDevice();
-  for(const fake of [{}, app, gpu, Object.create(GPUDevice.prototype)]) {
-    assert.throws(() => Reflect.apply(app.createWindow, app, [fake]), /GPUDevice/);
+  for(const fake of [{}, app, device, Object.create(GPU.prototype)]) {
+    assert.throws(() => Reflect.apply(app.createWindow, app, [fake]));
   }
   const sentinel = Symbol("options getter failure");
-  assert.throws(() => app.createWindow(device!, { get title(): string { throw sentinel; } }), error => error === sentinel);
-  assert.throws(() => app.createWindow(device!, { get width(): number { app.dispose(); return 320; } }), /in progress/);
+  assert.throws(() => app.createWindow(gpu, { get title(): string { throw sentinel; } }), error => error === sentinel);
+  assert.throws(() => app.createWindow(gpu, { get width(): number { app.dispose(); return 320; } }), /in progress/);
   for(const options of [null, [], { width: 0 }, { height: Infinity }, { width: 1.5 }, { title: "a\0b" }, { resizable: 1 }]) {
-    assert.throws(() => Reflect.apply(app.createWindow, app, [device, options]));
+    assert.throws(() => Reflect.apply(app.createWindow, app, [gpu, options]));
   }
-  const window = app.createWindow(device); // Optional argument through nobind itself.
+  const window = app.createWindow(gpu); // Optional argument through nobind itself.
   try {
+    window.configure({ device, format: gpu.getPreferredCanvasFormat() });
     assert.equal(window.disposed, false);
     assert.equal(window.presentMode, "fifo");
     assert.equal(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window), "disposed")?.set, undefined);
-    assert.throws(() => Reflect.apply(window.draw, window, [null]), TypeError);
+    assert.throws(() => Reflect.apply(window.renderFrame, window, [null]), TypeError);
     assert.throws(() => Reflect.apply(window.setPointerCapture, window, [1, false]), TypeError);
     assert.throws(() => Reflect.apply(window.dispatchInput, window, [() => 1]), /synchronously/);
     assert.throws(() => window.dispatchInput(() => { throw sentinel; }), error => error === sentinel);
@@ -39,22 +40,22 @@ try {
       assert.throws(() => window.dispose(), /in progress/);
       assert.throws(() => app.pollEvents(), /in progress/);
     });
-    window.draw(texture => {
+    window.renderFrame(texture => {
       assert.ok(texture instanceof GPUTexture, "Surface texture must retain Dawn's wrapper");
       assertFramebufferSize(texture, 320, 240);
       assert.ok(texture.createView() instanceof GPUTextureView);
-      assert.throws(() => window.draw(() => {}), /in progress/);
+      assert.throws(() => window.renderFrame(() => {}), /in progress/);
     });
-    assert.throws(() => window.draw(() => { throw sentinel; }), error => error === sentinel);
-    assert.throws(() => Reflect.apply(window.draw, window, [() => 1]), /synchronously/);
-    window.draw(() => {});
+    assert.throws(() => window.renderFrame(() => { throw sentinel; }), error => error === sentinel);
+    assert.throws(() => Reflect.apply(window.renderFrame, window, [() => 1]), /synchronously/);
+    window.renderFrame(() => {});
   } finally {
     window.dispose();
   }
   assert.equal(window.disposed, true);
   window.dispose();
-  assert.throws(() => window.draw(() => {}), /disposed/);
-  const replacement = app.createWindow(device, undefined);
+  assert.throws(() => window.renderFrame(() => {}), /disposed/);
+  const replacement = app.createWindow(gpu, undefined);
   app.dispose();
   assert.equal(replacement.disposed, true);
   replacement.dispose();

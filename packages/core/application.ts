@@ -2,16 +2,7 @@ import { getProcessGPU, NativeApplication } from "../native/bridge.ts";
 import type { WindowOptions } from "../native/bridge.ts";
 import { Window } from "./window.ts";
 import { ApplicationLoop } from "./loop.ts";
-import type { FixedUpdateEvent, RenderEvent, RunOptions } from "./timing.ts";
-
-type ApplicationEvents = {
-  fixedUpdate: FixedUpdateEvent,
-  render: RenderEvent
-};
-
-type Listeners = {
-  [Event in keyof ApplicationEvents]: Set<{ callback: (event: ApplicationEvents[Event]) => undefined }>
-};
+import type { FixedUpdateEvent, RunOptions } from "./timing.ts";
 
 /** Owns one GLFW session and its window. Construct on the process main thread. */
 export class Application {
@@ -20,7 +11,7 @@ export class Application {
   #native: NativeApplication;
   #loop: ApplicationLoop | undefined;
   #window: Window | undefined;
-  #listeners: Listeners = { fixedUpdate: new Set(), render: new Set() };
+  #listeners = new Set<{ callback: (event: FixedUpdateEvent) => undefined }>();
 
   constructor() {
     this.#native = new NativeApplication();
@@ -32,9 +23,8 @@ export class Application {
     }
   }
 
-  /** One live window (default: fixed 320×240), retaining a caller-owned device obtained through app.gpu. */
-  createWindow(device: GPUDevice, options: WindowOptions = {}) {
-    this.#window = new Window(this.#native.createWindow(device, options));
+  createWindow(options: WindowOptions = {}) {
+    this.#window = new Window(this.#native.createWindow(this.gpu, options));
     return this.#window;
   }
 
@@ -46,10 +36,10 @@ export class Application {
   }
 
   /** Registers a synchronous listener and returns an idempotent unsubscribe function. */
-  on<Event extends keyof ApplicationEvents>(event: Event, listener: (event: ApplicationEvents[Event]) => undefined) {
+  on(event: "fixedUpdate", listener: (event: FixedUpdateEvent) => undefined) {
     this.#requireAlive();
-    if(!Object.hasOwn(this.#listeners, event)) throw new TypeError(`Unknown application event: ${String(event)}`);
-    const listeners = this.#listeners[event];
+    if(event !== "fixedUpdate") throw new TypeError(`Unknown application event: ${String(event)}`);
+    const listeners = this.#listeners;
     if(typeof listener !== "function") throw new TypeError("Expected an application listener");
     const entry = { callback: listener };
     listeners.add(entry);
@@ -60,14 +50,22 @@ export class Application {
   run(options: RunOptions = {}) {
     this.#requireAlive();
     if(this.#loop) throw new Error("Application is already running");
-    // Enforce the native operation guard before scheduling, including inside draw.
+    // Enforce the native operation guard before scheduling, including inside rendering.
     // Check guards without delivering input until the run promise is active.
     void this.#native.hasOpenWindows;
     const loop = new ApplicationLoop(options, {
       pollEvents: () => this.pollEvents(),
-      fixedUpdate: event => { this.#emit("fixedUpdate", event); },
-      render: event => { this.#emit("render", event); }
+      fixedUpdate: event => { this.#emitFixedUpdate(event); },
+      render: event => {
+        if(!loop.active) return;
+        if(!this.#native.hasOpenWindows) {
+          loop.stop();
+          return;
+        }
+        this.#window?.dispatchRender(event, active);
+      }
     });
+    function active() { return loop.active; }
     this.#loop = loop;
     return loop.run().finally(() => {
       this.#loop = undefined;
@@ -90,7 +88,7 @@ export class Application {
   }
 
   /**
-   * Disposes windows before GLFW. Idempotent; forbidden inside draw. Devices remain caller-owned.
+   * Disposes windows before GLFW. Idempotent; forbidden inside rendering. Devices remain caller-owned.
    * A GPU cleanup timeout destroys the stalled device and throws after cleanup.
    */
   dispose() {
@@ -103,8 +101,7 @@ export class Application {
         this.stop();
         this.#window?.dispose();
         this.#window = undefined;
-        this.#listeners.fixedUpdate.clear();
-        this.#listeners.render.clear();
+        this.#listeners.clear();
       }
     }
   }
@@ -119,8 +116,8 @@ export class Application {
     return this.#loop;
   }
 
-  #emit<Event extends keyof ApplicationEvents>(event: Event, value: ApplicationEvents[Event]) {
-    const listeners = this.#listeners[event];
+  #emitFixedUpdate(value: FixedUpdateEvent) {
+    const listeners = this.#listeners;
     // Snapshot additions; removals take effect before a listener's turn. Stop,
     // pause, close requests, and disposal prevent the remaining callbacks.
     const snapshot = Array.from(listeners);
@@ -135,7 +132,7 @@ export class Application {
       if(result !== undefined) {
         // Reject async results without leaving a rejected returned promise orphaned.
         void Promise.resolve(result).catch(() => {});
-        throw new TypeError(`${event} listeners must return undefined synchronously`);
+        throw new TypeError("fixedUpdate listeners must return undefined synchronously");
       }
     }
   }

@@ -1,13 +1,11 @@
 import { Application, Key, Modifier, PointerButton } from "hostframe";
-import type { FixedWindow, InputEvent, InputState, PresentMode, Window, WindowOptions } from "hostframe";
+import type { InputEvent, InputState, PresentMode, Window, WindowOptions, WindowGPUContext, WindowEvents } from "hostframe";
 
 // Compiled in a clean consumer without Bun or Node ambient types.
 // @webgpu/types uses DOM base types even when the runtime is native.
 export function usePublicAPI(app: Application, device: GPUDevice) {
   const options = { width: 320, height: 240, vsync: true } satisfies WindowOptions;
-  const window: Window = app.createWindow(device, options);
-  const legacy: FixedWindow = window;
-  const mode: PresentMode = legacy.presentMode;
+  const window: Window = app.createWindow(options);
   const state: InputState = window.input;
   const gpu: GPU = app.gpu;
   window.on("key", event => {
@@ -15,16 +13,34 @@ export function usePublicAPI(app: Application, device: GPUDevice) {
     const key: number = input.key;
     void key;
   });
-  window.draw(texture => {
-    const gpuTexture: GPUTexture = texture;
-    void gpuTexture;
+  const context: WindowGPUContext = window.getContext("webgpu");
+  const adapter: Promise<GPUAdapter | null> = context.requestAdapter({ powerPreference: "high-performance" });
+  context.configure({ device, format: gpu.getPreferredCanvasFormat() });
+  const mode: PresentMode = window.presentMode;
+  window.on("render", event => {
+    const renderEvent: WindowEvents["render"] = event;
+    const gpuTexture: GPUTexture = context.getCurrentTexture();
+    void [gpuTexture, renderEvent];
   });
+  void adapter;
   app.on("fixedUpdate", event => { void event.dt; });
+  // @ts-expect-error Device-first construction is not part of the API.
+  app.createWindow(device, options);
+  // @ts-expect-error Window rendering has no callback drawing entry point.
+  window.draw(() => {});
+  // @ts-expect-error Rendering belongs to the window.
+  app.on("render", () => {});
   // @ts-expect-error Unknown event names must remain rejected after declaration bundling.
   window.on("invalid", () => {});
   // @ts-expect-error Options must retain their native field types.
-  app.createWindow(device, { width: "320" });
-  // @ts-expect-error Drawing must remain synchronous.
-  window.draw(async () => {});
+  app.createWindow({ width: "320" });
+  // @ts-expect-error Window render listeners must remain synchronous.
+  window.on("render", async () => {});
+  // @ts-expect-error Native surface selection must not extend the standard GPU options.
+  gpu.requestAdapter({ compatibleSurface: context });
+  // @ts-expect-error The context accepts only standard adapter options.
+  context.requestAdapter({ compatibleSurface: context });
+  // @ts-expect-error Configuration requires a standard GPUDevice.
+  context.configure({ device: {}, format: "bgra8unorm" });
   return { mode, state, gpu, key: Key.W, button: PointerButton.LEFT, modifier: Modifier.SHIFT };
 }

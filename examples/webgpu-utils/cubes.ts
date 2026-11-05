@@ -30,30 +30,29 @@ try {
   let group: GPUBindGroup;
   let time = 0;
   example.app.on("fixedUpdate", ({ dt }) => { time += dt; });
-  example.app.on("render", () => {
-    example.draw(texture => {
-      if(!pipeline) {
-        pipeline = device.createRenderPipeline({
-          layout: "auto", vertex: { module, entryPoint: "vertex", buffers: mesh.bufferLayouts },
-          fragment: { module, entryPoint: "fragment", targets: [{ format: texture.format }] },
-          depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" }
-        });
-        group = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniforms.buffer } }] });
-      }
-      uniforms.write({ time, aspect: texture.width / texture.height });
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{ view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1], loadOp: "clear", storeOp: "store" }],
-        depthStencilAttachment: { view: depth(texture.width, texture.height), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" }
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    if(!pipeline) {
+      pipeline = device.createRenderPipeline({
+        layout: "auto", vertex: { module, entryPoint: "vertex", buffers: mesh.bufferLayouts },
+        fragment: { module, entryPoint: "fragment", targets: [{ format: texture.format }] },
+        depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" }
       });
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, group!);
-      mesh.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
-      pass.setIndexBuffer(mesh.indexBuffer!, mesh.indexFormat!);
-      pass.drawIndexed(mesh.numElements, 80);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
+      group = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniforms.buffer } }] });
+    }
+    uniforms.write({ time, aspect: texture.width / texture.height });
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{ view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1], loadOp: "clear", storeOp: "store" }],
+      depthStencilAttachment: { view: depth(texture.width, texture.height), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" }
     });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, group!);
+    mesh.buffers.forEach((buffer, slot) => pass.setVertexBuffer(slot, buffer));
+    pass.setIndexBuffer(mesh.indexBuffer!, mesh.indexFormat!);
+    pass.drawIndexed(mesh.numElements, 80);
+    pass.end();
+    device.queue.submit([encoder.finish()]);
   });
   await example.run();
 } finally {

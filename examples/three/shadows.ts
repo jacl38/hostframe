@@ -34,7 +34,7 @@ try {
   scene.add(floor);
   example.defer(() => { geometry.dispose(); material.dispose(); floorGeometry.dispose(); floorMaterial.dispose(); });
   example.app.on("fixedUpdate", ({ dt }) => { knot.rotation.y += dt * 0.4; knot.rotation.x += dt * 0.2; });
-  example.app.on("render", () => { example.render(scene, camera); });
+  example.window.on("render", () => { example.render(scene, camera); });
   await example.run();
 } finally {
   await example.dispose();

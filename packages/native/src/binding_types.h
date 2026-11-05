@@ -10,11 +10,13 @@
 namespace hostframe {
 // Raw Node-API handles keep Dawn's node-addon-api ABI/exception configuration
 // separate from nobind's. All handles are borrowed for the synchronous call.
-struct DawnDevice { napi_env env; napi_value value; };
 struct DawnGPU { napi_value value = nullptr; };
+struct DawnAdapterRequest { napi_value value = nullptr; };
+struct AdapterOptionsArgument { napi_env env; napi_value value; };
+struct CanvasConfiguration { napi_env env = nullptr; napi_value value = nullptr; };
 struct DawnGlobals { napi_value value = nullptr; };
 struct WindowOptionsArgument { napi_env env; napi_value value; };
-struct DrawCallback { napi_env env; napi_value value; };
+struct FrameCallback { napi_env env; napi_value value; };
 
 template <size_t N> struct Text {
   char value[N];

@@ -1,7 +1,7 @@
 # Project-owned native bindings
 
 `Application`, `Window`, window options, and input transport are registered in C++
-with nobind17 2.0.1. The public TypeScript scheduling and listener API is unchanged.
+with nobind17 2.0.1. The public TypeScript layer supplies window render listeners and a WebGPU context.
 Dawn still supplies every WebGPU binding; `@webgpu/types` remains the authority for
 WebGPU declarations. nobind does not wrap or replace Dawn GPU objects.
 
@@ -17,8 +17,9 @@ WebGPU declarations. nobind does not wrap or replace Dawn GPU objects.
   supplies build-time event-name metadata; extraction emits a frozen
   `build/native/generated/input-events.ts` list for TypeScript listener validation.
   Input callbacks remain deferred until dispatch, after GLFW callbacks return.
-- `binding_maps.h` maps borrowed Dawn devices to `GPUDevice` and synchronous draw
-  callbacks to `(texture: GPUTexture) => undefined`. Native window state validates
+- `binding_maps.h` maps GPU owners, standard adapter options, canvas configuration,
+  and adapter promises to their standard WebGPU types; internal frame callbacks
+  use `(texture: GPUTexture) => undefined`. Native window state validates
   and retains the original device. Presentation still uses Dawn's
   `GPUTexture::Create<binding::GPUTexture>` and expires textures/views on return.
 - `packages/native/bridge.ts` imports the generated module type and retains the
@@ -58,7 +59,7 @@ with Dawn-facing implementation files. `NativeBoundary` preserves pending JS
 exceptions instead of transporting C++ exceptions between these configurations.
 
 Two integration probes established necessary adaptations to the build-owned
-nobind headers, leaving installed dependencies and Dawn's bindings unchanged:
+nobind headers, leaving installed dependencies and vendored inputs unchanged:
 
 1. The default nobind module initializer calls `uv_async_init` even for synchronous
    registrations. Bun 1.3.14 aborts on that call. This addon disables nobind's basic
@@ -118,3 +119,29 @@ physical monitors, other operating systems or other runtime versions.
 The [2026-11-01 hardware follow-up](presentation-performance.md) subsequently
 passed the combined implementation's full interaction and lifecycle suite in
 Node.js and Bun on Intel, including the generated binding boundary checks.
+
+A build-owned interop-template guard rejects prototype-only objects such as
+`Object.create(GPU.prototype)` before dereferencing their missing native wrapper.
+The boundary regression fixture reproduces this failure for GPU owners and devices.
+
+## Window contexts
+
+`Application.createWindow(gpu, options)` creates a GLFW window and Dawn
+surface before device selection. `Window.requestAdapter(options)` calls the
+build-owned GPU binding's surface-aware selection path; the normal GPU method is
+unchanged. Because upstream enumeration ignores `compatibleSurface`, this path
+filters the same ordered adapters using surface capabilities. There is no second
+handwritten adapter-options definition or backend/flag selection implementation.
+
+Native configuration parses Dawn's generated `GPUCanvasConfiguration` and reuses
+its enum/usage converters. It validates instance/device ownership, loss, surface
+capabilities and supported configuration fields before replacing the old device.
+The window retains the normalized configuration's JavaScript device. Unconfigure
+and reconfigure drain deferred GPU deletion before releasing that device.
+
+`WindowGPUContext` reuses the existing native synchronous frame scope internally.
+It exposes the acquired texture only while all window render listeners dispatch;
+a bound callback is reused across frames. Presentation and native texture expiry
+still happen on success or failure through RAII. The context clears its current
+texture in `finally`, and window/application disposal releases its saved device
+configuration. No separate public `present()` call is needed.

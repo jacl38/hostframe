@@ -37,7 +37,7 @@ try {
     physics.step(dt);
   });
   const rotation = new Quaternion();
-  example.app.on("render", ({ alpha }) => {
+  example.window.on("render", ({ alpha }) => {
     physics.boxes.forEach((box, i) => {
       const p = box.body.translation();
       const q = box.body.rotation();

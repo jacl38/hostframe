@@ -11,7 +11,7 @@ class WindowState;
 
 void RequireMainThread(Napi::Env env);
 
-// Native ownership outlives an individual JS wrapper during a draw callback.
+// Native ownership outlives an individual JS wrapper during render dispatch.
 // Windows refer back weakly; there is no application/window reference cycle.
 class ApplicationState {
  public:

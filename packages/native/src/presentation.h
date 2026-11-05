@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include <GLFW/glfw3.h>
 #include <webgpu/webgpu_cpp.h>
@@ -13,20 +14,26 @@ namespace hostframe {
 // The application's GLFW session outlives all presentation resources.
 class Presentation {
  public:
-  Presentation(wgpu::Device device, const WindowOptions& options);
+  Presentation(wgpu::Instance instance, const WindowOptions& options);
   ~Presentation();
   bool Close();
-  void Draw(Napi::Env env, Napi::Function callback);
+  void RenderFrame(Napi::Env env, Napi::Function callback);
   GLFWwindow* NativeWindow() const { return window_.get(); }
   bool ShouldClose() const;
   void RequestClose();
   const char* PresentMode() const;
+  wgpu::Surface Surface() const { return surface_; }
+  bool HasDevice() const { return static_cast<bool>(device_); }
+  Napi::Value Configure(Napi::Env env, Napi::Value configuration);
+  void Unconfigure();
 
  private:
   bool DeviceLost() const;
   bool Prepare(Napi::Env env);
   wgpu::SurfaceTexture Acquire(Napi::Env env);
   void Abort();
+  bool Drain();
+  void ConfigureDevice(wgpu::Device device, wgpu::SurfaceConfiguration configuration);
 
   std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> window_{nullptr, glfwDestroyWindow};
   wgpu::Device device_;
@@ -36,5 +43,7 @@ class Presentation {
   uint32_t max_dimension_ = 0;
   bool configured_ = false;
   bool reconfigure_ = false;
+  bool vsync_ = true;
+  std::vector<wgpu::TextureFormat> view_formats_;
 };
 }

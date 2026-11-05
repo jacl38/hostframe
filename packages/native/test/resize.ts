@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { Application, type Window } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 import { assertDeviceAlive } from "./device.ts";
+import { configureWindow, renderFrames } from "./frames.ts";
 
 const execute = promisify(execFile);
 const runtime = process.versions.bun ? "bun" : "node";
@@ -70,7 +71,7 @@ try {
 
   // Check actual native title, client geometry, and fixed-size WM hints for defaults.
   for(const options of [undefined, { title: "Configured fixed window", width: 400, height: 280, resizable: false }]) {
-    const window = app.createWindow(device, options);
+    const window = app.createWindow(options);
     app.pollEvents();
     const id = await findWindow(options?.title ?? "hostframe solid color");
     assert.equal(await xdo("getwindowname", id), options?.title ?? "hostframe solid color");
@@ -78,14 +79,19 @@ try {
     const size = `${options?.width ?? 320} by ${options?.height ?? 240}`;
     assert.ok(hints.includes(`minimum size: ${size}`));
     assert.ok(hints.includes(`maximum size: ${size}`));
-    window.draw(texture => {
+    const context = configureWindow(app, window, device);
+    const off = window.on("render", () => {
+      const texture = context.getCurrentTexture();
       assert.equal(texture.width, options?.width ?? 320);
       assert.equal(texture.height, options?.height ?? 240);
     });
+    await renderFrames(app, window);
+    off();
     window.dispose();
   }
 
-  let window: Window = app.createWindow(device, { title: "hostframe resize interactions", width: 480, height: 300, resizable: true, vsync });
+  let window: Window = app.createWindow({ title: "hostframe resize interactions", width: 480, height: 300, resizable: true, vsync });
+  let context = configureWindow(app, window, device);
   const id = await findWindow("hostframe resize interactions");
   const mode = window.presentMode;
   let frames = 0;
@@ -98,39 +104,34 @@ try {
   let loopError: unknown;
   const sentinel = Symbol("abandoned resized frame");
   app.on("fixedUpdate", () => { ticks++; });
-  app.on("render", () => {
-    try {
-      window.draw(texture => {
-        frames++;
-        dimensions = `${texture.width}x${texture.height}`;
-        escaped = texture;
-        escapedView = texture.createView();
-        assert.throws(() => app.pollEvents(), /in progress/);
-        assert.throws(() => window.dispose(), /in progress/);
-        assert.throws(() => app.dispose(), /in progress/);
-        const encoder = renderingDevice.createCommandEncoder();
-        const pass = encoder.beginRenderPass({
-          colorAttachments: [{
-            view: escapedView,
-            clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
-            loadOp: "clear",
-            storeOp: "store"
-          }]
-        });
-        pass.end();
-        renderingDevice.queue.submit([encoder.finish()]);
-        if(callbackFailure) {
-          abandonedView = escapedView;
-          const error = callbackFailure;
-          callbackFailure = undefined;
-          throw error;
-        }
-      });
-    } catch (error) {
-      if(error !== sentinel) throw error;
+  window.on("render", () => {
+    const texture = context.getCurrentTexture();
+    frames++;
+    dimensions = `${texture.width}x${texture.height}`;
+    escaped = texture;
+    escapedView = texture.createView();
+    assert.throws(() => app.pollEvents(), /in progress/);
+    assert.throws(() => window.dispose(), /in progress/);
+    assert.throws(() => app.dispose(), /in progress/);
+    const encoder = renderingDevice.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{
+      view: escapedView,
+      clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
+      loadOp: "clear", storeOp: "store"
+    }] });
+    pass.end();
+    renderingDevice.queue.submit([encoder.finish()]);
+    if(callbackFailure) {
+      abandonedView = escapedView;
+      const error = callbackFailure;
+      callbackFailure = undefined;
+      throw error;
     }
   });
-  running = app.run({ updateHz: 120, maxFPS: 60 }).catch(error => { loopError = error; });
+  function start() {
+    running = app.run({ updateHz: 120, maxFPS: 60 }).catch(error => { loopError = error; });
+  }
+  start();
   async function rendered(size: string) {
     await until(() => {
       if(loopError) throw loopError;
@@ -151,12 +152,11 @@ try {
     const ticksBefore = ticks;
     for(let attempt = 0; attempt < 10; attempt++) {
       assert.equal(app.pollEvents(), true, "Minimizing must not close the window");
-      window.draw(() => { assert.fail("Minimized window must skip its callback"); });
+      assert.throws(() => context.getCurrentTexture(), /active.*render/);
       await setTimeout(10);
     }
     assert.equal(frames, before);
     assert.ok(ticks > ticksBefore, "Fixed updates must continue while minimized");
-    assert.throws(() => Reflect.apply(window.draw, window, [null]), /draw callback/);
     assert.equal(window.shouldClose, false);
   }
 
@@ -169,7 +169,11 @@ try {
   callbackFailure = sentinel;
   await until(() => !callbackFailure, "Resized callback failure was not exercised");
   assert.ok(abandonedView);
+  await running;
+  assert.equal(loopError, sentinel);
+  loopError = undefined;
   await assertExpired(device, abandonedView);
+  start();
   await resize(360, 520);
   await minimize();
   await assertExpired(device, escapedView!);
@@ -184,41 +188,43 @@ try {
   await minimize();
   app.stop();
   window.requestClose();
-  assert.throws(() => window.draw(() => {}), /close requested/);
+  assert.throws(() => context.getCurrentTexture(), /active.*render/);
   await running;
   if(loopError) throw loopError;
   window.dispose();
   window.dispose();
-  assert.throws(() => window.draw(() => {}), /disposed/);
+  assert.throws(() => context.getCurrentTexture(), /disposed/);
   assert.throws(() => window.presentMode, /disposed/);
   assert.equal(app.pollEvents(), false);
 
   await assertDeviceAlive(device);
 
   // Application disposal with a live device and a minimized presentation.
-  window = app.createWindow(device, { title: "hostframe minimized disposal", width: 420, height: 260, resizable: true, vsync });
+  window = app.createWindow({ title: "hostframe minimized disposal", width: 420, height: 260, resizable: true, vsync });
+  context = configureWindow(app, window, device);
   const replacementId = await findWindow("hostframe minimized disposal");
   app.pollEvents();
-  window.draw(() => {});
+  await renderFrames(app, window);
   await xdo("windowminimize", "--sync", replacementId);
   app.pollEvents();
   app.dispose();
   app.dispose();
   window.dispose();
   assert.throws(() => window.shouldClose, /disposed/);
-  assert.throws(() => app.createWindow(renderingDevice), /disposed/);
+  assert.throws(() => app.createWindow(), /disposed/);
   await assertDeviceAlive(device);
 
   // Minimized draws still reject destroyed devices before deciding to skip a frame.
   const next = new Application();
   try {
-    const lostWindow = next.createWindow(device, { title: "hostframe minimized lost device", resizable: true });
-    lostWindow.draw(() => {});
+    const lostWindow = next.createWindow({ title: "hostframe minimized lost device", resizable: true });
+    configureWindow(next, lostWindow, device);
+    await renderFrames(next, lostWindow);
     const lostId = await findWindow("hostframe minimized lost device");
     await xdo("windowminimize", "--sync", lostId);
     next.pollEvents();
     device.destroy();
-    assert.throws(() => lostWindow.draw(() => {}), /lost or destroyed/);
+    await assert.rejects(renderFrames(next, lostWindow), /lost or destroyed/);
     next.dispose();
     lostWindow.dispose();
   } finally {

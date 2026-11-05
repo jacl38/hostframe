@@ -21,7 +21,7 @@ export async function createThreeExample(title: string, options: Parameters<type
         }
       },
       getCurrentTexture() {
-        if(!currentTexture) throw new Error("Three.js requested a surface texture outside draw()");
+        if(!currentTexture) throw new Error("Three.js requested a surface texture outside a render event");
         return currentTexture;
       }
     };
@@ -59,59 +59,58 @@ export async function createThreeExample(title: string, options: Parameters<type
       // Custom rendering stays inside the same acquisition/composition scope.
       // This supports progressive tracers, post-processing and native HUDs.
       render(scene: Scene, camera: PerspectiveCamera, draw?: () => undefined) {
-        example.draw(texture => {
-          if(output.width !== texture.width || output.height !== texture.height) {
-            output.destroy();
-            output = example.device.createTexture({
-              size: [texture.width, texture.height], format: "rgba16float",
-              usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
+        const texture = example.context.getCurrentTexture();
+        if(output.width !== texture.width || output.height !== texture.height) {
+          output.destroy();
+          output = example.device.createTexture({
+            size: [texture.width, texture.height], format: "rgba16float",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC
+          });
+        }
+        currentTexture = output;
+        try {
+          if(canvas.width !== texture.width || canvas.height !== texture.height) {
+            renderer.setSize(texture.width, texture.height, false);
+          }
+          camera.aspect = texture.width / texture.height;
+          camera.updateProjectionMatrix();
+          nextFrame?.(performance.now());
+          if(draw) {
+            const result: unknown = draw();
+            if(result !== undefined) {
+              void Promise.resolve(result).catch(() => {});
+              throw new TypeError("Three.js rendering callbacks must return undefined synchronously");
+            }
+          } else renderer.render(scene, camera);
+          if(!blit) {
+            const shader = example.device.createShaderModule({ code: `
+            @group(0) @binding(0) var source: texture_2d<f32>;
+            @vertex fn vertex(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+              let p = array(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
+              return vec4f(p[i], 0, 1);
+            }
+            @fragment fn fragment(@builtin(position) p: vec4f) -> @location(0) vec4f {
+              let color = textureLoad(source, vec2i(p.xy), 0);
+              return ${texture.format.endsWith("-srgb") ? "color" : "vec4f(pow(color.rgb, vec3f(1.0 / 2.2)), color.a)"};
+            }
+          ` });
+            blit = example.device.createRenderPipeline({
+              layout: "auto", vertex: { module: shader, entryPoint: "vertex" },
+              fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] }
             });
           }
-          currentTexture = output;
-          try {
-            if(canvas.width !== texture.width || canvas.height !== texture.height) {
-              renderer.setSize(texture.width, texture.height, false);
-            }
-            camera.aspect = texture.width / texture.height;
-            camera.updateProjectionMatrix();
-            nextFrame?.(performance.now());
-            if(draw) {
-              const result: unknown = draw();
-              if(result !== undefined) {
-                void Promise.resolve(result).catch(() => {});
-                throw new TypeError("Three.js rendering callbacks must return undefined synchronously");
-              }
-            } else renderer.render(scene, camera);
-            if(!blit) {
-              const shader = example.device.createShaderModule({ code: `
-              @group(0) @binding(0) var source: texture_2d<f32>;
-              @vertex fn vertex(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
-                let p = array(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
-                return vec4f(p[i], 0, 1);
-              }
-              @fragment fn fragment(@builtin(position) p: vec4f) -> @location(0) vec4f {
-                let color = textureLoad(source, vec2i(p.xy), 0);
-                return ${texture.format.endsWith("-srgb") ? "color" : "vec4f(pow(color.rgb, vec3f(1.0 / 2.2)), color.a)"};
-              }
-            ` });
-              blit = example.device.createRenderPipeline({
-                layout: "auto", vertex: { module: shader, entryPoint: "vertex" },
-                fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] }
-              });
-            }
-            const encoder = example.device.createCommandEncoder();
-            const pass = encoder.beginRenderPass({ colorAttachments: [{
-              view: texture.createView(), loadOp: "clear", storeOp: "store"
-            }] });
-            pass.setPipeline(blit);
-            pass.setBindGroup(0, example.device.createBindGroup({ layout: blit.getBindGroupLayout(0), entries: [{ binding: 0, resource: output.createView() }] }));
-            pass.draw(3);
-            pass.end();
-            example.device.queue.submit([encoder.finish()]);
-          } finally {
-            currentTexture = undefined;
-          }
-        });
+          const encoder = example.device.createCommandEncoder();
+          const pass = encoder.beginRenderPass({ colorAttachments: [{
+            view: texture.createView(), loadOp: "clear", storeOp: "store"
+          }] });
+          pass.setPipeline(blit);
+          pass.setBindGroup(0, example.device.createBindGroup({ layout: blit.getBindGroupLayout(0), entries: [{ binding: 0, resource: output.createView() }] }));
+          pass.draw(3);
+          pass.end();
+          example.device.queue.submit([encoder.finish()]);
+        } finally {
+          currentTexture = undefined;
+        }
       }
     };
   } catch (error) {

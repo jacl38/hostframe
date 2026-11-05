@@ -118,7 +118,7 @@ void Application::Cleanup(void* data) {
   application->cleanupRegistered_ = false;
 }
 
-Window* Application::CreateWindow(DawnDevice device, WindowOptionsArgument argument) {
+Window* Application::CreateWindow(DawnGPU gpu, WindowOptionsArgument argument) {
   return NativeBoundary(env_, [&]() -> Window* {
     Napi::Env env(env_);
     RequireMainThread(env);
@@ -127,7 +127,7 @@ Window* Application::CreateWindow(DawnDevice device, WindowOptionsArgument argum
     ApplicationOperation operation(*state_);
     auto options = DecodeWindowOptions(argument);
     if(env.IsExceptionPending()) return nullptr;
-    auto state = std::make_shared<WindowState>(env, Napi::Value(env, device.value), state_, options);
+    auto state = std::make_shared<WindowState>(env, gpu, state_, options);
     auto window = std::make_unique<Window>(env, state);
     state_->Register(state);
     return window.release();

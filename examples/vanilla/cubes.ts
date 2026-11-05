@@ -45,33 +45,32 @@ try {
   let bindGroup: GPUBindGroup;
   let time = 0;
   example.app.on("fixedUpdate", ({ dt }) => { time += dt; });
-  example.app.on("render", () => {
-    example.draw(texture => {
-      if(!pipeline) {
-        pipeline = device.createRenderPipeline({
-          layout: "auto",
-          vertex: { module: shader, entryPoint: "vertex", buffers: [{ arrayStride: 24, attributes: [
-            { shaderLocation: 0, offset: 0, format: "float32x3" },
-            { shaderLocation: 1, offset: 12, format: "float32x3" }
-          ] }] },
-          fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] },
-          depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" }
-        });
-        bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniforms } }] });
-      }
-      device.queue.writeBuffer(uniforms, 0, new Float32Array([time, texture.width / texture.height, 0, 0]));
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{ view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1], loadOp: "clear", storeOp: "store" }],
-        depthStencilAttachment: { view: depth(texture.width, texture.height), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" }
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    if(!pipeline) {
+      pipeline = device.createRenderPipeline({
+        layout: "auto",
+        vertex: { module: shader, entryPoint: "vertex", buffers: [{ arrayStride: 24, attributes: [
+          { shaderLocation: 0, offset: 0, format: "float32x3" },
+          { shaderLocation: 1, offset: 12, format: "float32x3" }
+        ] }] },
+        fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] },
+        depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" }
       });
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, bindGroup!);
-      pass.setVertexBuffer(0, vertices);
-      pass.draw(36, 6);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
+      bindGroup = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: uniforms } }] });
+    }
+    device.queue.writeBuffer(uniforms, 0, new Float32Array([time, texture.width / texture.height, 0, 0]));
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{ view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1], loadOp: "clear", storeOp: "store" }],
+      depthStencilAttachment: { view: depth(texture.width, texture.height), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" }
     });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup!);
+    pass.setVertexBuffer(0, vertices);
+    pass.draw(36, 6);
+    pass.end();
+    device.queue.submit([encoder.finish()]);
   });
   await example.run();
 } finally {

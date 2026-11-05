@@ -88,7 +88,7 @@ try {
     if(!paused) clock.value += dt;
     morph.value += (targetMorph - morph.value) * (1 - Math.exp(-dt * 2));
   });
-  example.app.on("render", () => {
+  example.window.on("render", () => {
     paletteA.value.setHex(palettes[palette]!.a);
     paletteB.value.setHex(palettes[palette]!.b);
     overlay.setStatus(`${paused ? "HELD" : "FLOWING"}  /  ${palettes[palette]!.name}`);

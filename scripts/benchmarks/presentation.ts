@@ -18,7 +18,14 @@ function percentile(values: number[], quantile: number) {
 const app = new Application();
 let device: GPUDevice | undefined;
 try {
-  const adapter = await app.gpu.requestAdapter();
+  const window = app.createWindow({
+    title: "hostframe presentation benchmark",
+    width: 960,
+    height: 540,
+    vsync: vsyncArgument === "on"
+  });
+  const context = window.getContext("webgpu");
+  const adapter = await context.requestAdapter();
   assert.ok(adapter);
   if(process.env.HOSTFRAME_EXPECT_VENDOR) {
     assert.equal(adapter.info.vendor, process.env.HOSTFRAME_EXPECT_VENDOR);
@@ -28,12 +35,7 @@ try {
   const renderingDevice = device;
   const errors: string[] = [];
   device.addEventListener("uncapturederror", event => { errors.push(event.error.message); });
-  const window = app.createWindow(device, {
-    title: "hostframe presentation benchmark",
-    width: 960,
-    height: 540,
-    vsync: vsyncArgument === "on"
-  });
+  context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
   let pipeline: GPURenderPipeline | undefined;
   const shader = workload === "shader" ? device.createShaderModule({ code: `
     @vertex fn vertex(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -63,32 +65,39 @@ try {
     assert.equal(dt, 1 / 120);
     if(started) updates++;
   });
-  app.on("render", event => {
+  let rendered = false;
+  let frameDroppedTime = 0;
+  window.on("render", event => {
+    frameDroppedTime = event.droppedTime;
+    const texture = context.getCurrentTexture();
+    assert.equal(texture.width, 960);
+    assert.equal(texture.height, 540);
+    const encoder = renderingDevice.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{
+      view: texture.createView(),
+      clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
+      loadOp: "clear",
+      storeOp: "store"
+    }] });
+    if(shader) {
+      pipeline ??= renderingDevice.createRenderPipeline({
+        layout: "auto",
+        vertex: { module: shader, entryPoint: "vertex" },
+        fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] }
+      });
+      pass.setPipeline(pipeline);
+      pass.draw(3);
+    }
+    pass.end();
+    renderingDevice.queue.submit([encoder.finish()]);
+    rendered = true;
+  });
+  // Measure acquisition, all render listeners, and presentation together.
+  const renderFrame = context.render.bind(context);
+  context.render = function measureFrame(dispatch) {
     const before = performance.now();
-    let rendered = false;
-    window.draw(texture => {
-      assert.equal(texture.width, 960);
-      assert.equal(texture.height, 540);
-      const encoder = renderingDevice.createCommandEncoder();
-      const pass = encoder.beginRenderPass({ colorAttachments: [{
-        view: texture.createView(),
-        clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
-        loadOp: "clear",
-        storeOp: "store"
-      }] });
-      if(shader) {
-        pipeline ??= renderingDevice.createRenderPipeline({
-          layout: "auto",
-          vertex: { module: shader, entryPoint: "vertex" },
-          fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] }
-        });
-        pass.setPipeline(pipeline);
-        pass.draw(3);
-      }
-      pass.end();
-      renderingDevice.queue.submit([encoder.finish()]);
-      rendered = true;
-    });
+    rendered = false;
+    renderFrame(dispatch);
     const after = performance.now();
     if(!started) {
       if(after >= warmupDeadline) {
@@ -98,8 +107,8 @@ try {
       }
       return;
     }
-    droppedTime += event.droppedTime;
     if(rendered) {
+      droppedTime += frameDroppedTime;
       frames++;
       intervals.push(after - previous);
       draws.push(after - before);
@@ -111,7 +120,7 @@ try {
       cpuMilliseconds = (usage.user + usage.system) / 1000;
       app.stop();
     }
-  });
+  };
   await app.run({ updateHz: 120, maxFPS });
   assert.ok(finished > started && frames > 0, "Benchmark interrupted before completion");
   const drainStarted = performance.now();

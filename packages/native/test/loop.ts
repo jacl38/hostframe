@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { setTimeout } from "node:timers/promises";
 import { Application, type RenderEvent } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
+import { configureWindow, renderFrames } from "./frames.ts";
 
 function render(device: GPUDevice, texture: GPUTexture) {
   const encoder = device.createCommandEncoder();
@@ -25,7 +26,7 @@ try {
   assert.throws(() => app.pause(), /not running/);
   assert.throws(() => app.resume(), /not running/);
   assert.throws(() => Reflect.apply(app.on, app, ["unknown", () => {}]), /Unknown application event/);
-  assert.throws(() => Reflect.apply(app.on, app, ["render", null]), /listener/);
+  assert.throws(() => Reflect.apply(app.on, app, ["fixedUpdate", null]), /listener/);
   assert.throws(() => app.run({ updateHz: 0 }), /updateHz/);
   await app.run();
 
@@ -36,18 +37,22 @@ try {
   const renderingDevice = device;
   const failures: string[] = [];
   device.addEventListener("uncapturederror", event => failures.push(event.error.message));
-  let window = app.createWindow(device);
+  let window = app.createWindow();
+  let context = configureWindow(app, window, device);
   assert.equal(window.shouldClose, false);
   assert.equal(app.pollEvents(), true);
-  window.draw(() => {
+  const offGuards = window.on("render", () => {
     assert.throws(() => app.pollEvents(), /in progress/);
-    assert.throws(() => app.run(), /in progress/);
+    assert.throws(() => app.run(), /already running/);
     assert.throws(() => window.requestClose(), /in progress/);
     assert.throws(() => window.shouldClose, /in progress/);
   });
 
+  await renderFrames(app, window);
+  offGuards();
+
   if(process.argv.includes("--external-close")) {
-    app.on("render", () => { window.draw(texture => { render(renderingDevice, texture); }); });
+    window.on("render", () => { render(renderingDevice, context.getCurrentTexture()); });
     console.log(`Ready for native close: ${process.pid}`);
     await app.run({ updateHz: 120 });
     assert.equal(window.shouldClose, true);
@@ -69,13 +74,11 @@ try {
       assert.equal(event.dt, 1 / 120);
       assert.equal(event.tick, ++ticks);
     });
-    const offRender = app.on("render", event => {
+    const offRender = window.on("render", event => {
       assert.equal(event.frame, ++frames);
       assert.ok(event.alpha >= 0 && event.alpha < 1);
-      window.draw(texture => {
-        render(renderingDevice, texture);
-        assert.throws(() => app.dispose(), /in progress/);
-      });
+      render(renderingDevice, context.getCurrentTexture());
+      assert.throws(() => app.dispose(), /in progress/);
       if(frames === 20) {
         assert.ok(hostTaskRan, "Host timers must progress during rendering");
         assert.ok(mapped, "Asynchronous GPU readback must progress during rendering");
@@ -97,13 +100,13 @@ try {
     // listeners after stop. Unsubscription remains safe when repeated.
     const calls: string[] = [];
     let added: (() => void) | undefined;
-    const first = app.on("render", event => {
+    const first = window.on("render", event => {
       calls.push(`first:${event.frame}`);
       removed();
-      if(event.frame === 1) added = app.on("render", () => { calls.push("added"); });
+      if(event.frame === 1) added = window.on("render", () => { calls.push("added"); });
       else app.stop();
     });
-    const removed = app.on("render", () => { calls.push("removed"); });
+    const removed = window.on("render", () => { calls.push("removed"); });
     await app.run();
     first();
     removed();
@@ -116,9 +119,9 @@ try {
       duplicateCalls++;
       return undefined;
     }
-    const duplicateOne = app.on("render", duplicate);
-    const duplicateTwo = app.on("render", duplicate);
-    const offStopDuplicates = app.on("render", () => { app.stop(); });
+    const duplicateOne = window.on("render", duplicate);
+    const duplicateTwo = window.on("render", duplicate);
+    const offStopDuplicates = window.on("render", () => { app.stop(); });
     await app.run();
     assert.equal(duplicateCalls, 2);
     duplicateOne();
@@ -128,10 +131,10 @@ try {
     offStopDuplicates();
 
     const sentinel = Symbol("loop callback failure");
-    const offFailure = app.on("render", () => { window.draw(() => { throw sentinel; }); });
+    const offFailure = window.on("render", () => { throw sentinel; });
     await assert.rejects(app.run(), error => error === sentinel);
     offFailure();
-    const offAsync = Reflect.apply(app.on, app, ["render", async () => { throw new Error("async listener"); }]) as () => void;
+    const offAsync = Reflect.apply(window.on, window, ["render", async () => { throw new Error("async listener"); }]) as () => void;
     await assert.rejects(app.run(), /return undefined synchronously/);
     offAsync();
     const offReturn = Reflect.apply(app.on, app, ["fixedUpdate", () => 42]) as () => void;
@@ -140,7 +143,7 @@ try {
 
     const resumed: RenderEvent[] = [];
     let resumeTask: Promise<void> | undefined;
-    const offPause = app.on("render", event => {
+    const offPause = window.on("render", event => {
       resumed.push(event);
       if(event.frame === 1) {
         app.pause();
@@ -162,14 +165,14 @@ try {
 
     // Stop releases a pending long render-cap timer promptly.
     let stopTask: Promise<void> | undefined;
-    const offCapped = app.on("render", () => { stopTask = setTimeout(5).then(() => { app.stop(); }); });
+    const offCapped = window.on("render", () => { stopTask = setTimeout(5).then(() => { app.stop(); }); });
     await app.run({ maxFPS: 0.001 });
     await stopTask;
     offCapped();
 
     // Close requests are observed even while paused, without dispatching render.
     let unexpectedRender = false;
-    const offClosed = app.on("render", () => { unexpectedRender = true; });
+    const offClosed = window.on("render", () => { unexpectedRender = true; });
     const closing = app.run();
     app.pause();
     const closeTask = setTimeout(5).then(() => { window.requestClose(); });
@@ -179,35 +182,34 @@ try {
     assert.equal(unexpectedRender, false);
     assert.equal(window.shouldClose, true);
     assert.equal(app.pollEvents(), false);
-    assert.throws(() => window.draw(() => {}), /close requested/);
+    await app.run();
     window.dispose();
     assert.throws(() => window.requestClose(), /disposed/);
     assert.throws(() => window.shouldClose, /disposed/);
-    window = app.createWindow(device);
+    window = app.createWindow();
+    context = configureWindow(app, window, device);
 
     // Disposing a window during update prevents later listeners from drawing it.
     let disposedInUpdate = false;
     const offDisposeWindow = app.on("fixedUpdate", () => { disposedInUpdate = true; window.dispose(); });
-    const offDisposedRender = app.on("render", () => { assert.equal(disposedInUpdate, false); });
+    const offDisposedRender = window.on("render", () => { assert.equal(disposedInUpdate, false); });
     await app.run({ updateHz: 120, maxFPS: 240 });
     assert.equal(disposedInUpdate, true);
     offDisposeWindow();
     offDisposedRender();
-    window = app.createWindow(device);
+    window = app.createWindow();
+    context = configureWindow(app, window, device);
 
-    const offDispose = app.on("render", () => {
-      window.draw(texture => { render(renderingDevice, texture); });
-      app.dispose();
-    });
-    app.on("render", () => { assert.fail("Listener dispatched after application disposal"); });
+    const offDispose = app.on("fixedUpdate", () => { app.dispose(); });
+    app.on("fixedUpdate", () => { assert.fail("Listener dispatched after application disposal"); });
     await app.run();
     offDispose();
     assert.throws(() => app.run(), /disposed/);
-    assert.throws(() => app.on("render", () => {}), /disposed/);
+    assert.throws(() => window.on("render", () => {}), /disposed/);
     assert.throws(() => app.pollEvents(), /disposed/);
     assert.throws(() => app.pause(), /disposed/);
     assert.throws(() => app.resume(), /disposed/);
-    assert.throws(() => window.draw(() => {}), /disposed/);
+    assert.throws(() => context.getCurrentTexture(), /disposed/);
     app.stop();
     app.dispose();
 

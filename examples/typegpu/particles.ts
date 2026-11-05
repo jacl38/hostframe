@@ -58,12 +58,11 @@ try {
     settings.write(d.vec4f(dt, aspect, 0, 0));
     compute.with(computeGroup).dispatchWorkgroups(Math.ceil(count / 64));
   });
-  example.app.on("render", () => {
-    example.draw(texture => {
-      aspect = texture.width / texture.height;
-      pipeline ??= createPipeline(texture.format);
-      pipeline.withColorAttachment({ view: texture.createView(), clearValue: [0.01, 0.015, 0.035, 1] }).draw(6, count);
-    });
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    aspect = texture.width / texture.height;
+    pipeline ??= createPipeline(texture.format);
+    pipeline.withColorAttachment({ view: texture.createView(), clearValue: [0.01, 0.015, 0.035, 1] }).draw(6, count);
   });
   await example.run();
 } finally {

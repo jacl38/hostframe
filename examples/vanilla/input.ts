@@ -52,24 +52,23 @@ try {
     x = Math.max(0, Math.min(1, x));
     y = Math.max(0, Math.min(1, y));
   });
-  app.on("render", () => {
-    example.draw(texture => {
-      pipeline ??= renderingDevice.createRenderPipeline({ layout: "auto", vertex: { module: shader, entryPoint: "vertex" }, fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] } });
-      const encoder = renderingDevice.createCommandEncoder();
-      const pass = encoder.beginRenderPass({ colorAttachments: [{
-        view: texture.createView(),
-        clearValue: window.input.focused ? { r: 0.04, g: 0.08, b: 0.15, a: 1 } : { r: 0.1, g: 0.1, b: 0.1, a: 1 },
-        loadOp: "clear",
-        storeOp: "store"
-      }] });
-      pass.setPipeline(pipeline);
-      const width = Math.min(size, texture.width);
-      const height = Math.min(size, texture.height);
-      pass.setViewport(Math.max(0, Math.min(texture.width - width, x * texture.width - width / 2)), Math.max(0, Math.min(texture.height - height, y * texture.height - height / 2)), width, height, 0, 1);
-      pass.draw(6);
-      pass.end();
-      renderingDevice.queue.submit([encoder.finish()]);
-    });
+  window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    pipeline ??= renderingDevice.createRenderPipeline({ layout: "auto", vertex: { module: shader, entryPoint: "vertex" }, fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] } });
+    const encoder = renderingDevice.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{
+      view: texture.createView(),
+      clearValue: window.input.focused ? { r: 0.04, g: 0.08, b: 0.15, a: 1 } : { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+      loadOp: "clear",
+      storeOp: "store"
+    }] });
+    pass.setPipeline(pipeline);
+    const width = Math.min(size, texture.width);
+    const height = Math.min(size, texture.height);
+    pass.setViewport(Math.max(0, Math.min(texture.width - width, x * texture.width - width / 2)), Math.max(0, Math.min(texture.height - height, y * texture.height - height / 2)), width, height, 0, 1);
+    pass.draw(6);
+    pass.end();
+    renderingDevice.queue.submit([encoder.finish()]);
   });
   console.log("WASD/arrows move; left click captures; Escape releases; wheel resizes; Q quits.");
   await example.run();

@@ -72,12 +72,16 @@ NOBIND_MODULE(hostframe, m) {
   m.typescript_fragment("export type PresentMode = " + Nobind::ToTSType<PresentMode>() + ";\n");
   m.typescript_fragment("export type InputEvent = " + Nobind::ToTSType<InputEvent>() + ";\n");
   m.def<Window>("Window")
-      .def<&Window::Draw>("draw")
+      .def<&Window::RenderFrame>("renderFrame")
+      .def<&Window::RequestAdapter>("requestAdapter")
+      .def<&Window::Configure>("configure")
+      .def<&Window::Unconfigure>("unconfigure")
       .def<&Window::DispatchInput>("dispatchInput")
       .def<&Window::SetPointerCapture>("setPointerCapture")
       .def<&Window::RequestClose>("requestClose")
       .def<&Window::Dispose>("dispose")
       .def<&Window::disposed, Nobind::ReadOnly>("disposed")
+      .def<&Window::configured, Nobind::ReadOnly>("configured")
       .def<&Window::shouldClose, Nobind::ReadOnly>("shouldClose")
       .def<&Window::presentMode, Nobind::ReadOnly>("presentMode");
   m.def<Application>("Application").cons<napi_env>()

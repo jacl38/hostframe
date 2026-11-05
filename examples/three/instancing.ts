@@ -23,7 +23,7 @@ try {
   example.defer(() => { mesh.dispose(); geometry.dispose(); material.dispose(); });
   let time = 0;
   example.app.on("fixedUpdate", ({ dt }) => { time += dt; });
-  example.app.on("render", () => {
+  example.window.on("render", () => {
     for(let i = 0; i < mesh.count; i++) {
       const x = (i % 40 - 19.5) * 0.9;
       const z = (Math.floor(i / 40) - 19.5) * 0.9;

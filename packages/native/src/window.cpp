@@ -9,38 +9,62 @@
 #include "input.h"
 #include "bindings.h"
 #include "native_boundary.h"
+#include "dawn_bridge.h"
 
 namespace hostframe {
 
-WindowState::WindowState(Napi::Env env, Napi::Value value,
+WindowState::~WindowState() { Close(); }
+
+WindowState::WindowState(Napi::Env env, DawnGPU owner,
                          const std::shared_ptr<ApplicationState>& application, const WindowOptions& options) : application_(application) {
-  void* wrapped = nullptr;
-  if(!value.IsObject() || napi_unwrap(env, value, &wrapped) != napi_ok || !wrapped) {
-    throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
-  }
-  auto* device = wgpu::interop::GPUDevice::Unwrap(value.As<Napi::Object>());
-  auto* binding = dynamic_cast<wgpu::binding::GPUDevice*>(device);
-  if(!binding) throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
-  device_ = Napi::Persistent(value.As<Napi::Object>());
-  presentation_ = std::make_unique<Presentation>(binding->GetNativeDevice(), options);
+  Napi::Value gpu(env, owner.value);
+  auto& binding = RequireGPU(env, gpu);
+  gpu_ = Napi::Persistent(gpu.As<Napi::Object>());
+  presentation_ = std::make_unique<Presentation>(binding.GetNativeInstance(), options);
   input_ = std::make_unique<WindowInput>(presentation_->NativeWindow());
 }
 
-WindowState::~WindowState() { Close(); }
+napi_value WindowState::RequestAdapter(Napi::Env env, Napi::Value value) {
+  wgpu::interop::GPURequestAdapterOptions options;
+  auto result = wgpu::interop::FromJSOptional(env, value, options);
+  if(!result) {
+    if(!env.IsExceptionPending()) throw Napi::TypeError::New(env, result.error);
+    return env.Undefined();
+  }
+  if(env.IsExceptionPending()) return env.Undefined();
+  return RequireGPU(env, gpu_.Value()).requestAdapterForSurface(env, options, presentation_->Surface());
+}
+
+napi_value WindowState::Configure(Napi::Env env, Napi::Value value) {
+  auto configuration = presentation_->Configure(env, value);
+  if(!env.IsExceptionPending()) {
+    device_ = Napi::Persistent(configuration.As<Napi::Object>().Get("device").As<Napi::Object>());
+  }
+  return configuration;
+}
+
+void WindowState::Unconfigure() {
+  // Retain through draining, but release even when draining reports a timeout.
+  auto device = std::move(device_);
+  presentation_->Unconfigure();
+}
+
+bool WindowState::IsConfigured() const { return presentation_ && presentation_->HasDevice(); }
 
 bool WindowState::Close() {
   input_.reset();
   const bool drained = !presentation_ || presentation_->Close();
   presentation_.reset();
   device_.Reset();
+  gpu_.Reset();
   if(auto application = Owner()) application->Unregister(this);
   application_.reset();
   return drained;
 }
 
-void WindowState::Draw(Napi::Env env, Napi::Function callback) {
+void WindowState::RenderFrame(Napi::Env env, Napi::Function callback) {
   if(!presentation_) throw Napi::Error::New(env, "Window is disposed");
-  presentation_->Draw(env, callback);
+  presentation_->RenderFrame(env, callback);
 }
 
 bool WindowState::ShouldClose() const {
@@ -71,11 +95,42 @@ bool Window::Disposed() {
   });
 }
 
-void Window::Draw(DrawCallback callback) {
+bool Window::Configured() {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    return state_->IsConfigured();
+  });
+}
+
+void Window::RenderFrame(FrameCallback callback) {
   NativeBoundary(env_, [&] {
     auto application = RequireAvailable();
     ApplicationOperation operation(*application);
-    state_->Draw(env_, Napi::Value(env_, callback.value).As<Napi::Function>());
+    state_->RenderFrame(env_, Napi::Value(env_, callback.value).As<Napi::Function>());
+  });
+}
+
+DawnAdapterRequest Window::RequestAdapter(AdapterOptionsArgument options) {
+  return NativeBoundary(env_, [&]() -> DawnAdapterRequest {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    return {state_->RequestAdapter(env_, Napi::Value(env_, options.value))};
+  });
+}
+
+CanvasConfiguration Window::Configure(CanvasConfiguration configuration) {
+  return NativeBoundary(env_, [&]() -> CanvasConfiguration {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    return {env_, state_->Configure(env_, Napi::Value(env_, configuration.value))};
+  });
+}
+
+void Window::Unconfigure() {
+  NativeBoundary(env_, [&] {
+    auto application = RequireAvailable();
+    ApplicationOperation operation(*application);
+    state_->Unconfigure();
   });
 }
 

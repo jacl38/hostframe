@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readdirSync, readlinkSync } from "node:fs";
-import { setTimeout } from "node:timers/promises";
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
 import { Application } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 import { assertFramebufferSize } from "./framebuffer.ts";
 import { assertDeviceAlive } from "./device.ts";
+import { configureWindow, renderFrames } from "./frames.ts";
 
 function processSockets() {
   const sockets = new Set<string>();
@@ -63,8 +63,6 @@ if(!isMainThread) {
     if(process.platform === "linux") assert.ok(sessionSockets.length > 0, "Application must open an X11 connection");
     const gpu = app.gpu;
     assert.throws(() => new Application(), /Only one native application/);
-    assert.throws(() => app.createWindow({} as GPUDevice), /GPUDevice/);
-    assert.throws(() => app.createWindow(gpu as unknown as GPUDevice), /GPUDevice/);
     const adapter = await gpu.requestAdapter();
     assert.ok(adapter, "No compatible GPU adapter");
     checkAdapter(adapter);
@@ -72,7 +70,9 @@ if(!isMainThread) {
     const failures: string[] = [];
     device.addEventListener("uncapturederror", event => failures.push(event.error.message));
     if(process.argv.includes("--shutdown")) {
-      app.createWindow(device).draw(() => {});
+      const window = app.createWindow();
+      configureWindow(app, window, device);
+      await renderFrames(app, window);
       // Only retain the application: it owns the window even if its JS wrapper is collected.
       Object.defineProperty(globalThis, "__hostframeShutdownApplication", { value: app });
       (globalThis as { gc?: () => void }).gc?.();
@@ -83,45 +83,42 @@ if(!isMainThread) {
         assert.ok(invalidAdapter);
         const invalidDevice = await invalidAdapter.requestDevice();
         invalidDevice.destroy();
-        // A constructor failure after device retention must leave the app usable.
-        assert.throws(() => app.createWindow(invalidDevice), /lost or destroyed/);
-        const window = app.createWindow(device);
+        const window = app.createWindow();
+        const context = window.getContext("webgpu");
+        const format = gpu.getPreferredCanvasFormat();
+        // Configuration failure retains the surface and permits retry.
+        assert.throws(() => context.configure({ device: invalidDevice, format }), /lost or destroyed/);
+        context.configure({ device, format });
         try {
-          assert.throws(() => app.createWindow(device), /Only one native window/);
-          // These deliberately bypass the TypeScript contract to test the native boundary.
-          assert.throws(() => Reflect.apply(window.draw, window, [null]), /draw callback/);
-          assert.throws(() => Reflect.apply(window.draw, window, [() => Promise.resolve()]), /synchronously/);
+          assert.throws(() => app.createWindow(), /Only one native window/);
+          assert.equal("draw" in window, false);
+          assert.throws(() => Reflect.apply(app.on, app, ["render", () => {}]), /Unknown application event/);
           const sentinel = new Error("render failed");
-          assert.throws(() => window.draw(() => { throw sentinel; }), error => error === sentinel);
-          window.draw(() => {
-            assert.throws(() => window.draw(() => {}), /in progress/);
+          const offFailure = window.on("render", () => { throw sentinel; });
+          await assert.rejects(renderFrames(app, window), error => error === sentinel);
+          offFailure();
+          let escaped: GPUTexture | undefined;
+          let frames = 0;
+          const offRender = window.on("render", () => {
             assert.throws(() => window.dispose(), /in progress/);
             assert.throws(() => app.dispose(), /in progress/);
-            assert.throws(() => app.createWindow(device), /in progress/);
-          });
-
-          let escaped: GPUTexture | undefined;
-          for(let frame = 0; frame < 60; frame++) {
-            assert.equal(app.pollEvents(), true);
-            window.draw(texture => {
-              assertFramebufferSize(texture, 320, 240);
-              escaped = texture;
-              const encoder = device.createCommandEncoder();
-              const pass = encoder.beginRenderPass({
-                colorAttachments: [{
-                  view: texture.createView(),
-                  clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
-                  loadOp: "clear",
-                  storeOp: "store"
-                }]
-              });
-              pass.end();
-              device.queue.submit([encoder.finish()]);
-            });
+            assert.throws(() => app.createWindow(), /in progress/);
+            const texture = context.getCurrentTexture();
+            assertFramebufferSize(texture, 320, 240);
+            escaped = texture;
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({ colorAttachments: [{
+              view: texture.createView(),
+              clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
+              loadOp: "clear", storeOp: "store"
+            }] });
+            pass.end();
+            device.queue.submit([encoder.finish()]);
             // Exercise collection while native window/device references are live.
-            if(frame === 30) (globalThis as { gc?: () => void }).gc?.();
-            await setTimeout(16);
-          }
+            if(++frames === 30) (globalThis as { gc?: () => void }).gc?.();
+          });
+          await renderFrames(app, window, 60);
+          offRender();
           await device.queue.onSubmittedWorkDone();
           assert.deepEqual(failures, []);
           device.pushErrorScope("validation");
@@ -132,31 +129,33 @@ if(!isMainThread) {
           });
           expiredPass.end();
           device.queue.submit([expiredEncoder.finish()]);
-          assert.ok(await device.popErrorScope(), "Frame textures must expire after draw");
+          assert.ok(await device.popErrorScope(), "Frame textures must expire after render dispatch");
         } finally {
           window.dispose();
         }
         window.dispose();
-        assert.throws(() => window.draw(() => {}), /disposed/);
+        assert.throws(() => context.getCurrentTexture(), /disposed/);
         assert.throws(() => new Application(), /Only one native application/);
         // Linux socket identities prove GLFW's X11 connection survives window
         // disposal/recreation, rather than closing and reopening the session.
         for(const socket of sessionSockets) assert.ok(processSockets().has(socket));
-        const replacement = app.createWindow(device);
-        replacement.draw(() => {});
+        const replacement = app.createWindow();
+        configureWindow(app, replacement, device);
+        await renderFrames(app, replacement);
         replacement.dispose();
         for(const socket of sessionSockets) assert.ok(processSockets().has(socket));
         await assertDeviceAlive(device);
         // Dispose the application with live, rendered swapchain resources.
-        const liveWindow = app.createWindow(device);
-        liveWindow.draw(() => {});
+        const liveWindow = app.createWindow();
+        const liveContext = configureWindow(app, liveWindow, device);
+        await renderFrames(app, liveWindow);
         app.dispose();
         app.dispose();
         for(const socket of sessionSockets) assert.ok(!processSockets().has(socket));
         liveWindow.dispose();
-        assert.throws(() => liveWindow.draw(() => {}), /disposed/);
-        assert.throws(() => app.createWindow(device), /Application is disposed/);
-        assert.throws(() => window.draw(() => {}), /disposed/);
+        assert.throws(() => liveContext.getCurrentTexture(), /disposed/);
+        assert.throws(() => app.createWindow(), /Application is disposed/);
+        assert.throws(() => context.getCurrentTexture(), /disposed/);
         await assertDeviceAlive(device);
         assert.deepEqual(failures, []);
       } finally {
@@ -174,12 +173,15 @@ if(!isMainThread) {
       const lostDevice = await lostAdapter.requestDevice();
       const lostFailures: string[] = [];
       lostDevice.addEventListener("uncapturederror", event => lostFailures.push(event.error.message));
-      const lostWindow = nextApp.createWindow(lostDevice);
-      lostWindow.draw(() => {});
+      const lostWindow = nextApp.createWindow();
+      configureWindow(nextApp, lostWindow, lostDevice);
+      await renderFrames(nextApp, lostWindow);
       lostDevice.destroy();
-      assert.throws(() => lostWindow.draw(() => {}), /lost or destroyed/);
+      await assert.rejects(renderFrames(nextApp, lostWindow), /lost or destroyed/);
       lostWindow.dispose();
-      assert.throws(() => nextApp.createWindow(lostDevice), /lost or destroyed/);
+      const retry = nextApp.createWindow();
+      assert.throws(() => configureWindow(nextApp, retry, lostDevice), /lost or destroyed/);
+      retry.dispose();
       nextApp.dispose();
       nextApp.dispose();
       assert.deepEqual(lostFailures, []);
@@ -194,8 +196,9 @@ if(!isMainThread) {
           assert.ok(recreatedAdapter);
           checkAdapter(recreatedAdapter);
           recreatedDevice = await recreatedAdapter.requestDevice();
-          const recreatedWindow = recreated.createWindow(recreatedDevice);
-          recreatedWindow.draw(() => {});
+          const recreatedWindow = recreated.createWindow();
+          configureWindow(recreated, recreatedWindow, recreatedDevice);
+          await renderFrames(recreated, recreatedWindow);
           await recreatedDevice.queue.onSubmittedWorkDone();
         } finally {
           try {

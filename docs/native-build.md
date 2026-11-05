@@ -304,8 +304,8 @@ Go resolves only the generator's needed modules using upstream `go.mod`/`go.sum`
 with readonly module metadata and automatic toolchain downloading disabled.
 
 [`scripts/native/generate.ts`](../scripts/native/generate.ts) copies the binding
-into `build/native/binding/`, adds the binding-only
-`GPUDevice::GetNativeDevice()` accessor, and runs upstream generators for
+into `build/native/binding/`, adds binding-only GPU-instance/device accessors and an internal surface-aware
+adapter selection method, and runs upstream generators for
 `WebGPU.h/.cpp` and `ComboLimits.h/.cpp`. It does not modify the vendored binding.
 Generated inputs are stamped so repeat setup runs can reuse them. These directories
 are build-owned; edit the scripts or project-owned native sources instead.

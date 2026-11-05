@@ -116,16 +116,47 @@ class ToJS<hostframe::Computed<Owner, Method>&, Ret> : public ToJS<hostframe::Co
   using ToJS<hostframe::Computed<Owner, Method>, Ret>::ToJS;
 };
 
-// The native object is borrowed only for this call. WindowState retains the
-// original Dawn JS device, and Presentation wraps textures with Dawn's interop.
-template <> class FromJS<hostframe::DawnDevice> {
-  hostframe::DawnDevice value_;
+template <> class FromJS<hostframe::DawnGPU> {
+  hostframe::DawnGPU value_;
  public:
-  explicit FromJS(const Napi::Value& value) : value_{value.Env(), value} {
-    if(!value.IsObject()) throw Napi::TypeError::New(value.Env(), "Expected a Dawn GPUDevice");
-  }
+  explicit FromJS(const Napi::Value& value) : value_{value} {}
   auto Get() { return value_; }
-  static std::string TSType() { return "GPUDevice"; }
+  static std::string TSType() { return "GPU"; }
+};
+
+template <> class FromJS<hostframe::AdapterOptionsArgument> {
+  hostframe::AdapterOptionsArgument value_;
+ public:
+  static constexpr bool IsOptional = true;
+  explicit FromJS(const Napi::Value& value) : value_{value.Env(), value} {}
+  auto Get() { return value_; }
+  static std::string TSType() { return "GPURequestAdapterOptions"; }
+};
+
+template <> class FromJS<hostframe::CanvasConfiguration> {
+  hostframe::CanvasConfiguration value_;
+ public:
+  explicit FromJS(const Napi::Value& value) : value_{value.Env(), value} {}
+  auto Get() { return value_; }
+  static std::string TSType() { return "GPUCanvasConfiguration"; }
+};
+
+template <const ReturnAttribute& Ret> class ToJS<hostframe::CanvasConfiguration, Ret> {
+  Napi::Env env_;
+  hostframe::CanvasConfiguration value_;
+ public:
+  ToJS(Napi::Env env, hostframe::CanvasConfiguration value) : env_(env), value_(value) {}
+  Napi::Value Get() { return value_.value ? Napi::Value(env_, value_.value) : env_.Undefined(); }
+  static std::string TSType() { return "GPUCanvasConfiguration"; }
+};
+
+template <const ReturnAttribute& Ret> class ToJS<hostframe::DawnAdapterRequest, Ret> {
+  Napi::Env env_;
+  hostframe::DawnAdapterRequest value_;
+ public:
+  ToJS(Napi::Env env, hostframe::DawnAdapterRequest value) : env_(env), value_(value) {}
+  Napi::Value Get() { return value_.value ? Napi::Value(env_, value_.value) : env_.Undefined(); }
+  static std::string TSType() { return "Promise<GPUAdapter | null>"; }
 };
 
 template <> class FromJS<hostframe::WindowOptionsArgument> {
@@ -141,11 +172,11 @@ template <class Callback> class CallbackMap {
   Callback value_;
  public:
   explicit CallbackMap(const Napi::Value& value) : value_{value.Env(), value} {
-    if(!value.IsFunction()) throw Napi::TypeError::New(value.Env(), std::is_same_v<Callback, hostframe::DrawCallback> ? "Expected a draw callback" : "Expected an input callback");
+    if(!value.IsFunction()) throw Napi::TypeError::New(value.Env(), std::is_same_v<Callback, hostframe::FrameCallback> ? "Expected a frame callback" : "Expected an input callback");
   }
   auto Get() { return value_; }
 };
-template <> class FromJS<hostframe::DrawCallback> : public CallbackMap<hostframe::DrawCallback> {
+template <> class FromJS<hostframe::FrameCallback> : public CallbackMap<hostframe::FrameCallback> {
  public:
   using CallbackMap::CallbackMap;
   static std::string TSType() { return "(texture: GPUTexture) => undefined"; }

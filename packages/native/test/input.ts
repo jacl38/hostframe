@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { Application, Key, Modifier, PointerButton } from "../../../index.ts";
 import type { InputEvent } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
+import { configureWindow, renderFrames } from "./frames.ts";
 
 const execute = promisify(execFile);
 async function xdo(...args: string[]) {
@@ -20,7 +21,8 @@ try {
   assert.ok(adapter);
   checkAdapter(adapter);
   device = await adapter.requestDevice();
-  const window = app.createWindow(device, { title: "hostframe input verification", width: 480, height: 300 });
+  const window = app.createWindow({ title: "hostframe input verification", width: 480, height: 300 });
+  const context = configureWindow(app, window, device);
   const id = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe input verification$")).split("\n")[0]!;
   const events: InputEvent[] = [];
   for(const name of ["key", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"] as const) {
@@ -44,9 +46,9 @@ try {
   const offGuards = window.on("key", () => {
     assert.throws(() => app.pollEvents(), /in progress/);
     assert.throws(() => app.dispose(), /in progress/);
-    assert.throws(() => app.createWindow(device!), /in progress/);
+    assert.throws(() => app.createWindow(), /in progress/);
     assert.throws(() => app.run(), /in progress/);
-    assert.throws(() => window.draw(() => {}), /in progress/);
+    assert.throws(() => context.configure({ device: device!, format: app.gpu.getPreferredCanvasFormat() }), /in progress/);
     assert.throws(() => window.dispose(), /in progress/);
     assert.throws(() => window.requestClose(), /in progress/);
     assert.throws(() => window.setPointerCapture(true), /in progress/);
@@ -157,7 +159,9 @@ try {
   offAsync();
   await xdo("keyup", "s");
   await until(() => !window.isKeyDown(Key.S), "Async failure left stuck input");
-  window.draw(() => { assert.throws(() => window.setPointerCapture(true), /in progress/); });
+  const offRenderGuard = window.on("render", () => { assert.throws(() => window.setPointerCapture(true), /in progress/); });
+  await renderFrames(app, window);
+  offRenderGuard();
   window.setPointerCapture(true);
   await xdo("keydown", "w");
   await xdo("mousedown", "1");
@@ -177,7 +181,7 @@ try {
   assert.throws(() => window.input, /disposed/);
   assert.throws(() => window.on("key", () => {}), /disposed/);
   assert.throws(() => window.setPointerCapture(true), /disposed/);
-  const replacement = app.createWindow(device);
+  const replacement = app.createWindow();
   assert.deepEqual(replacement.input.keys, []);
   assert.deepEqual(replacement.input.buttons, []);
   const replacementId = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe solid color$")).split("\n")[0]!;

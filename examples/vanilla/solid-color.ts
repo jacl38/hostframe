@@ -7,15 +7,14 @@ try {
   console.log(`Present mode: ${example.window.presentMode}`);
   let ticks = 0;
   example.app.on("fixedUpdate", () => { ticks++; });
-  example.app.on("render", () => {
-    example.draw(texture => {
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({ colorAttachments: [{
-        view: texture.createView(), clearValue: [0.05, 0.1, 0.8, 1], loadOp: "clear", storeOp: "store"
-      }] });
-      pass.end();
-      device.queue.submit([encoder.finish()]);
-    });
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{
+      view: texture.createView(), clearValue: [0.05, 0.1, 0.8, 1], loadOp: "clear", storeOp: "store"
+    }] });
+    pass.end();
+    device.queue.submit([encoder.finish()]);
     // Preserve the introductory demo's three-second lifetime, unless bounded by frames.
     if(ticks >= 360 && !process.argv.some(arg => arg.startsWith("--frames="))) example.app.stop();
   });

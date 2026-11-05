@@ -31,20 +31,19 @@ try {
   ` });
   let pipeline: GPURenderPipeline | undefined;
   let group: GPUBindGroup;
-  example.app.on("render", () => {
-    example.draw(texture => {
-      if(!pipeline) {
-        pipeline = device.createRenderPipeline({ layout: "auto", vertex: { module: shader, entryPoint: "vertex" }, fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] } });
-        group = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: image.createView() }, { binding: 1, resource: sampler }] });
-      }
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({ colorAttachments: [{ view: texture.createView(), loadOp: "clear", storeOp: "store" }] });
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, group!);
-      pass.draw(3);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
-    });
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    if(!pipeline) {
+      pipeline = device.createRenderPipeline({ layout: "auto", vertex: { module: shader, entryPoint: "vertex" }, fragment: { module: shader, entryPoint: "fragment", targets: [{ format: texture.format }] } });
+      group = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: image.createView() }, { binding: 1, resource: sampler }] });
+    }
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{ view: texture.createView(), loadOp: "clear", storeOp: "store" }] });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, group!);
+    pass.draw(3);
+    pass.end();
+    device.queue.submit([encoder.finish()]);
   });
   await example.run();
 } finally {

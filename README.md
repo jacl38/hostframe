@@ -3,7 +3,7 @@
 Licensed under [Apache-2.0](LICENSE). Third-party components retain their own
 licenses; the package includes their notices in `dist/THIRD_PARTY_NOTICES.txt`.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. An optional fixed-update scheduler and explicit event polling support both application-owned and caller-owned loops. Keyboard and pointer input include held-state snapshots and game-style pointer capture. Multiple live windows remain planned.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. The application scheduler drives fixed updates and window render events; explicit event polling is also available. Keyboard and pointer input include held-state snapshots and game-style pointer capture. Multiple live windows remain planned.
 
 | Piece | Responsibility | Location |
 |---|---|---|
@@ -64,61 +64,8 @@ time, on the process main thread. The example renders a resizable blue 640×480 
 seconds of simulated time and exits, or stops normally when the window is closed.
 It supports Linux x64 with X11 and Vulkan, and macOS arm64 with Cocoa and Metal.
 
-Window creation preserves the original defaults: title `"hostframe solid color"`,
-320×240 client size, non-resizable, and vsync enabled. Override them at creation:
-
-```ts
-const window = app.createWindow(device, {
-  title: "My application",
-  width: 960,
-  height: 540,
-  resizable: true
-});
-```
-
-`width` and `height` are positive signed 32-bit integers in GLFW screen
-coordinates. Framebuffer dimensions can differ on high-DPI displays. Use the
-current `texture.width` and `texture.height` inside `draw` to size depth/MSAA
-attachments, viewports, and projection matrices. The surface follows framebuffer
-pixels automatically after native events are polled, including size changes
-independent of the logical window size. Framebuffers exceeding the device's
-`maxTextureDimension2D` are rejected before surface configuration.
-
-`draw` returns `undefined` and skips its callback while minimized or at zero
-framebuffer size. It resumes after restoration without recreating the window.
-Outdated/lost acquisitions get one recovery attempt; persistent unavailability
-or an acquisition timeout skips that draw. A suboptimal frame remains usable and
-requests reconfiguration on the next draw. Device loss, disposed windows, close
-requests, and invalid operations still throw. Keep polling events even when no
-frame is rendered. `app.run()` does this automatically; fixed updates continue
-while minimized.
-
-The public window type is `Window`; `FixedWindow` remains a deprecated type alias.
-
-Presentation and the render cap are separate settings:
-
-```ts
-const window = app.createWindow(device, { vsync: false });
-console.log(window.presentMode); // "immediate" or "mailbox", selected from surface capabilities
-await app.run({ updateHz: 120, maxFPS: 144 }); // Fixed updates still use dt = 1 / 120.
-```
-
-`vsync` defaults to `true`, selecting FIFO. `false` prefers Immediate (tearing
-permitted), then Mailbox (latest completed frame displayed at refresh, older
-pending frames replaced). Creation throws if no mode supporting the requested
-policy is advertised; it never silently falls back to FIFO for `vsync: false`.
-The selected `window.presentMode` is read-only. Omit `maxFPS` for no scheduler
-render cap. Both vsync settings support capped and uncapped rendering; uncapped
-does not guarantee a frame rate or bypass GPU/display limits.
-
-The example supports all four combinations in Bun or Node.js:
-
-```sh
-bun examples/vanilla/solid-color.ts                              # FIFO, uncapped scheduler
-bun examples/vanilla/solid-color.ts --max-fps=30                 # FIFO, capped
-bun examples/vanilla/solid-color.ts --no-vsync                   # Immediate/Mailbox, uncapped
-bun examples/vanilla/solid-color.ts --no-vsync --max-fps=144      # Immediate/Mailbox, capped
-```
+Create the window before choosing its GPU device. Its WebGPU context owns the
+presentation surface and can select an adapter compatible with that surface:
 
 ```ts
 import { Application } from "hostframe";
@@ -126,19 +73,27 @@ import { Application } from "hostframe";
 const app = new Application();
 let device: GPUDevice | undefined;
 try {
-  const adapter = await app.gpu.requestAdapter();
-  if(!adapter) throw new Error("No compatible adapter");
+  const window = app.createWindow({
+    title: "My application",
+    width: 1280,
+    height: 720,
+    resizable: true
+  });
+  const context = window.getContext("webgpu");
+  const adapter = await context.requestAdapter();
+  if(!adapter) throw new Error("No compatible GPU adapter");
   device = await adapter.requestDevice();
   const renderingDevice = device;
-  const window = app.createWindow(renderingDevice);
+  context.configure({
+    device: renderingDevice,
+    format: app.gpu.getPreferredCanvasFormat()
+  });
 
-  // A single manual frame; call pollEvents regularly in a caller-owned loop.
-  app.pollEvents();
-  window.draw(texture => {
+  window.on("render", () => {
     const encoder = renderingDevice.createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: texture.createView(),
+        view: context.getCurrentTexture().createView(),
         clearValue: { r: 0.05, g: 0.1, b: 0.8, a: 1 },
         loadOp: "clear",
         storeOp: "store"
@@ -147,6 +102,8 @@ try {
     pass.end();
     renderingDevice.queue.submit([encoder.finish()]);
   });
+
+  await app.run();
 } finally {
   try {
     app.dispose();
@@ -156,29 +113,64 @@ try {
 }
 ```
 
-When a framebuffer is available, `draw` acquires a surface texture, runs the synchronous callback, and presents.
-Native events are pumped separately with `app.pollEvents()` or automatically by
-`app.run()`. Encode and submit commands before returning `undefined`.
-Textures and their views expire when the callback finishes. Failed callbacks
-abandon the frame, preserve the thrown value, and permit later draws. Reentrant
-creation/drawing/disposal, asynchronous callback results, disposed objects, and
-lost devices are rejected. Drawing remains synchronous and can be caller-driven.
+`context.requestAdapter(options?)` is a Hostframe extension accepting standard
+`GPURequestAdapterOptions`. The context supplies the native surface constraint;
+`app.gpu` remains the standard WebGPU interface. Alternatively, select an adapter
+with `app.gpu.requestAdapter()` and let `context.configure()` check compatibility.
+Devices from either path remain ordinary Dawn WebGPU devices.
 
-Windows own their surfaces and presentation resources and retain their JavaScript
-device while alive. Devices remain caller-owned: dispose the window or application
-before destroying a device. `window.dispose()` unregisters the window and permits
-`app.createWindow(device)` again without terminating GLFW. `app.dispose()` disposes
-all its windows before releasing GLFW. Repeated disposal is safe; creating a window
-on a disposed application or drawing on a disposed window throws. Application
-construction failure releases partial initialization so it can be retried.
+Hostframe acquires a surface texture before dispatching the window's synchronous
+render listeners, presents once after successful dispatch, and expires the texture
+and its views afterward. `getCurrentTexture()` returns the same object throughout
+that dispatch and throws outside it. A failed listener abandons the frame and
+rejects `app.run()` with the original error. Async listeners are rejected.
+Configuration, disposal, event polling, and other reentrant native mutations are
+forbidden during rendering; `app.stop()` and `app.pause()` remain safe.
 
-Use a device obtained through `app.gpu`. Its single GPU owner is deliberately rooted
-on `globalThis` until process exit because upstream child objects do not retain it.
-Application disposal does not release this root or destroy caller-owned devices.
-**Application ownership does not solve upstream GPU-object lifetime management.**
-Window/application cleanup still drains deferred swapchain deletion; a five-second
-GPU cleanup timeout destroys the stalled device and explicit disposal throws (see
-[the build guide](docs/native-build.md)).
+An unconfigured context emits no window render events. Minimized/zero-size windows
+and temporarily unavailable frames also skip window render events; event polling
+and fixed updates continue. Outdated/lost surface acquisition gets one recovery
+attempt; suboptimal acquisition renders and requests reconfiguration next frame.
+Device loss and invalid lifecycle operations still fail the run.
+
+Window defaults remain title `"hostframe solid color"`, 320×240 client size,
+non-resizable, and vsync enabled. Dimensions are positive signed 32-bit integers
+in GLFW screen coordinates. Framebuffer pixels can differ on high-DPI displays;
+size depth/MSAA attachments, viewports, and projections from the current texture's
+`width` and `height`. Framebuffer changes are applied automatically after polling.
+
+`context.configure()` accepts `GPUCanvasConfiguration`; the format, usage, alpha
+mode, and view formats are validated. Currently only `"srgb"` color space and
+`"standard"` tone mapping are supported. `getConfiguration()` returns a copy;
+`unconfigure()` releases presentation resources and permits later reconfiguration.
+See [the window context contract](docs/window-context.md) for lifecycle details.
+
+Presentation and the scheduler cap remain separate. Set `vsync: false` at window
+creation to prefer Immediate, then Mailbox. The default `true` selects FIFO.
+Configuration throws if the surface cannot support the requested policy; it never
+silently falls back to FIFO for `false`. Read `window.presentMode` after configuring.
+`app.run({ maxFPS: 144 })` independently limits render scheduling; omission means
+no scheduler cap. Neither setting guarantees an achieved frame rate.
+
+```sh
+bun examples/vanilla/solid-color.ts                              # FIFO, uncapped scheduler
+bun examples/vanilla/solid-color.ts --max-fps=30                 # FIFO, capped
+bun examples/vanilla/solid-color.ts --no-vsync                   # Immediate/Mailbox, uncapped
+bun examples/vanilla/solid-color.ts --no-vsync --max-fps=144      # Immediate/Mailbox, capped
+```
+
+Windows own their surfaces and retain their configured JavaScript device. Devices
+remain caller-owned: dispose/unconfigure the window before destroying its device.
+`window.dispose()` unregisters it and permits `app.createWindow()` again without
+terminating GLFW. `app.dispose()` disposes windows before releasing GLFW. Repeated
+disposal is safe, including a window that was never configured. Closing the last
+window ends `run()` normally but does not dispose resources; use `finally`.
+
+Every application uses one process-rooted GPU owner because upstream child GPU
+objects do not retain it. Application disposal does not release that root or
+destroy caller-owned devices. **Application ownership does not solve upstream
+GPU-object lifetime management.** Native cleanup drains deferred swapchain deletion;
+a five-second timeout destroys the stalled device and throws after cleanup.
 
 **Keyboard and pointer input**
 
@@ -204,8 +196,8 @@ Register synchronous callbacks, then explicitly start the loop:
 const unsubscribe = app.on("fixedUpdate", ({ dt, tick }) => {
   // Advance simulation by dt seconds. At updateHz: 120, dt is always 1 / 120.
 });
-app.on("render", ({ alpha, frameTime, droppedTime }) => {
-  // Interpolate simulation states with alpha, then call window.draw(...).
+window.on("render", ({ alpha, frameTime, droppedTime }) => {
+  // Interpolate simulation states and render into context.getCurrentTexture().
 });
 await app.run({ updateHz: 120 });
 unsubscribe();
@@ -242,17 +234,17 @@ That connection does not require modifying either library.
 > [!NOTE]
 > Here, `wgpu::` is Dawn’s C++ WebGPU namespace; it does not refer to the separate Rust wgpu implementation.
 
-The prototype established how to connect **Dawn’s JavaScript objects to native presentation resources**. One binding-only accessor, `GPUDevice::GetNativeDevice()`, exposes the native device. hostframe unwraps the JavaScript device, derives its adapter and instance through `device.GetAdapter().GetInstance()`, and uses the GLFW helper to create a surface. Acquired textures are wrapped using the existing `interop::GPUTexture::Create<binding::GPUTexture>` implementation.
-
-Add this public accessor inside upstream `binding::GPUDevice`:
-
-```cpp
-wgpu::Device GetNativeDevice() const { return device_; }
-```
+The binding-only patches in `scripts/native/generate.ts` expose the native GPU
+instance and device, and add an internal surface-aware adapter-selection entry
+point. The latter shares upstream's backend/flag/feature selection and filters
+adapters with `surface.GetCapabilities()`: Dawn's `EnumerateAdapters()` ignores
+`compatibleSurface`. Standard JavaScript `GPU.requestAdapter()` retains its
+existing parameters and behavior. Acquired textures use the existing
+`interop::GPUTexture::Create<binding::GPUTexture>` wrapper.
 
 The project-owned addon entry point initializes upstream interop with `interop::Initialize(env)` and creates GPU objects through upstream `binding::GPU`. WebGPU functions link directly to the monolithic engine’s C entry points; this build does not call `dawnProcSetProcs` or compile upstream’s proc-table-based module entry point.
 
-Stock GPU, adapter, and device creation remains intact. Applications use normal JavaScript WebGPU commands with the acquired textures, followed by native presentation. No engine, texture, command-encoder, or GLFW patches are required. The accessor patch is compiled with the binding and does not require rebuilding the engine.
+Standard GPU, adapter, and device creation remains available. Applications use normal JavaScript WebGPU commands with the acquired textures, followed by native presentation. No engine, texture, command-encoder, or GLFW patches are required. These localized patches are compiled with the binding and do not require rebuilding the engine.
 
 Project-owned `Application`, `Window`, options, and input bindings use nobind17 typed
 registrations to generate `build/native/generated/native.d.ts` on both setup and
@@ -278,7 +270,9 @@ packages/
     bridge.ts      # Internal addon transport and process GPU owner
     test/          # Native and JavaScript runtime checks
   core/
-    application.ts # Application and listener API
+    application.ts # Application and shared scheduler ownership
+    window.ts      # Window input and render listeners
+    context.ts     # WebGPU context and frame texture lifetime
     loop.ts        # Optional host scheduling
     timing.ts      # Fixed-step accounting and event types
     test/          # Deterministic timing and scheduler checks

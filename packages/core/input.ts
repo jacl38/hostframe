@@ -2,7 +2,7 @@ import type { InputEvent, InputState } from "../../build/native/generated/native
 import { inputEventTypes } from "../../build/native/generated/input-events.ts";
 export type { InputEvent, InputState, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent } from "../../build/native/generated/native";
 
-export type WindowEvents = {
+export type WindowInputEvents = {
   [Event in InputEvent as Event["type"]]: Event
 };
 
@@ -15,9 +15,9 @@ export function freezeInput(state: InputState) {
 
 /** Listener policy shared by every window input event. Loads no native addon or GPU. */
 export class InputListeners {
-  #listeners = new Map<keyof WindowEvents, Set<{ callback: (event: InputEvent) => undefined }>>();
+  #listeners = new Map<keyof WindowInputEvents, Set<{ callback: (event: InputEvent) => undefined }>>();
 
-  on<Event extends keyof WindowEvents>(event: Event, callback: (event: WindowEvents[Event]) => undefined) {
+  on<Event extends keyof WindowInputEvents>(event: Event, callback: (event: WindowInputEvents[Event]) => undefined) {
     if(!inputEventTypes.includes(event)) {
       throw new TypeError(`Unknown window event: ${String(event)}`);
     }

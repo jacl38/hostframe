@@ -41,6 +41,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       [resolve(buildRoot, "cmake/native_presentation_check")],
       ["node", resolve(root, "packages/native/test/bindings.ts")],
       ["bun", resolve(root, "packages/native/test/bindings.ts")],
+      ["node", resolve(root, "packages/native/test/context.ts")],
+      ["bun", resolve(root, "packages/native/test/context.ts")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["node", resolve(root, "packages/native/test/loop.ts")],
@@ -53,6 +55,8 @@ async function verify(presentation: boolean, interactions: boolean) {
   }
   if(interactions) {
     checks.push(
+      ["node", resolve(root, "packages/native/test/context.ts"), "--interactions"],
+      ["bun", resolve(root, "packages/native/test/context.ts"), "--interactions"],
       ["node", resolve(root, "packages/native/test/resize.ts")],
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],

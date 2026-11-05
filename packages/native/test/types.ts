@@ -1,5 +1,5 @@
 import type * as Native from "../../../build/native/generated/native";
-import type { InputEvent, WindowOptions, Window } from "../../../index.ts";
+import type { Application, InputEvent, WindowOptions, WindowGPUContext, WindowEvents } from "../../../index.ts";
 import { Key, Modifier, PointerButton } from "../../../index.ts";
 
 function inputConstantContracts() {
@@ -21,23 +21,22 @@ void inputConstantContracts;
 
 // Compiled by the required typecheck; these contracts must be generated without
 // widening WebGPU objects, synchronous returns, discriminants or readonly fields.
-function nativeContracts(app: Native.Application, device: GPUDevice, publicWindow: Window) {
+function nativeContracts(app: Native.Application, gpu: GPU, device: GPUDevice) {
   const options: WindowOptions = { width: 640, resizable: true, vsync: false };
-  const window = app.createWindow(device, options);
-  app.createWindow(device);
-  app.createWindow(device, undefined);
-  publicWindow.draw(texture => {
+  const window = app.createWindow(gpu, options);
+  app.createWindow(gpu);
+  app.createWindow(gpu, undefined);
+  window.configure({ device, format: gpu.getPreferredCanvasFormat() });
+  window.renderFrame(texture => {
     const gpuTexture: GPUTexture = texture;
     gpuTexture.createView();
   });
-  // @ts-expect-error The public wrapper must retain the generated synchronous contract.
-  publicWindow.draw(async () => {});
-  // @ts-expect-error A device must remain Dawn's WebGPU device type.
-  app.createWindow({});
-  // @ts-expect-error Draw callbacks must return undefined synchronously.
-  window.draw(async () => {});
+  // @ts-expect-error The transport requires a GPU owner, not a device.
+  app.createWindow(device);
+  // @ts-expect-error Internal frame callbacks must return undefined synchronously.
+  window.renderFrame(async () => {});
   // @ts-expect-error Arbitrary callback results are forbidden.
-  window.draw(() => 1);
+  window.renderFrame(() => 1);
   // @ts-expect-error Native state properties remain read-only.
   window.disposed = false;
   window.dispatchInput((state, events) => {
@@ -59,3 +58,38 @@ function nativeContracts(app: Native.Application, device: GPUDevice, publicWindo
   window.dispatchInput(async () => {});
 }
 void nativeContracts;
+
+function contextContracts(app: Application, device: GPUDevice) {
+  const window = app.createWindow({ title: "Context types", resizable: true });
+  const context: WindowGPUContext = window.getContext("webgpu");
+  const adapter: Promise<GPUAdapter | null> = context.requestAdapter({ powerPreference: "low-power" });
+  context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
+  const configuration: GPUCanvasConfiguration | null = context.getConfiguration();
+  window.on("render", event => {
+    const render: WindowEvents["render"] = event;
+    const texture: GPUTexture = context.getCurrentTexture();
+    void [render, texture];
+  });
+  // @ts-expect-error Window creation accepts options, not a device.
+  app.createWindow(device);
+  // @ts-expect-error Device-first construction has no overload.
+  app.createWindow(device, {});
+  // @ts-expect-error Rendering belongs to windows.
+  app.on("render", () => {});
+  // @ts-expect-error The callback drawing API is not public.
+  window.draw(() => {});
+  // @ts-expect-error Only WebGPU contexts are supported.
+  window.getContext("2d");
+  // @ts-expect-error Render callbacks cannot be asynchronous.
+  window.on("render", async () => {});
+  // @ts-expect-error Render callbacks cannot return arbitrary values.
+  window.on("render", () => 1);
+  // @ts-expect-error Native selection must not modify the standard GPU interface.
+  app.gpu.requestAdapter({ compatibleSurface: context });
+  // @ts-expect-error The surface is supplied by the receiver, not an option.
+  context.requestAdapter({ compatibleSurface: context });
+  // @ts-expect-error Configurations require a device and format.
+  context.configure({ device });
+  void [adapter, configuration];
+}
+void contextContracts;

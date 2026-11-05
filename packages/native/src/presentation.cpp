@@ -7,13 +7,13 @@
 #include <webgpu/webgpu_glfw.h>
 
 #include "src/dawn/node/binding/GPUTexture.h"
+#include "src/dawn/node/binding/GPUDevice.h"
+#include "src/dawn/node/binding/Converter.h"
 #include "present_mode.h"
 #include "surface_acquisition.h"
 
 namespace hostframe {
-Presentation::Presentation(wgpu::Device device, const WindowOptions& options) : device_(std::move(device)) {
-  instance_ = device_.GetAdapter().GetInstance();
-  if(DeviceLost()) throw std::runtime_error("GPU device is lost or destroyed");
+Presentation::Presentation(wgpu::Instance instance, const WindowOptions& options) : instance_(std::move(instance)), vsync_(options.vsync) {
   glfwDefaultWindowHints();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   glfwWindowHint(GLFW_RESIZABLE, options.resizable ? GLFW_TRUE : GLFW_FALSE);
@@ -21,20 +21,90 @@ Presentation::Presentation(wgpu::Device device, const WindowOptions& options) : 
   if(!window_) throw std::runtime_error("GLFW window creation failed");
   surface_ = wgpu::glfw::CreateSurfaceForWindow(instance_, window_.get());
   if(!surface_) throw std::runtime_error("Dawn surface creation failed");
+}
+
+void Presentation::ConfigureDevice(wgpu::Device device, wgpu::SurfaceConfiguration configuration) {
+  if(device.GetAdapter().GetInstance().Get() != instance_.Get()) {
+    throw std::runtime_error("Device must belong to this surface's GPU instance");
+  }
+  if(instance_.WaitAny(device.GetLostFuture(), 0) == wgpu::WaitStatus::Success) {
+    throw std::runtime_error("GPU device is lost or destroyed");
+  }
   wgpu::SurfaceCapabilities capabilities;
-  if(surface_.GetCapabilities(device_.GetAdapter(), &capabilities) != wgpu::Status::Success ||
+  if(surface_.GetCapabilities(device.GetAdapter(), &capabilities) != wgpu::Status::Success ||
      capabilities.formatCount == 0 || capabilities.alphaModeCount == 0) {
     throw std::runtime_error("Device adapter cannot present to this window");
   }
-  configuration_.device = device_;
-  configuration_.format = capabilities.formats[0];
-  configuration_.alphaMode = capabilities.alphaModes[0];
-  configuration_.presentMode = SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, options.vsync);
-  wgpu::Limits limits;
-  if(device_.GetLimits(&limits) != wgpu::Status::Success) {
-    throw std::runtime_error("Device limits unavailable");
+  if(std::find(capabilities.formats, capabilities.formats + capabilities.formatCount, configuration.format) ==
+     capabilities.formats + capabilities.formatCount) throw std::runtime_error("Unsupported surface format");
+  if(std::find(capabilities.alphaModes, capabilities.alphaModes + capabilities.alphaModeCount, configuration.alphaMode) ==
+     capabilities.alphaModes + capabilities.alphaModeCount) throw std::runtime_error("Unsupported surface alphaMode");
+  if(configuration.usage == wgpu::TextureUsage::None || (configuration.usage & capabilities.usages) != configuration.usage) {
+    throw std::runtime_error("Unsupported surface usage");
   }
+  configuration.presentMode = SelectPresentMode({capabilities.presentModes, capabilities.presentModeCount}, vsync_);
+  wgpu::Limits limits;
+  if(device.GetLimits(&limits) != wgpu::Status::Success) throw std::runtime_error("Device limits unavailable");
+  // Validate everything before replacing an existing configuration.
+  Unconfigure();
+  device_ = std::move(device);
+  configuration.device = device_;
+  configuration_ = configuration;
   max_dimension_ = limits.maxTextureDimension2D;
+}
+
+Napi::Value Presentation::Configure(Napi::Env env, Napi::Value value) {
+  if(!value.IsObject() || value.IsNull() || value.IsArray() || value.IsFunction()) {
+    throw Napi::TypeError::New(env, "Expected a canvas configuration object");
+  }
+  wgpu::interop::GPUCanvasConfiguration descriptor;
+  auto result = wgpu::interop::FromJS(env, value, descriptor);
+  if(!result) {
+    if(!env.IsExceptionPending()) throw Napi::TypeError::New(env, result.error);
+    return env.Undefined();
+  }
+  if(env.IsExceptionPending()) return env.Undefined();
+  if(descriptor.colorSpace != wgpu::interop::PredefinedColorSpace::kSrgb ||
+     descriptor.toneMapping.mode != wgpu::interop::GPUCanvasToneMappingMode::kStandard) {
+    throw Napi::TypeError::New(env, "Only srgb colorSpace and standard toneMapping are supported");
+  }
+  wgpu::binding::Converter convert(env);
+  auto* binding = dynamic_cast<wgpu::binding::GPUDevice*>(*descriptor.device);
+  if(!binding) throw Napi::TypeError::New(env, "Expected a Dawn GPUDevice");
+  auto device = binding->GetNativeDevice();
+  wgpu::SurfaceConfiguration configuration;
+  std::vector<wgpu::TextureFormat> formats;
+  if(!convert(configuration.format, descriptor.format) ||
+     !convert(configuration.usage, descriptor.usage)) return env.Undefined();
+  for(auto format : descriptor.viewFormats) {
+    wgpu::TextureFormat nativeFormat;
+    if(!convert(nativeFormat, format)) return env.Undefined();
+    auto base = [](wgpu::TextureFormat format) {
+      if(format == wgpu::TextureFormat::RGBA8UnormSrgb) return wgpu::TextureFormat::RGBA8Unorm;
+      if(format == wgpu::TextureFormat::BGRA8UnormSrgb) return wgpu::TextureFormat::BGRA8Unorm;
+      return format;
+    };
+    if(base(nativeFormat) != base(configuration.format)) throw Napi::TypeError::New(env, "Incompatible surface viewFormat");
+    formats.push_back(nativeFormat);
+  }
+  configuration.alphaMode = descriptor.alphaMode == wgpu::interop::GPUCanvasAlphaMode::kOpaque
+      ? wgpu::CompositeAlphaMode::Opaque : wgpu::CompositeAlphaMode::Premultiplied;
+  auto normalized = wgpu::interop::ToJS(env, descriptor);
+  if(env.IsExceptionPending()) return env.Undefined();
+  ConfigureDevice(std::move(device), configuration);
+  view_formats_ = std::move(formats);
+  configuration_.viewFormatCount = view_formats_.size();
+  configuration_.viewFormats = view_formats_.data();
+  return normalized;
+}
+
+void Presentation::Unconfigure() {
+  Abort();
+  const bool drained = Drain();
+  configuration_ = {};
+  view_formats_.clear();
+  device_ = nullptr;
+  if(!drained) throw std::runtime_error("GPU cleanup timed out; device was destroyed");
 }
 
 Presentation::~Presentation() { Close(); }
@@ -43,6 +113,11 @@ bool Presentation::Close() {
   if(!surface_) return true;
   Abort();
   surface_ = nullptr;
+  return Drain();
+}
+
+bool Presentation::Drain() {
+  if(!device_) return true;
   // Vulkan defers swapchain deletion to a queue serial. Complete that work
   // before GLFW closes the X11 connection used by the swapchain's deleter.
   if(!DeviceLost()) {
@@ -64,7 +139,8 @@ bool Presentation::Close() {
   return true;
 }
 
-void Presentation::Draw(Napi::Env env, Napi::Function callback) {
+void Presentation::RenderFrame(Napi::Env env, Napi::Function callback) {
+  if(!device_) throw Napi::Error::New(env, "Context is not configured");
   if(DeviceLost()) throw Napi::Error::New(env, "GPU device is lost or destroyed");
   if(glfwWindowShouldClose(window_.get())) throw Napi::Error::New(env, "Window close requested");
   auto acquired = Acquire(env);
@@ -93,7 +169,7 @@ void Presentation::Draw(Napi::Env env, Napi::Function callback) {
       return;
     }
     if(!result.IsUndefined()) {
-      throw Napi::TypeError::New(env, "draw callback must return undefined synchronously");
+      throw Napi::TypeError::New(env, "frame callback must return undefined synchronously");
     }
     if(surface_.Present() != wgpu::Status::Success) {
       throw Napi::Error::New(env, "Surface presentation failed");
@@ -160,7 +236,10 @@ wgpu::SurfaceTexture Presentation::Acquire(Napi::Env env) {
 
 bool Presentation::ShouldClose() const { return glfwWindowShouldClose(window_.get()); }
 void Presentation::RequestClose() { glfwSetWindowShouldClose(window_.get(), GLFW_TRUE); }
-const char* Presentation::PresentMode() const { return PresentModeName(configuration_.presentMode); }
+const char* Presentation::PresentMode() const {
+  if(!device_) throw std::runtime_error("Context is not configured");
+  return PresentModeName(configuration_.presentMode);
+}
 
 bool Presentation::DeviceLost() const {
   return instance_.WaitAny(device_.GetLostFuture(), 0) == wgpu::WaitStatus::Success;

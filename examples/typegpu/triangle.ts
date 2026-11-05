@@ -18,11 +18,10 @@ try {
     return example.root.createRenderPipeline({ vertex, fragment, targets: { format } });
   }
   let pipeline: ReturnType<typeof createPipeline> | undefined;
-  example.app.on("render", () => {
-    example.draw(texture => {
-      pipeline ??= createPipeline(texture.format);
-      pipeline.withColorAttachment({ view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1] }).draw(3);
-    });
+  example.window.on("render", () => {
+    const texture = example.context.getCurrentTexture();
+    pipeline ??= createPipeline(texture.format);
+    pipeline.withColorAttachment({ view: texture.createView(), clearValue: [0.025, 0.035, 0.065, 1] }).draw(3);
   });
   await example.run();
 } finally {
