@@ -120,3 +120,9 @@ option(HOSTFRAME_TEST_CLEANUP_TIMEOUT "Enable deterministic cleanup timeout fixt
 if(HOSTFRAME_TEST_CLEANUP_TIMEOUT)
   set_property(SOURCE src/presentation.cpp APPEND PROPERTY COMPILE_DEFINITIONS HOSTFRAME_TEST_CLEANUP_TIMEOUT)
 endif()
+
+add_executable(native_input_check test/input-contracts.cpp src/input.cpp)
+target_include_directories(native_input_check PRIVATE src "${DAWN_SOURCE}/third_party/node-api-headers/include")
+target_compile_definitions(native_input_check PRIVATE GLFW_INCLUDE_NONE)
+target_compile_options(native_input_check PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(native_input_check PRIVATE glfw)
