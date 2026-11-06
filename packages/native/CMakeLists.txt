@@ -113,3 +113,10 @@ add_executable(native_presentation_check test/presentation.cpp)
 target_include_directories(native_presentation_check PRIVATE "${DAWN_SOURCE}/include")
 target_link_libraries(native_presentation_check PRIVATE dawn_glfw)
 target_compile_options(native_presentation_check PRIVATE -Wall -Wextra -Wpedantic)
+
+# Fault controls never exist in the default/packaged addon. No exported methods
+# or binding layouts change; the define affects only private drain observations.
+option(HOSTFRAME_TEST_CLEANUP_TIMEOUT "Enable deterministic cleanup timeout fixture" OFF)
+if(HOSTFRAME_TEST_CLEANUP_TIMEOUT)
+  set_property(SOURCE src/presentation.cpp APPEND PROPERTY COMPILE_DEFINITIONS HOSTFRAME_TEST_CLEANUP_TIMEOUT)
+endif()

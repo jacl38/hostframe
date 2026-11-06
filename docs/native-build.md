@@ -195,7 +195,56 @@ best-effort Vulkan swapchain deletion pending, which crashes if the display is
 closed first. The implementation submits an empty command buffer and uses public
 `dawn::native::DeviceTick` to drain these deletions. If polling exceeds five seconds,
 it destroys the stalled device to release the display-dependent resources, and
-explicit disposal throws. This fallback is not exercised by the normal tests.
+explicit unconfigure, replacement configuration, or disposal throws
+`GPU cleanup timed out; device was destroyed` **after** releasing the affected
+configuration/window/session ownership. Replacement configuration is not installed
+when old-device cleanup times out. TypeScript clears its cached configuration or
+listeners after native teardown even when the operation throws. Repeated cleanup
+is safe. The device is normally caller-owned; this bounded timeout fallback is
+an intentional ownership exception, including when other caller resources share
+that device. Timeout destruction uses the retained Dawn JavaScript binding's
+native destruction entry point so its finalizer state agrees with the native
+device; `WindowState` keeps that binding alive until draining finishes. Failed
+replacement cleanup also releases its old persistent device reference before
+rethrowing the original cleanup error.
+
+`HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:build` enables a compile-time-only
+fault seam in private cleanup observations. In that build, the verifier's
+`HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:verify --presentation` launches
+fresh Node.js/Bun processes for unconfigure, replacement configuration, window
+disposal, and application disposal. Each process forces one busy/expired drain
+after real submission; it neither hangs a GPU nor replaces application behavior.
+The fixture checks device loss, cached state, weak-reference collection while
+wrappers remain reachable, error propagation, repeated cleanup, X11 session
+release, and subsequent rendering. Existing real success-path checks still run.
+CI runs this variant and then rebuilds the default addon before packaging.
+Run `bun run native:build` without the build flag to remove the seam. Default
+builds do not read the fault environment variable, expose no fault method or
+public TypeScript API, and retain the same binding ABI. The forced observation
+does not reproduce a driver hang or establish that every driver releases stalled
+resources correctly.
+
+Presentation keeps two distinct forms of state. An optional `ContextConfiguration`
+owns the native device retain, validated descriptor, view-format storage, limits,
+and timeout destruction callback. Its descriptor is the sole explicit native device
+retain in presentation; `WindowState` separately retains the JavaScript binding
+through cleanup. `SurfaceConfigurationState` tracks only whether Dawn's drawable
+surface is unconfigured, current, or awaiting refresh after a suboptimal frame.
+A current surface still requires a live device and drawable framebuffer before
+acquisition. There is no per-state class hierarchy.
+
+| Operation | Context configuration | Drawable surface |
+| --- | --- | --- |
+| Configure / valid replacement | Install after old cleanup succeeds | Unconfigured until acquisition |
+| Invalid replacement | Preserve previous configuration | Preserve previous state |
+| Acquire / restore | Retain; update framebuffer dimensions | Configure lazily, then acquire → render → present |
+| Minimize / non-drawable / oversized framebuffer | Retain | Unconfigure; skip or reject the frame |
+| Suboptimal frame | Retain | Present, then refresh on next acquisition |
+| Outdated / lost surface | Retain | Unconfigure; recreate if lost; retry at most once |
+| Acquisition timeout / callback failure | Retain | Unconfigure; a later frame can retry |
+| Lost device | Retain until explicit cleanup; reject rendering | No further acquisition; deactivate if loss is observed during acquisition |
+| Unconfigure / replacement cleanup timeout | Clear, then throw if timed out | Unconfigure and drain |
+| Window / application disposal | Clear after bounded drain | Release surface before native window, then GLFW session |
 
 On Linux, each new GLFW session also negotiates XFixes before Vulkan surface use. Mesa
 26.2.5 cached WSI extension information by connection address across application
@@ -413,6 +462,40 @@ Python 3.14.5, Node.js 26.7.0, and Bun 1.3.14:
   The solid-color example also exited normally for all four settings in both
   runtimes; captured windows were inspected under
   `build/native/screenshots/presentation-settings/`.
+
+### Cleanup and state validation, 2026-11-06
+
+On Fedora 44 x64, GCC 16.1.1, Node.js 26.7.0, Bun 1.3.14,
+Xvfb/KWin, and Mesa 26.2.5 lavapipe:
+
+- Reused copies of pinned source/dependencies and checksum-verified archives;
+  regenerated bindings and built in a private worktree CMake directory with
+  private mutable caches. Downloaded the pinned Go generator module.
+- The new reconfiguration regression first failed device collection while its
+  application/window/context wrappers remained reachable. Resetting the old
+  `WindowState` binding reference when native configuration is gone fixed it.
+- Direct native timeout destruction also exposed intermittent lavapipe device
+  destruction heap aborts during later cleanup/collection. Ordinary cleanup
+  comparison runs passed. Routing forced destruction through the retained
+  binding aligned its finalizer state; 20 repeated forced cases then passed.
+  A separate sanitizer addon reported no error in one pre-fix window case;
+  that observation alone did not identify the source of the corruption.
+- The fault-enabled full presentation/interaction suite passed in both
+  runtimes: eight timeout scenarios, real lifecycle success paths, compute,
+  configuration/frame lifetime, deterministic acquisition recovery, resize,
+  minimize/restore, keyboard/pointer input, and disposal/recreation.
+- Inspected initial/resized/restored captures under
+  `build/validation/desktop-nuK09F/captures/`. Context assertions verified retained
+  configuration during suspension/restoration and device loss, then explicit
+  cleanup after loss.
+- Rebuilt the default addon with the seam disabled. Its binary contains no
+  fault-control environment name, and its generated API declarations match the
+  test addon (apart from the binary hash). Lint, typecheck, and all 55 script/core
+  tests passed. The default addon also passed the full presentation suite.
+
+These checks simulate cleanup progress/deadline failure on a functioning GPU;
+real hung-driver destruction, macOS behavior, and hardware presentation were
+not exercised in this change.
 
 ### Resize interaction checks, 2026-10-31
 

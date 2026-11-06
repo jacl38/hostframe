@@ -59,6 +59,7 @@ export async function buildNative() {
   const options = [
     "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     `-DHOSTFRAME_BUILD_ROOT=${buildRoot}`,
+    `-DHOSTFRAME_TEST_CLEANUP_TIMEOUT=${process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT === "1" ? "ON" : "OFF"}`,
     `-DHOSTFRAME_ENGINE_LIBRARY=${resolve(engine.destination, engine.sentinel)}`,
     `-DHOSTFRAME_HEADERS_INCLUDE=${resolve(headers.destination, headers.includeDirectory)}`,
     `-DCMAKE_C_COMPILER_LAUNCHER=${launcher}`,

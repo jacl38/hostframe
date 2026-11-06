@@ -53,6 +53,13 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
     );
   }
+  if(presentation && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT === "1") {
+    for(const runtime of ["node", "bun"]) {
+      for(const operation of ["unconfigure", "reconfigure", "window", "application"]) {
+        checks.push([runtime, "--expose-gc", resolve(root, "packages/native/test/cleanup-timeout.ts"), operation]);
+      }
+    }
+  }
   if(interactions) {
     checks.push(
       ["node", resolve(root, "packages/native/test/context.ts"), "--interactions"],
@@ -65,7 +72,10 @@ async function verify(presentation: boolean, interactions: boolean) {
   }
   for(const command of checks) {
     // Verification needs bounded process lifetimes and signal diagnostics.
-    const env = command.includes("--no-display") ? { ...process.env, DISPLAY: "" } : process.env;
+    const env = { ...process.env };
+    delete env.HOSTFRAME_TEST_STALL_CLEANUP;
+    if(command.includes("--no-display")) env.DISPLAY = "";
+    if(command.some(argument => argument.endsWith("/cleanup-timeout.ts"))) env.HOSTFRAME_TEST_STALL_CLEANUP = "1";
     const child = Bun.spawn(command, { cwd: root, env, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
     const code = await child.exited;
     if(code !== 0) throw new Error(`${command[0]} verification failed (exit ${code}, signal ${child.signalCode || "none"}).`);

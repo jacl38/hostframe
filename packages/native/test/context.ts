@@ -207,11 +207,14 @@ try {
       await setTimeout(150);
       assert.equal(rendered, before, "Minimized windows must emit no render events");
       assert.ok(ticks > ticksBefore, "Fixed updates must continue while minimized");
+      assert.equal(context.getConfiguration()?.device, device, "Suspending the drawable must retain context configuration");
+      assert.equal(window.presentMode, "fifo");
       size = "";
       await xdo("windowmap", "--sync", id);
       await xdo("windowactivate", "--sync", id);
       await until("480x300");
       await capture("restored");
+      assert.equal(context.getConfiguration()?.device, device, "Restoring must reuse the configured context");
       await xdo("windowsize", "--sync", id, "360", "260");
       await until("360x260");
     } finally {
@@ -262,6 +265,9 @@ try {
   device.destroy();
   const offLost = replacement.on("render", () => {});
   await assert.rejects(app.run(), /lost or destroyed/);
+  assert.equal(replacementContext.getConfiguration()?.device, device, "Device loss retains configuration until explicit cleanup");
+  replacementContext.unconfigure();
+  assert.equal(replacementContext.getConfiguration(), null);
   offLost();
   replacement.dispose();
   app.createWindow().dispose(); // Disposal before configuration is safe.
