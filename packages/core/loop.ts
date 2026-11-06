@@ -104,6 +104,8 @@ export class ApplicationLoop {
         if(this.active && (resumed || renderTime >= deadline)) {
           const frameTime = resumed ? 0 : Math.max(0, (renderTime - previousRender) / 1000);
           previousRender = renderTime;
+          // Cap dispatch starts. Native acquisition happens inside render() and
+          // may delay listener entry independently on each frame.
           deadline = renderTime + this.#clock.options.frameInterval;
           this.#hooks.render({ alpha: timing.alpha, droppedTime, frameTime, frame: ++frame });
           droppedTime = 0;

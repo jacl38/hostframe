@@ -66,6 +66,31 @@ test("render caps account for work already spent in the frame", async () => {
   expect(updates.every((event, index) => event.dt === 1 / 120 && event.tick === index + 1)).toBe(true);
 });
 
+test("render caps dispatch before acquisition; variable acquisition can compress listener arrivals", async () => {
+  let now = 0;
+  const dispatches: number[] = [];
+  const arrivals: number[] = [];
+  const frameTimes: number[] = [];
+  const acquisitionDelays = [80, 0, 150, 0];
+  const loop = new ApplicationLoop({ maxFPS: 10 }, {
+    pollEvents: () => true,
+    fixedUpdate: () => {},
+    render: event => {
+      dispatches.push(now);
+      frameTimes.push(event.frameTime);
+      now += acquisitionDelays[arrivals.length]!;
+      arrivals.push(now);
+      // Submission/presentation work also counts toward the next deadline.
+      now += 10;
+      if(arrivals.length === acquisitionDelays.length) loop.stop();
+    }
+  }, { now: () => now, wait: async milliseconds => { now += milliseconds; } });
+  await loop.run();
+  expect(dispatches).toEqual([0, 100, 200, 360]);
+  expect(arrivals).toEqual([80, 100, 350, 360]);
+  expect(frameTimes).toEqual([0, 0.1, 0.1, 0.16]);
+});
+
 test("a low render cap does not throttle fixed updates or create an artificial catch-up backlog", async () => {
   let now = 0;
   let frames = 0;

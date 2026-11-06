@@ -96,6 +96,15 @@ try {
         assert.equal(window.presentMode, mode);
         let ticks = 0;
         const starts: number[] = [];
+        const frames: Array<{ dispatch: number, listener?: number, submitted?: number, returned?: number }> = [];
+        const dispatchRender = window.dispatchRender.bind(window);
+        window.dispatchRender = function(event, active) {
+          // Independent wall-clock observations, rather than event.frameTime.
+          const frame: typeof frames[number] = { dispatch: performance.now() };
+          frames.push(frame);
+          dispatchRender(event, active);
+          frame.returned = performance.now();
+        };
         const offUpdate = app.on("fixedUpdate", event => {
           assert.equal(event.dt, 1 / 120);
           assert.equal(event.tick, ++ticks);
@@ -103,6 +112,7 @@ try {
         const context = window.getContext("webgpu");
         const offRender = window.on("render", event => {
           starts.push(performance.now());
+          frames.at(-1)!.listener = starts.at(-1)!;
           assert.ok(event.alpha >= 0 && event.alpha < 1);
           const texture = context.getCurrentTexture();
           const encoder = renderingDevice.createCommandEncoder();
@@ -116,20 +126,35 @@ try {
           });
           pass.end();
           renderingDevice.queue.submit([encoder.finish()]);
-          if(ticks >= 24) app.stop();
+          frames.at(-1)!.submitted = performance.now();
+          if(ticks >= 120) app.stop();
         });
+        let timedOut = false;
+        const timeout = setTimeout(() => { timedOut = true; app.stop(); }, 5000);
         try {
           await app.run({ updateHz: 120, maxFPS });
         } finally {
+          clearTimeout(timeout);
           offUpdate();
           offRender();
         }
-        assert.ok(ticks >= 24);
+        assert.equal(timedOut, false, "presentation did not make progress within five seconds");
+        assert.ok(ticks >= 120);
         assert.ok(starts.length >= 2);
         assert.equal(window.presentMode, mode);
+        // Dispatch -> listener includes acquisition/configuration and the bridge.
+        // Submission -> return includes Present(), ProcessEvents() and frame cleanup;
+        // neither interval measures scanout or GPU completion.
+        if(process.env.HOSTFRAME_PACING_TRACE === "1") console.log(JSON.stringify({ mode, maxFPS, frames }));
         if(maxFPS !== undefined) {
-          // Allow sub-millisecond callback dispatch overhead around the scheduler's timestamp.
-          for(let index = 1; index < starts.length; index++) assert.ok(starts[index]! - starts[index - 1]! >= 1000 / maxFPS - 1);
+          // Observe the scheduling boundary before native acquisition, not listener
+          // arrivals after it. Allow 1 ms for instrumentation/dispatch overhead.
+          for(let index = 1; index < frames.length; index++) {
+            const interval = frames[index]!.dispatch - frames[index - 1]!.dispatch;
+            assert.ok(interval >= 1000 / maxFPS - 1, JSON.stringify({ mode, maxFPS, interval, previous: frames[index - 1], current: frames[index] }));
+          }
+          // Also bound sustained dispatch rate independently of scheduler metadata.
+          assert.ok(frames.at(-1)!.dispatch - frames[0]!.dispatch >= (frames.length - 1) * 1000 / maxFPS - 1);
         }
         await device.queue.onSubmittedWorkDone();
         assert.deepEqual(failures, []);
