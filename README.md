@@ -149,8 +149,10 @@ Presentation and the scheduler cap remain separate. Set `vsync: false` at window
 creation to prefer Immediate, then Mailbox. The default `true` selects FIFO.
 Configuration throws if the surface cannot support the requested policy; it never
 silently falls back to FIFO for `false`. Read `window.presentMode` after configuring.
-`app.run({ maxFPS: 144 })` independently limits render scheduling; omission means
-no scheduler cap. Neither setting guarantees an achieved frame rate.
+`app.run({ maxFPS: 144 })` independently spaces scheduler render dispatches before texture acquisition;
+omission means no scheduler cap. Variable acquisition waits can compress window
+listener arrival intervals. Neither setting guarantees an achieved or displayed
+frame rate. See [the timing contract](docs/application-loop.md#timing-contract).
 
 ```sh
 bun examples/vanilla/solid-color.ts                              # FIFO, uncapped scheduler

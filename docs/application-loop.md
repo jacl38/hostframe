@@ -56,8 +56,18 @@ value. A failed run can be restarted after removing or fixing its failing listen
 
 Rates and elapsed limits must be finite and positive. The catch-up update limit
 must be a positive safe integer. Numerically unrepresentable configurations are
-rejected. The render cap is an upper scheduling target; it does not guarantee an
-exact achieved FPS or change vsync.
+rejected. The render cap spaces scheduler render dispatch starts by at least `1000 / maxFPS`
+milliseconds, measured with the monotonic scheduler clock before native texture
+acquisition. Each deadline starts from the actual dispatch time; late frames do
+not trigger catch-up render bursts. Work in acquisition, listeners, and presentation
+counts toward that interval. Pause/resume resets the deadline and permits an
+immediate first dispatch. The cap does not guarantee an achieved FPS or change vsync.
+
+Window listeners enter only after successful acquisition. Variable acquisition
+waits can therefore make consecutive listener arrivals closer than the cap's
+interval, even when dispatches obey it. The cap does not bound listener-arrival,
+GPU-completion, presentation-return, or displayed-frame intervals. Skipped
+acquisitions still consume a scheduler render dispatch.
 
 ## Presentation settings
 
@@ -106,8 +116,10 @@ simulation steps and retains the fractional remainder. The render event contains
 
 - `alpha`: the remaining fraction of the next simulation step, in `[0, 1)`, for
   interpolation between previous and current simulation states.
-- `frameTime`: measured seconds since the preceding render event, including work
-  and presentation waits. It is zero on the first render after resume.
+- `frameTime`: measured seconds between scheduler render dispatch starts, before
+  acquisition, including intervening work and presentation waits. It is not the
+  interval between listener arrivals. Skipped acquisitions still advance this
+  accounting. It is zero on the first render after resume.
 - `droppedTime`: elapsed seconds discarded by catch-up limits since the preceding
   render event. Excess whole updates are discarded; fractional time is retained.
 - `frame`: the render event number within this run.

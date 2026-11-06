@@ -5,7 +5,7 @@ export type RunOptions = {
   maxCatchUpUpdates?: number,
   /** Maximum admitted elapsed time per iteration, in seconds. Default: 0.25. */
   maxFrameTime?: number,
-  /** Optional positive, finite render-rate limit, independent of vsync and updateHz. Omit for no scheduler cap. */
+  /** Optional positive, finite scheduler dispatch cap, before surface acquisition. Independent of vsync and updateHz. Omit for no cap. */
   maxFPS?: number
 };
 
@@ -19,7 +19,7 @@ export type FixedUpdateEvent = Readonly<{
 export type RenderEvent = Readonly<{
   /** Fraction of the next simulation step, in [0, 1). */
   alpha: number,
-  /** Measured elapsed time since the preceding render event, in seconds. */
+  /** Elapsed seconds between scheduler render dispatches, before acquisition; zero after resume. */
   frameTime: number,
   /** Elapsed time discarded by catch-up limits since the preceding render event. */
   droppedTime: number,
