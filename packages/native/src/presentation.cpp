@@ -1,6 +1,9 @@
 #include "presentation.h"
 
 #include <chrono>
+#ifdef HOSTFRAME_TEST_CLEANUP_TIMEOUT
+#include <cstdlib>
+#endif
 #include <stdexcept>
 #include <thread>
 
@@ -92,6 +95,9 @@ Napi::Value Presentation::Configure(Napi::Env env, Napi::Value value) {
   auto normalized = wgpu::interop::ToJS(env, descriptor);
   if(env.IsExceptionPending()) return env.Undefined();
   ConfigureDevice(std::move(device), configuration);
+  // WindowState retains the JS binding through cleanup. Use its destruction
+  // entry point on timeout so its finalizer agrees with the native device state.
+  destroy_device_ = [binding, env] { binding->destroy(env); };
   view_formats_ = std::move(formats);
   configuration_.viewFormatCount = view_formats_.size();
   configuration_.viewFormats = view_formats_.data();
@@ -104,6 +110,7 @@ void Presentation::Unconfigure() {
   configuration_ = {};
   view_formats_.clear();
   device_ = nullptr;
+  destroy_device_ = {};
   if(!drained) throw std::runtime_error("GPU cleanup timed out; device was destroyed");
 }
 
@@ -125,13 +132,23 @@ bool Presentation::Drain() {
     auto commands = device_.CreateCommandEncoder().Finish();
     queue.Submit(1, &commands);
   }
+  // Only test builds can replace progress/deadline observations. Consume once
+  // per process, after real submission, so retries exercise ordinary cleanup.
+  bool forceTimeout = false;
+#ifdef HOSTFRAME_TEST_CLEANUP_TIMEOUT
+  static bool injected = false;
+  if(!injected && std::getenv("HOSTFRAME_TEST_STALL_CLEANUP")) {
+    injected = true;
+    forceTimeout = true;
+  }
+#endif
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
   // A work-done future advances user-visible completion only. DeviceTick also
   // runs Dawn's best-effort deletion processors before reporting the device idle.
-  while(dawn::native::DeviceTick(device_.Get())) {
-    if(std::chrono::steady_clock::now() >= deadline) {
+  while(dawn::native::DeviceTick(device_.Get()) || forceTimeout) {
+    if(forceTimeout || std::chrono::steady_clock::now() >= deadline) {
       // A stalled device must release its swapchains before its display dies.
-      device_.Destroy();
+      destroy_device_();
       return false;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(1));

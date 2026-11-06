@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <functional>
 #include <vector>
 
 #include <GLFW/glfw3.h>
@@ -37,6 +38,7 @@ class Presentation {
 
   std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> window_{nullptr, glfwDestroyWindow};
   wgpu::Device device_;
+  std::function<void()> destroy_device_;
   wgpu::Instance instance_;
   wgpu::Surface surface_;
   wgpu::SurfaceConfiguration configuration_;

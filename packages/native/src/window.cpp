@@ -36,11 +36,18 @@ napi_value WindowState::RequestAdapter(Napi::Env env, Napi::Value value) {
 }
 
 napi_value WindowState::Configure(Napi::Env env, Napi::Value value) {
-  auto configuration = presentation_->Configure(env, value);
-  if(!env.IsExceptionPending()) {
-    device_ = Napi::Persistent(configuration.As<Napi::Object>().Get("device").As<Napi::Object>());
+  try {
+    auto configuration = presentation_->Configure(env, value);
+    if(!env.IsExceptionPending()) {
+      device_ = Napi::Persistent(configuration.As<Napi::Object>().Get("device").As<Napi::Object>());
+    }
+    return configuration;
+  } catch(...) {
+    // Replacement cleanup can clear the native configuration before throwing.
+    // Preserve validation failures' old owner, but never retain a timed-out one.
+    if(!IsConfigured()) device_.Reset();
+    throw;
   }
-  return configuration;
 }
 
 void WindowState::Unconfigure() {

@@ -195,7 +195,34 @@ best-effort Vulkan swapchain deletion pending, which crashes if the display is
 closed first. The implementation submits an empty command buffer and uses public
 `dawn::native::DeviceTick` to drain these deletions. If polling exceeds five seconds,
 it destroys the stalled device to release the display-dependent resources, and
-explicit disposal throws. This fallback is not exercised by the normal tests.
+explicit unconfigure, replacement configuration, or disposal throws
+`GPU cleanup timed out; device was destroyed` **after** releasing the affected
+configuration/window/session ownership. Replacement configuration is not installed
+when old-device cleanup times out. TypeScript clears its cached configuration or
+listeners after native teardown even when the operation throws. Repeated cleanup
+is safe. The device is normally caller-owned; this bounded timeout fallback is
+an intentional ownership exception, including when other caller resources share
+that device. Timeout destruction uses the retained Dawn JavaScript binding's
+native destruction entry point so its finalizer state agrees with the native
+device; `WindowState` keeps that binding alive until draining finishes. Failed
+replacement cleanup also releases its old persistent device reference before
+rethrowing the original cleanup error.
+
+`HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:build` enables a compile-time-only
+fault seam in private cleanup observations. In that build, the verifier's
+`HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:verify --presentation` launches
+fresh Node.js/Bun processes for unconfigure, replacement configuration, window
+disposal, and application disposal. Each process forces one busy/expired drain
+after real submission; it neither hangs a GPU nor replaces application behavior.
+The fixture checks device loss, cached state, weak-reference collection while
+wrappers remain reachable, error propagation, repeated cleanup, X11 session
+release, and subsequent rendering. Existing real success-path checks still run.
+CI runs this variant and then rebuilds the default addon before packaging.
+Run `bun run native:build` without the build flag to remove the seam. Default
+builds do not read the fault environment variable, expose no fault method or
+public TypeScript API, and retain the same binding ABI. The forced observation
+does not reproduce a driver hang or establish that every driver releases stalled
+resources correctly.
 
 On Linux, each new GLFW session also negotiates XFixes before Vulkan surface use. Mesa
 26.2.5 cached WSI extension information by connection address across application
