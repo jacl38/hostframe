@@ -190,3 +190,47 @@ registrations, then re-exported by the core API. GLFW constant values are resolv
 by compiling the pinned header, including active preprocessor branches and aliases;
 there is no handwritten numeric table or C-expression parser. See
 [native bindings](native-bindings.md).
+
+### Key symbols and layout labels
+
+`getKeyName(event.key)` returns a canonical symbol such as `LEFT_SHIFT` or `A`.
+It derives from the compiler-generated GLFW constants, with no separate key
+inventory. `Key.UNKNOWN` maps to `"UNKNOWN"`; unrecognized numbers return
+`undefined`. Aliases use the first GLFW macro name in lexical order (excluding
+`LAST`), so `Key[getKeyName(token)!]` returns the original recognized token.
+`Key` remains a frozen name-to-number object.
+
+Use `app.getKeyLabel(event.key, event.scancode)` for a printable name in the
+active keyboard layout using [GLFW key names](https://www.glfw.org/docs/latest/input_guide.html#input_key_name). For example, a physical `Key.Z` can display `y` under a
+German layout. Non-printable keys fall back to their canonical symbol (`ESCAPE`);
+unrecognized values and unavailable unknown scancodes fall back to `UNKNOWN`.
+GLFW may return lowercase or unmodified labels; these are hints, not translated
+UI strings. Space may also use its symbolic fallback.
+
+`app.getKeyScancode(Key.W)` returns the platform scancode, or `undefined` for
+unsupported/unrecognized tokens and `Key.UNKNOWN`. Scancodes distinguish unknown
+physical keys and are platform-specific; do not treat them as portable key tokens.
+An unknown token with a valid event scancode can still have a printable label.
+
+```ts
+import { Key, getKeyName } from "hostframe";
+
+window.on("key", event => {
+  console.log(getKeyName(event.key), event.scancode);
+});
+// Query outside input/render callbacks, under the application's operation guard.
+const forwardHint = app.getKeyLabel(Key.W);
+const forwardScancode = app.getKeyScancode(Key.W);
+```
+
+Label/scancode queries require a live application on its owning main thread and
+cannot run inside native application operations, including input/render listeners.
+Returned strings are copied from GLFW, so callers own ordinary JavaScript strings;
+query again after layout group changes rather than caching for the entire session.
+Replacing the entire X11 server keymap with `setxkbmap` during an existing GLFW
+session was observed to retain stale Xlib mappings with the pinned GLFW version;
+US and German layouts were verified in separately initialized sessions.
+Arguments must be signed 32-bit integers. A token identifies a physical GLFW key,
+a scancode identifies a platform key, and a display label describes that key in
+the current layout. None is typed text: modifiers, dead keys and IME composition
+require a separate text-input API, which is not implemented here.

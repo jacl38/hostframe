@@ -143,6 +143,23 @@ void Application::Dispose() {
   });
 }
 
+std::string Application::GetKeyLabel(int key, int scancode) {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    state_->RequireAvailable(env_);
+    const char* name = glfwGetKeyName(key, scancode);
+    return name ? std::string(name) : std::string();
+  });
+}
+
+int Application::GetKeyScancode(int key) {
+  return NativeBoundary(env_, [&] {
+    RequireMainThread(env_);
+    state_->RequireAvailable(env_);
+    return glfwGetKeyScancode(key);
+  });
+}
+
 bool Application::PollEvents() {
   return NativeBoundary(env_, [&] {
     RequireMainThread(env_);

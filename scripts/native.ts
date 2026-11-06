@@ -39,6 +39,8 @@ async function verify(presentation: boolean, interactions: boolean) {
   if(presentation) {
     checks.push(
       [resolve(buildRoot, "cmake/native_input_check")],
+      ["node", resolve(root, "packages/native/test/key-labels.ts")],
+      ["bun", resolve(root, "packages/native/test/key-labels.ts")],
       [resolve(buildRoot, "cmake/native_presentation_check")],
       ["node", resolve(root, "packages/native/test/bindings.ts")],
       ["bun", resolve(root, "packages/native/test/bindings.ts")],

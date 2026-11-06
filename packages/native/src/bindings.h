@@ -21,6 +21,8 @@ class Application {
   Application& operator=(const Application&) = delete;
   Window* CreateWindow(DawnGPU gpu, WindowOptionsArgument options);
   bool PollEvents();
+  std::string GetKeyLabel(int key, int scancode);
+  int GetKeyScancode(int key);
   bool HasOpenWindows();
   bool Disposed();
   void Dispose();

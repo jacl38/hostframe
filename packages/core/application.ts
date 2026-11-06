@@ -1,3 +1,4 @@
+import { Key, getKeyName } from "./keys.ts";
 import { getProcessGPU, NativeApplication } from "../native/bridge.ts";
 import type { WindowOptions } from "../native/bridge.ts";
 import { Window } from "./window.ts";
@@ -21,6 +22,28 @@ export class Application {
       this.#native.dispose();
       throw error;
     }
+  }
+
+  /** Active-layout printable name, falling back to the canonical symbol or UNKNOWN. */
+  getKeyLabel(key: number, scancode = -1) {
+    this.#requireAlive();
+    requireKeyInteger(key);
+    requireKeyInteger(scancode);
+    // Enforce native thread/session/operation guards even for fallback values.
+    void this.#native.hasOpenWindows;
+    const name = getKeyName(key);
+    if(!name || (key === Key.UNKNOWN && scancode < 0)) return name ?? "UNKNOWN";
+    return this.#native.getKeyLabel(key, scancode) || name;
+  }
+
+  /** Platform scancode for a known token, or undefined when unavailable. */
+  getKeyScancode(key: number) {
+    this.#requireAlive();
+    requireKeyInteger(key);
+    void this.#native.hasOpenWindows;
+    if(key === Key.UNKNOWN || !getKeyName(key)) return undefined;
+    const scancode = this.#native.getKeyScancode(key);
+    return scancode < 0 ? undefined : scancode;
   }
 
   createWindow(options: WindowOptions = {}) {
@@ -135,5 +158,11 @@ export class Application {
         throw new TypeError("fixedUpdate listeners must return undefined synchronously");
       }
     }
+  }
+}
+
+function requireKeyInteger(value: number) {
+  if(!Number.isInteger(value) || value < -2147483648 || value > 2147483647) {
+    throw new RangeError("Key tokens and scancodes must be signed 32-bit integers");
   }
 }

@@ -59,6 +59,8 @@ try {
   let guards = 0;
   const offGuards = window.on("key", () => {
     assert.throws(() => app.pollEvents(), /in progress/);
+    assert.throws(() => app.getKeyLabel(Key.A), /in progress/);
+    assert.throws(() => app.getKeyScancode(Key.A), /in progress/);
     assert.throws(() => app.dispose(), /in progress/);
     assert.throws(() => app.createWindow(), /in progress/);
     assert.throws(() => app.run(), /in progress/);
