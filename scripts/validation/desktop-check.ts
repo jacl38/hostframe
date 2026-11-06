@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 const root = resolve(import.meta.dir, "../..");
 await mkdir(join(root, "build/validation"), { recursive: true });
 const directory = await mkdtemp(join(root, "build/validation/lifecycle-"));
+console.log(`Desktop lifecycle diagnostics: ${directory}`);
 
 function launch(args: string[], name: string) {
   return Bun.spawn([process.execPath, join(import.meta.dir, "desktop.ts"), ...args], {
@@ -16,7 +17,10 @@ function launch(args: string[], name: string) {
 async function evidence(name: string) {
   const log = await Bun.file(join(directory, `${name}.log`)).text();
   const output = log.match(/Private X11 validation diagnostics: (.*)/)?.[1];
-  assert.ok(output, "Runner must report its evidence directory");
+  const stderr = await Bun.file(join(directory, `${name}.stderr`)).text();
+  const diagnostics = `Runner "${name}" did not reach display initialization; logs: ${directory}/${name}.{log,stderr}\n${log}\n${stderr}`;
+  assert.ok(output, diagnostics);
+  assert.ok(await Bun.file(join(output, "display.json")).exists(), diagnostics);
   const metadata: { serverPID: number } = await Bun.file(join(output, "display.json")).json();
   assert.throws(() => process.kill(metadata.serverPID, 0), "Xvfb must be reaped");
   assert.ok(await Bun.file(join(output, "command.log")).exists());

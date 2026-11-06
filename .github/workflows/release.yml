@@ -24,6 +24,7 @@ jobs:
         shell: bash
     env:
       HOSTFRAME_JOBS: "2"
+      HOSTFRAME_X11_WM: openbox
       VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
     steps:
       - name: Install native and test prerequisites
@@ -34,7 +35,7 @@ jobs:
             libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel \
             libXi-devel libXext-devel libXfixes-devel \
             vulkan-loader mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth \
-            kwin-x11 xdotool xprop ImageMagick dbus-daemon
+            openbox xdotool xprop ImageMagick dbus-daemon
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
@@ -81,6 +82,8 @@ jobs:
         with:
           name: validation-diagnostics
           path: |
+            build/validation/lifecycle-*/*.log
+            build/validation/lifecycle-*/*.stderr
             build/validation/desktop-*/*.log
             build/validation/desktop-*/*.stderr
             build/validation/desktop-*/*.json

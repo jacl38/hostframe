@@ -35,6 +35,7 @@ bun run typecheck
 bun test scripts packages/core/test
 # Select a software Vulkan implementation explicitly on headless hosts.
 export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+export HOSTFRAME_X11_WM=openbox
 bun scripts/validation/desktop-check.ts
 bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions
 bun scripts/validation/desktop.ts bun scripts/examples.ts --verify --representative
@@ -46,7 +47,10 @@ bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
 ```
 
 The desktop runner requires Linux, Xvfb with `-displayfd`, xauth,
-dbus-run-session, kwin_x11, xdotool, xprop and ImageMagick `import`.
+dbus-run-session, the selected window manager, xdotool, xprop and ImageMagick `import`.
+CI explicitly selects Openbox (`HOSTFRAME_X11_WM=openbox`); local installations
+with KWin/X11 can use `HOSTFRAME_X11_WM=kwin_x11` (the default). The selection
+is explicit: a missing selected manager fails rather than falling back to another.
 It reports missing tools; it never installs host packages. Use actual Node/Bun
 executables on PATH rather than version-manager shims that download a different
 version into the isolated cache.
@@ -61,7 +65,11 @@ Tests exercise failure diagnostics, timeout, and cancellation after a grandchild
 has installed a SIGTERM handler. This handles validation processes, not deliberate
 daemons that create their own sessions.
 
-Each run prints its `build/validation/desktop-*` diagnostics directory. Command
+Each run prints its `build/validation/desktop-*` diagnostics directory before
+checking prerequisites. `startup.stderr` records the startup phase and original
+error even if no display could be created. The lifecycle check also reports its
+`build/validation/lifecycle-*` directory and includes child startup errors in
+its failure message. Both directories' intended logs are uploaded by CI. Command
 and session stdout/stderr, WM/server logs, display metadata, resize captures and
 failure screenshots are retained. CI uploads only these intended files, excluding
 Xauthority, sockets and private config/cache directories. Inspect command.stderr
@@ -110,3 +118,24 @@ receipt and made the unchanged hostframe input fixtures pass. No native behavior
 change or weakened assertion was required. A separate cancellation probe exposed
 D-Bus exiting before nested cleanup; the runner now retains the command group PID
 for parent cleanup, with a permanent desktop lifecycle regression check.
+
+## Hosted startup failure on PR #29
+
+Hosted run 42162580843 passed native build/typechecking/tests, then failed before
+creating a display. The Fedora 44 transaction installed KWin 6.8.2 instead of
+`kwin-x11`; [the Fedora package obsoletes kwin-x11](https://packages.fedoraproject.org/pkgs/kwin/kwin/fedora-44-updates.html).
+The matching container provided `kwin_wayland` but no `kwin_x11`. The prerequisite
+assertion occurred before the evidence-directory message, and the lifecycle
+assertion hid the child stderr. Artifact globs also omitted `lifecycle-*` logs.
+CI now installs/selects Openbox for its isolated X11/EWMH session. Checks remain
+unchanged, including real key/repeat/focus and lifecycle assertions. Early errors
+are retained and reported, and both workflows upload lifecycle stdout/stderr.
+
+The fix was checked in a disposable Fedora 44 container: the old package set
+reproduced missing `kwin_x11`; selecting installed Openbox passed lifecycle
+failure/cancellation checks, full native interactions, representative renderers,
+and exact composition/resize readback in Node 26.7.0 and Bun 1.3.14. The unchanged
+previously verified tarball also passed clean npm/Bun consumers under Openbox.
+These runtime checks reused the existing native build; no native source changed.
+Local lint/typecheck and all 52 tests passed. Fixed GitHub-hosted execution still
+requires pushing the follow-up commit and rerunning PR #29.
