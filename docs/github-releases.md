@@ -19,8 +19,10 @@ compatibility with older Linux distributions.
 
 Build verification includes the native source audit, lint, typecheck, existing
 tests, full native presentation checks, and actual tarball installs in clean
-npm and Bun consumers. Presentation uses Xvfb and Mesa lavapipe inside the
-container; no host display or physical GPU access is needed.
+npm and Bun consumers. The full example gallery and exact Three-adapter
+composition/resize readback also run in both runtimes. Presentation and full
+window interactions use an isolated Xvfb/KWin session and Mesa lavapipe inside
+the container; no host display or physical GPU access is needed.
 
 After verification, `bun run release:prepare` assembles:
 

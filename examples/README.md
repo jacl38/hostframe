@@ -161,7 +161,7 @@ bun test
 # On an X11 display, render every entry and require normal completion in both runtimes:
 bun run examples:verify
 # A software Vulkan driver can also be used with an isolated X11 display:
-VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json xvfb-run -d bun run examples:verify
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
 ```
 
 The smoke runner requires 12 native frames per entry in both Bun and Node.js,
@@ -212,3 +212,5 @@ monitor scanout pacing remains unmeasured.
 TypeGPU 0.12.9 currently prints an `external-omitted` warning for `in.color` in
 the WGSL fragment templates. The generated shaders still receive that varying;
 their interpolated output was rendered and inspected. No warning is suppressed.
+
+Use `--representative` after `--verify` for the four renderer families. See [continuous validation](../docs/continuous-validation.md) for output readback and resize checks.

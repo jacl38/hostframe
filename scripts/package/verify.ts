@@ -1,4 +1,3 @@
-import { $ } from "bun";
 import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,8 +5,8 @@ import { resolve } from "node:path";
 import manifest from "../../package.json";
 import { root } from "../native/release.ts";
 
-async function run(command: string[], cwd: string, env = process.env) {
-  const child = Bun.spawn(command, { cwd, env, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
+async function run(command: string[], cwd: string, env = process.env, timeout = 30_000) {
+  const child = Bun.spawn(command, { cwd, env, stdout: "inherit", stderr: "inherit", timeout });
   const code = await child.exited;
   if(code !== 0) throw new Error(`${command.join(" ")} failed (exit ${code}, signal ${child.signalCode || "none"}).`);
 }
@@ -16,9 +15,12 @@ async function main() {
   const output = resolve(root, "build/package");
   await mkdir(output, { recursive: true });
   // Exercise npm's real prepack lifecycle and file selection.
-  await $`npm pack --pack-destination ${output}`.cwd(root);
+  await run(["npm", "pack", "--pack-destination", output], root, process.env, 300_000);
   const tarball = resolve(output, `${manifest.name}-${manifest.version}.tgz`);
-  const files = (await $`tar -tzf ${tarball}`.text()).trim().split("\n");
+  const listing = Bun.spawn(["tar", "-tzf", tarball], { stdout: "pipe", stderr: "inherit", timeout: 10_000 });
+  const contents = await new Response(listing.stdout).text();
+  assert.equal(await listing.exited, 0, "Unable to list packed consumer tarball");
+  const files = contents.trim().split("\n");
   for(const required of ["LICENSE", "dist/index.js", "dist/index.d.ts", "dist/hostframe.node", "dist/THIRD_PARTY_NOTICES.txt"]) {
     assert.ok(files.includes(`package/${required}`), `Missing ${required} in tarball`);
   }
@@ -37,8 +39,8 @@ async function main() {
         type: "module",
         dependencies: { hostframe: `file:${tarball}` }
       }));
-      if(manager === "npm") await $`npm install --ignore-scripts --no-audit --no-fund`.cwd(directory);
-      else await $`bun install --ignore-scripts`.cwd(directory);
+      if(manager === "npm") await run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"], directory);
+      else await run(["bun", "install", "--ignore-scripts"], directory);
       await copyFile(resolve(root, "scripts/package/fixtures/runtime.ts"), resolve(directory, "consumer.ts"));
       await copyFile(resolve(root, "scripts/package/fixtures/types.ts"), resolve(directory, "types.ts"));
       await Bun.write(resolve(directory, "tsconfig.json"), JSON.stringify({

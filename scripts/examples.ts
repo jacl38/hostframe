@@ -4,9 +4,12 @@ import { examples } from "../examples/catalog.ts";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const [name, ...args] = process.argv.slice(2);
 if(name === "--verify") {
-  if(args.length) throw new Error("Usage: bun run examples:verify");
+  if(args.some(arg => arg !== "--representative")) throw new Error("Usage: bun run examples:verify [--representative]");
+  const selected = args.includes("--representative")
+    ? examples.filter(example => ["vanilla/triangle", "three/materials", "typegpu/triangle", "webgpu-utils/textures"].includes(example))
+    : examples;
   for(const runtime of ["bun", "node"]) {
-    for(const example of examples) {
+    for(const example of selected) {
       const child = Bun.spawn([runtime, `examples/${example}.ts`, "--frames=12"], {
         cwd: root, stdout: "pipe", stderr: "pipe", timeout: 60_000
       });
