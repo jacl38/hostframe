@@ -26,7 +26,7 @@ Presentation::Presentation(wgpu::Instance instance, const WindowOptions& options
   if(!surface_) throw std::runtime_error("Dawn surface creation failed");
 }
 
-void Presentation::ConfigureDevice(wgpu::Device device, wgpu::SurfaceConfiguration configuration) {
+void Presentation::ReplaceContextConfiguration(wgpu::Device device, wgpu::SurfaceConfiguration configuration) {
   if(device.GetAdapter().GetInstance().Get() != instance_.Get()) {
     throw std::runtime_error("Device must belong to this surface's GPU instance");
   }
@@ -50,10 +50,10 @@ void Presentation::ConfigureDevice(wgpu::Device device, wgpu::SurfaceConfigurati
   if(device.GetLimits(&limits) != wgpu::Status::Success) throw std::runtime_error("Device limits unavailable");
   // Validate everything before replacing an existing configuration.
   Unconfigure();
-  device_ = std::move(device);
-  configuration.device = device_;
-  configuration_ = configuration;
-  max_dimension_ = limits.maxTextureDimension2D;
+  context_.emplace();
+  configuration.device = std::move(device);
+  context_->descriptor = configuration;
+  context_->max_dimension = limits.maxTextureDimension2D;
 }
 
 Napi::Value Presentation::Configure(Napi::Env env, Napi::Value value) {
@@ -94,23 +94,20 @@ Napi::Value Presentation::Configure(Napi::Env env, Napi::Value value) {
       ? wgpu::CompositeAlphaMode::Opaque : wgpu::CompositeAlphaMode::Premultiplied;
   auto normalized = wgpu::interop::ToJS(env, descriptor);
   if(env.IsExceptionPending()) return env.Undefined();
-  ConfigureDevice(std::move(device), configuration);
+  ReplaceContextConfiguration(std::move(device), configuration);
   // WindowState retains the JS binding through cleanup. Use its destruction
   // entry point on timeout so its finalizer agrees with the native device state.
-  destroy_device_ = [binding, env] { binding->destroy(env); };
-  view_formats_ = std::move(formats);
-  configuration_.viewFormatCount = view_formats_.size();
-  configuration_.viewFormats = view_formats_.data();
+  context_->destroy_device = [binding, env] { binding->destroy(env); };
+  context_->view_formats = std::move(formats);
+  context_->descriptor.viewFormatCount = context_->view_formats.size();
+  context_->descriptor.viewFormats = context_->view_formats.data();
   return normalized;
 }
 
 void Presentation::Unconfigure() {
-  Abort();
-  const bool drained = Drain();
-  configuration_ = {};
-  view_formats_.clear();
-  device_ = nullptr;
-  destroy_device_ = {};
+  DeactivateSurface();
+  const bool drained = DrainDevice();
+  context_.reset();
   if(!drained) throw std::runtime_error("GPU cleanup timed out; device was destroyed");
 }
 
@@ -118,18 +115,20 @@ Presentation::~Presentation() { Close(); }
 
 bool Presentation::Close() {
   if(!surface_) return true;
-  Abort();
+  DeactivateSurface();
   surface_ = nullptr;
-  return Drain();
+  const bool drained = DrainDevice();
+  context_.reset();
+  return drained;
 }
 
-bool Presentation::Drain() {
-  if(!device_) return true;
+bool Presentation::DrainDevice() {
+  if(!context_) return true;
   // Vulkan defers swapchain deletion to a queue serial. Complete that work
   // before GLFW closes the X11 connection used by the swapchain's deleter.
   if(!DeviceLost()) {
-    auto queue = device_.GetQueue();
-    auto commands = device_.CreateCommandEncoder().Finish();
+    auto queue = context_->descriptor.device.GetQueue();
+    auto commands = context_->descriptor.device.CreateCommandEncoder().Finish();
     queue.Submit(1, &commands);
   }
   // Only test builds can replace progress/deadline observations. Consume once
@@ -145,10 +144,10 @@ bool Presentation::Drain() {
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
   // A work-done future advances user-visible completion only. DeviceTick also
   // runs Dawn's best-effort deletion processors before reporting the device idle.
-  while(dawn::native::DeviceTick(device_.Get()) || forceTimeout) {
+  while(dawn::native::DeviceTick(context_->descriptor.device.Get()) || forceTimeout) {
     if(forceTimeout || std::chrono::steady_clock::now() >= deadline) {
       // A stalled device must release its swapchains before its display dies.
-      destroy_device_();
+      context_->destroy_device();
       return false;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -157,7 +156,8 @@ bool Presentation::Drain() {
 }
 
 void Presentation::RenderFrame(Napi::Env env, Napi::Function callback) {
-  if(!device_) throw Napi::Error::New(env, "Context is not configured");
+  if(!context_) throw Napi::Error::New(env, "Context is not configured");
+  // Loss rejects drawing but leaves context ownership for explicit cleanup.
   if(DeviceLost()) throw Napi::Error::New(env, "GPU device is lost or destroyed");
   if(glfwWindowShouldClose(window_.get())) throw Napi::Error::New(env, "Window close requested");
   auto acquired = Acquire(env);
@@ -166,7 +166,8 @@ void Presentation::RenderFrame(Napi::Env env, Napi::Function callback) {
     return;
   }
   // Defer suboptimal reconfiguration until the next draw, after this frame expires.
-  reconfigure_ = acquired.status == wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal;
+  surface_configuration_ = acquired.status == wgpu::SurfaceGetCurrentTextureStatus::SuccessSuboptimal
+      ? SurfaceConfigurationState::RefreshPending : SurfaceConfigurationState::Current;
   // Expire both the JS texture and any retained views on success or exception.
   struct Frame {
     wgpu::Texture texture;
@@ -175,14 +176,14 @@ void Presentation::RenderFrame(Napi::Env env, Napi::Function callback) {
   try {
     wgpu::TextureDescriptor descriptor;
     descriptor.size = {acquired.texture.GetWidth(), acquired.texture.GetHeight(), 1};
-    descriptor.format = configuration_.format;
-    descriptor.usage = configuration_.usage;
+    descriptor.format = context_->descriptor.format;
+    descriptor.usage = context_->descriptor.usage;
     auto texture = wgpu::interop::GPUTexture::Create<wgpu::binding::GPUTexture>(
-        env, device_, descriptor, acquired.texture);
+        env, context_->descriptor.device, descriptor, acquired.texture);
     auto result = callback.Call({texture});
     // Dawn compiles node-addon-api with C++ exception propagation disabled.
     if(env.IsExceptionPending()) {
-      Abort();
+      DeactivateSurface();
       return;
     }
     if(!result.IsUndefined()) {
@@ -194,54 +195,53 @@ void Presentation::RenderFrame(Napi::Env env, Napi::Function callback) {
     instance_.ProcessEvents();
   } catch(...) {
     // Abandon the frame, preserve the original exception, and permit a later draw.
-    Abort();
+    DeactivateSurface();
     throw;
   }
 }
 
-bool Presentation::Prepare(Napi::Env env) {
+bool Presentation::PrepareSurface(Napi::Env env) {
   int width = 0;
   int height = 0;
   glfwGetFramebufferSize(window_.get(), &width, &height);
   // X11 can retain nonzero framebuffer dimensions while iconified.
   if(glfwGetWindowAttrib(window_.get(), GLFW_ICONIFIED) || width <= 0 || height <= 0) {
-    Abort();
+    DeactivateSurface();
     return false;
   }
-  if(static_cast<uint32_t>(width) > max_dimension_ || static_cast<uint32_t>(height) > max_dimension_) {
-    Abort();
+  if(static_cast<uint32_t>(width) > context_->max_dimension || static_cast<uint32_t>(height) > context_->max_dimension) {
+    DeactivateSurface();
     throw Napi::Error::New(env, "Window framebuffer exceeds device maxTextureDimension2D");
   }
-  if(reconfigure_ || configuration_.width != static_cast<uint32_t>(width) ||
-     configuration_.height != static_cast<uint32_t>(height)) {
-    Abort();
+  if(surface_configuration_ == SurfaceConfigurationState::RefreshPending || context_->descriptor.width != static_cast<uint32_t>(width) ||
+     context_->descriptor.height != static_cast<uint32_t>(height)) {
+    DeactivateSurface();
   }
-  if(!configured_) {
-    configuration_.width = width;
-    configuration_.height = height;
-    surface_.Configure(&configuration_);
-    configured_ = true;
-    reconfigure_ = false;
+  if(surface_configuration_ == SurfaceConfigurationState::Unconfigured) {
+    context_->descriptor.width = width;
+    context_->descriptor.height = height;
+    surface_.Configure(&context_->descriptor);
+    surface_configuration_ = SurfaceConfigurationState::Current;
   }
   return true;
 }
 
 wgpu::SurfaceTexture Presentation::Acquire(Napi::Env env) {
   return AcquireSurfaceTexture(
-      [&] { return Prepare(env); },
+      [&] { return PrepareSurface(env); },
       [&] {
         wgpu::SurfaceTexture acquired;
         surface_.GetCurrentTexture(&acquired);
         if(DeviceLost()) {
           if(acquired.texture) acquired.texture.Destroy();
           acquired.texture = nullptr;
-          Abort();
+          DeactivateSurface();
           throw Napi::Error::New(env, "GPU device is lost or destroyed");
         }
         return acquired;
       },
       [&](bool recreate) {
-        Abort();
+        DeactivateSurface();
         if(recreate) {
           // Retain the old surface if recreation fails so disposal still drains its GPU work.
           auto replacement = wgpu::glfw::CreateSurfaceForWindow(instance_, window_.get());
@@ -254,16 +254,16 @@ wgpu::SurfaceTexture Presentation::Acquire(Napi::Env env) {
 bool Presentation::ShouldClose() const { return glfwWindowShouldClose(window_.get()); }
 void Presentation::RequestClose() { glfwSetWindowShouldClose(window_.get(), GLFW_TRUE); }
 const char* Presentation::PresentMode() const {
-  if(!device_) throw std::runtime_error("Context is not configured");
-  return PresentModeName(configuration_.presentMode);
+  if(!context_) throw std::runtime_error("Context is not configured");
+  return PresentModeName(context_->descriptor.presentMode);
 }
 
 bool Presentation::DeviceLost() const {
-  return instance_.WaitAny(device_.GetLostFuture(), 0) == wgpu::WaitStatus::Success;
+  return instance_.WaitAny(context_->descriptor.device.GetLostFuture(), 0) == wgpu::WaitStatus::Success;
 }
 
-void Presentation::Abort() {
-  if(configured_) surface_.Unconfigure();
-  configured_ = false;
+void Presentation::DeactivateSurface() {
+  if(surface_configuration_ != SurfaceConfigurationState::Unconfigured) surface_.Unconfigure();
+  surface_configuration_ = SurfaceConfigurationState::Unconfigured;
 }
 }

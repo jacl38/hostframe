@@ -56,7 +56,7 @@ void WindowState::Unconfigure() {
   presentation_->Unconfigure();
 }
 
-bool WindowState::IsConfigured() const { return presentation_ && presentation_->HasDevice(); }
+bool WindowState::IsConfigured() const { return presentation_ && presentation_->HasContextConfiguration(); }
 
 bool WindowState::Close() {
   input_.reset();
