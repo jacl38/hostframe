@@ -5,6 +5,19 @@ import { inputEventTypes } from "../../../build/native/generated/input-events.ts
 
 const press: InputEvent = { type: "key", key: 65, scancode: 38, action: "press", modifiers: 0, synthetic: false };
 
+test("input snapshots all event types once per batch", () => {
+  const listeners = new InputListeners();
+  const calls: string[] = [];
+  listeners.on("key", () => {
+    calls.push("key");
+    listeners.on("focus", () => { calls.push("late focus"); });
+  });
+  listeners.dispatch([press, { type: "focus", focused: true }]);
+  expect(calls).toEqual(["key"]);
+  listeners.dispatch([{ type: "focus", focused: false }]);
+  expect(calls).toEqual(["key", "late focus"]);
+});
+
 test("every native event type can be subscribed to and dispatched without a separate TS allowlist", () => {
   const events: InputEvent[] = [
     press,

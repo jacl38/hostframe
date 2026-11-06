@@ -173,6 +173,15 @@ awaited. A listener failure stops scheduling and rejects the run; resources rema
 available for explicit cleanup or recovery. Registering or starting a run after
 application disposal throws.
 
+Fixed updates, window rendering, and input listeners share internal subscription
+mechanics through composition. Their owners still control lifecycle checks,
+pause/stop handling, and event/frame/batch boundaries. A Node `EventEmitter` is
+not a replacement for this contract: its `on()` returns the emitter, removal
+during emission does not skip a listener already scheduled for that emission,
+and listener results are ignored. Hostframe returns independent unsubscribe
+functions, applies removals immediately, and enforces synchronous results.
+Input additionally snapshots additions across the entire native input batch.
+
 ## Event polling and execution limits
 
 `app.pollEvents()` processes native window/input events without rendering and

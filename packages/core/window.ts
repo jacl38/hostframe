@@ -2,6 +2,7 @@ import type { NativeWindow } from "../native/bridge.ts";
 import { freezeInput, InputListeners } from "./input.ts";
 import type { InputState, WindowInputEvents } from "./input.ts";
 import { WindowGPUContext } from "./context.ts";
+import { Subscriptions } from "./subscriptions.ts";
 import type { RenderEvent } from "./timing.ts";
 
 export type WindowEvents = WindowInputEvents & { render: RenderEvent };
@@ -12,7 +13,7 @@ export class Window {
   #listeners = new InputListeners();
   #input!: InputState;
   #context: WindowGPUContext | undefined;
-  #renderListeners = new Set<{ callback: (event: RenderEvent) => undefined }>();
+  #renderListeners = new Subscriptions<RenderEvent>("render", "a window");
   #renderEvent!: RenderEvent;
   #active!: () => boolean;
   #render: () => undefined;
@@ -40,10 +41,7 @@ export class Window {
   on<Event extends keyof WindowEvents>(event: Event, listener: (event: WindowEvents[Event]) => undefined) {
     this.#requireAlive();
     if(event === "render") {
-      if(typeof listener !== "function") throw new TypeError("Expected a window listener");
-      const entry = { callback: listener as (event: RenderEvent) => undefined };
-      this.#renderListeners.add(entry);
-      return () => { this.#renderListeners.delete(entry); };
+      return this.#renderListeners.add(listener as (event: RenderEvent) => undefined);
     }
     return this.#listeners.on(event as keyof WindowInputEvents, listener as (event: WindowInputEvents[keyof WindowInputEvents]) => undefined);
   }
@@ -64,16 +62,7 @@ export class Window {
   }
 
   #emitRender() {
-    const snapshot = Array.from(this.#renderListeners);
-    for(const entry of snapshot) {
-      if(!this.#active()) break;
-      if(!this.#renderListeners.has(entry)) continue;
-      const result: unknown = entry.callback(this.#renderEvent);
-      if(result !== undefined) {
-        void Promise.resolve(result).catch(() => {});
-        throw new TypeError("render listeners must return undefined synchronously");
-      }
-    }
+    this.#renderListeners.snapshot()(this.#renderEvent, this.#active);
     return undefined;
   }
 

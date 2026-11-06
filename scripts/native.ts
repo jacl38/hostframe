@@ -50,6 +50,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["node", resolve(root, "packages/native/test/loop.ts")],
       ["bun", resolve(root, "packages/native/test/loop.ts")],
+      ["node", resolve(root, "packages/native/test/subscriptions.ts")],
+      ["bun", resolve(root, "packages/native/test/subscriptions.ts")],
       ["node", resolve(root, "packages/native/test/presentation.ts")],
       ["bun", resolve(root, "packages/native/test/presentation.ts")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"],
