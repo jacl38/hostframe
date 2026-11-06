@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { setTimeout } from "node:timers/promises";
-import { Application, type RenderEvent } from "../../../index.ts";
+import { installWebGPUGlobals, Application, type RenderEvent } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 import { configureWindow, renderFrames } from "./frames.ts";
 
@@ -17,6 +17,8 @@ function render(device: GPUDevice, texture: GPUTexture) {
   pass.end();
   device.queue.submit([encoder.finish()]);
 }
+
+installWebGPUGlobals();
 
 const app = new Application();
 let device: GPUDevice | undefined;

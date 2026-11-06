@@ -31,6 +31,10 @@ async function verify(presentation: boolean, interactions: boolean) {
   const threadCheck = process.platform === "darwin" ? "--thread-only" : "--no-display";
   const checks = [
     [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
+    ["node", resolve(root, "packages/native/test/globals.ts")],
+    ["bun", resolve(root, "packages/native/test/globals.ts")],
+    ["node", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
+    ["bun", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
     ["node", resolve(root, "packages/native/test/compute.ts")],
     ["bun", resolve(root, "packages/native/test/compute.ts")],
     ["node", resolve(root, "packages/native/test/window.ts"), threadCheck],

@@ -4,10 +4,12 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
-import { Application } from "../../../index.ts";
+import { installWebGPUGlobals, Application } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 import { assertFramebufferSize } from "./framebuffer.ts";
 import { assertDeviceAlive } from "./device.ts";
+
+installWebGPUGlobals();
 
 const app = new Application();
 let device: GPUDevice | undefined;

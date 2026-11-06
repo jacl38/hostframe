@@ -18,7 +18,6 @@ const addon: typeof Native = require(typeof __HOSTFRAME_ADDON__ === "string"
 const ownerKey = Symbol.for("hostframe.experimental.gpu");
 
 export function getProcessGPU() {
-  Object.assign(globalThis, addon.globals);
   const existing = Reflect.get(globalThis, ownerKey) as GPU | undefined;
   if(existing) return existing;
   const gpu = addon.create([]);
@@ -27,3 +26,28 @@ export function getProcessGPU() {
 }
 
 export const NativeApplication = addon.Application;
+
+/** Installs missing WebGPU globals; rejects foreign values and accessors before writing. */
+export function installWebGPUGlobals() {
+  const missing: PropertyDescriptorMap = {};
+  for(const [name, value] of Object.entries(addon.globals)) {
+    let owner: object | null = globalThis;
+    let descriptor: PropertyDescriptor | undefined;
+    while(owner) {
+      descriptor = Object.getOwnPropertyDescriptor(owner, name);
+      if(descriptor) break;
+      owner = Object.getPrototypeOf(owner);
+    }
+    if(descriptor) {
+      if(!Object.hasOwn(descriptor, "value") || !Object.is(descriptor.value, value)) {
+        throw new TypeError(`Conflicting WebGPU global: ${name}`);
+      }
+    } else {
+      missing[name] = { value, writable: true, configurable: true, enumerable: true };
+    }
+  }
+  if(Object.keys(missing).length && !Object.isExtensible(globalThis)) {
+    throw new TypeError("Cannot install WebGPU globals on a nonextensible globalThis");
+  }
+  Object.defineProperties(globalThis, missing);
+}

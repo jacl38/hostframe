@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { Application, Key, Modifier, PointerButton } from "hostframe";
+import { installWebGPUGlobals, Application, Key, Modifier, PointerButton } from "hostframe";
+
+installWebGPUGlobals();
 
 assert.equal(Key.W, 87);
 assert.equal(PointerButton.LEFT, 0);

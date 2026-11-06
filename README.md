@@ -68,7 +68,9 @@ Create the window before choosing its GPU device. Its WebGPU context owns the
 presentation surface and can select an adapter compatible with that surface:
 
 ```ts
-import { Application } from "hostframe";
+import { Application, installWebGPUGlobals } from "hostframe";
+
+installWebGPUGlobals();
 
 const app = new Application();
 let device: GPUDevice | undefined;
@@ -319,3 +321,13 @@ On macOS arm64 (Apple M4), Metal compute/readback and the full presentation suit
 This checkout passes JavaScript compute/readback and configurable/resizable window presentation checks in Node.js and Bun, plus a separate C++ GLFW/X11/Vulkan presentation check on Linux x64; see the build guide for exact versions and lifetime constraints. Intel integrated-GPU presentation passed through DRI3/Xwayland on a virtual KWin output, with software fallback excluded; see the [hardware validation report](docs/intel-presentation.md). The resizable solid-color example was captured and inspected in both runtimes. Resize/minimize/restore and disposal interactions passed under Xvfb/KWin with lavapipe in Node.js and Bun; see the build guide for reproduction and limits. Physical-monitor pacing, platforms beyond Linux x64 and macOS arm64, complete GC/shutdown correctness, and performance remain unverified. Broader window APIs still require implementation; broader package compatibility and lifecycle validation are required before making release guarantees.
 
 Continuous PR, desktop interaction, renderer and packed-consumer gates are documented in [Continuous validation](docs/continuous-validation.md).
+
+WebGPU globals are opt-in: importing hostframe and constructing `Application` do
+not install constructors or constants. Call `installWebGPUGlobals()` before code
+that uses global WebGPU names (including renderer integrations). It installs
+missing names, accepts existing identical addon values even when read-only, and
+rejects conflicting values or accessors, including inherited properties. All
+checks precede installation, so a conflict or nonextensible global leaves the
+globals unchanged. Foreign implementations are never overwritten. Repeated
+installation preserves constructor identity. GPU ownership remains rooted until
+process exit independently of installation and application disposal.

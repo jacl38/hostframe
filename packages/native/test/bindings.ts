@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { assertFramebufferSize } from "./framebuffer.ts";
-import { getProcessGPU, NativeApplication } from "../bridge.ts";
+import { installWebGPUGlobals, getProcessGPU, NativeApplication } from "../bridge.ts";
 import type * as Native from "../../../build/native/generated/native";
 
 const require = createRequire(import.meta.url);
 const addon: typeof Native = require("../../../build/native/cmake/hostframe.node");
 assert.throws(() => Reflect.construct(addon.Window, []), TypeError);
 assert.equal(Object.getOwnPropertyDescriptor(addon, "__typescript")?.writable, false);
+installWebGPUGlobals();
+
 const app = new NativeApplication();
 let device: GPUDevice | undefined;
 try {
