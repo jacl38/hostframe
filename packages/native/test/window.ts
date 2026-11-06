@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readlinkSync } from "node:fs";
 import { isMainThread, parentPort, Worker } from "node:worker_threads";
-import { Application } from "../../../index.ts";
+import { installWebGPUGlobals, Application } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 import { assertFramebufferSize } from "./framebuffer.ts";
 import { assertDeviceAlive } from "./device.ts";
@@ -47,16 +47,20 @@ if(!isMainThread) {
     }
     console.log(`${process.versions.bun ? "Bun" : "Node.js"}: Application initialization failure passed.`);
   } else {
-    // Fail GPU-global installation after GLFW succeeds. The public constructor
-    // must close its native session before rethrowing and permit a later retry.
     const originalGPU = Object.getOwnPropertyDescriptor(globalThis, "GPU");
-    try {
-      Object.defineProperty(globalThis, "GPU", { value: undefined, writable: false, configurable: true });
-      for(let attempt = 0; attempt < 2; attempt++) assert.throws(() => new Application(), TypeError);
-    } finally {
-      if(originalGPU) Object.defineProperty(globalThis, "GPU", originalGPU);
-      else Reflect.deleteProperty(globalThis, "GPU");
-    }
+    assert.equal(originalGPU, undefined);
+    Object.defineProperty(globalThis, "GPU", { value: undefined, writable: false, configurable: true });
+    const isolated = new Application();
+    isolated.dispose();
+    assert.equal(Object.getOwnPropertyDescriptor(globalThis, "GPU")?.value, undefined);
+    assert.throws(() => installWebGPUGlobals(), /Conflicting WebGPU global/);
+    assert.equal(Object.hasOwn(globalThis, "GPUBufferUsage"), false);
+    Reflect.deleteProperty(globalThis, "GPU");
+    installWebGPUGlobals();
+    const constructor = GPU;
+    Object.defineProperty(globalThis, "GPU", { writable: false });
+    installWebGPUGlobals();
+    assert.equal(GPU, constructor);
     const beforeApplication = processSockets();
     const app = new Application();
     const sessionSockets = [...processSockets()].filter(socket => !beforeApplication.has(socket));

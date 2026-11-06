@@ -1,4 +1,6 @@
-import { Application, Key } from "../../index.ts";
+import { installWebGPUGlobals, Application, Key } from "../../index.ts";
+
+installWebGPUGlobals();
 
 /** Shared native lifetime only; renderer integration belongs to each source's adapter. */
 export async function createExample(title: string, options: {
