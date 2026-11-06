@@ -98,7 +98,8 @@ if(!isMainThread) {
         assert.throws(() => context.configure({ device: invalidDevice, format }), /lost or destroyed/);
         context.configure({ device, format });
         try {
-          assert.throws(() => app.createWindow(), /Only one native window/);
+          const second = app.createWindow();
+          second.dispose();
           assert.equal("draw" in window, false);
           assert.throws(() => Reflect.apply(app.on, app, ["render", () => {}]), /Unknown application event/);
           const sentinel = new Error("render failed");

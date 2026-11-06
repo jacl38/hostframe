@@ -52,6 +52,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", resolve(root, "packages/native/test/context.ts")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
+      ["node", resolve(root, "packages/native/test/multiple-windows.ts")],
+      ["bun", resolve(root, "packages/native/test/multiple-windows.ts")],
       ["node", resolve(root, "packages/native/test/loop.ts")],
       ["bun", resolve(root, "packages/native/test/loop.ts")],
       ["node", resolve(root, "packages/native/test/subscriptions.ts")],
@@ -77,6 +79,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],
       ["bun", resolve(root, "packages/native/test/input.ts")],
+      ["node", resolve(root, "packages/native/test/multiple-window-input.ts")],
+      ["bun", resolve(root, "packages/native/test/multiple-window-input.ts")],
       ["node", resolve(root, "packages/native/test/input-actions.ts")],
       ["bun", resolve(root, "packages/native/test/input-actions.ts")]
     );

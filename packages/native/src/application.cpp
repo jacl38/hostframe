@@ -123,7 +123,6 @@ Window* Application::CreateWindow(DawnGPU gpu, WindowOptionsArgument argument) {
     Napi::Env env(env_);
     RequireMainThread(env);
     state_->RequireAvailable(env);
-    if(state_->HasWindow()) throw Napi::Error::New(env, "Only one native window is supported in this increment");
     ApplicationOperation operation(*state_);
     auto options = DecodeWindowOptions(argument);
     if(env.IsExceptionPending()) return nullptr;

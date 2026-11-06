@@ -139,3 +139,16 @@ previously verified tarball also passed clean npm/Bun consumers under Openbox.
 These runtime checks reused the existing native build; no native source changed.
 Local lint/typecheck and all 52 tests passed. Fixed GitHub-hosted execution still
 requires pushing the follow-up commit and rerunning PR #29.
+
+Multiple-window coverage runs in the regular presentation and interaction gates:
+`multiple-windows.ts` covers configuration/ordering, cross-window operation guards,
+failed creation/rendering, fixed-update create/dispose, first/final closure, and
+shared-device readback after cleanup. `multiple-window-input.ts` drives two
+separately identified native windows with XTest, checking focus/capture loss,
+per-window keys, failed-batch isolation, resize/minimize/restore, paused commands,
+and independent disposal. Its screenshots are included in desktop diagnostics.
+The eight forced-cleanup cases also configure a sibling on the stalled device,
+assert its subsequent device-loss failure (or application disposal), and verify
+release of both contexts' references. Packed npm/Bun consumers render two windows
+and keep the second running after closing the first. The two-window example runs
+in both the representative and full gallery gates.

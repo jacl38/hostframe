@@ -12,6 +12,7 @@ type InputCommand = { type: "close" } | { type: "capture", captured: boolean, ra
 /** A native window owned by its Application. Dispose before destroying its device. */
 export class Window {
   #native: NativeWindow;
+  #onDisposed: ((window: Window) => void) | undefined;
   #listeners = new InputListeners();
   #input!: InputState;
   #context: WindowGPUContext | undefined;
@@ -22,8 +23,9 @@ export class Window {
   #inputCommands: InputCommand[] | undefined;
 
   /** @internal Created by Application.createWindow. */
-  constructor(native: NativeWindow) {
+  constructor(native: NativeWindow, onDisposed?: (window: Window) => void) {
     this.#native = native;
+    this.#onDisposed = onDisposed;
     this.#render = this.#emitRender.bind(this);
     this.dispatchInput();
   }
@@ -58,7 +60,7 @@ export class Window {
 
   /** @internal The application owns scheduling; the context owns the native frame. */
   dispatchRender(event: RenderEvent, active: () => boolean) {
-    if(this.#native.disposed || !this.#renderListeners.size) return;
+    if(this.#native.disposed || this.#native.shouldClose || !this.#renderListeners.size) return;
     this.#renderEvent = event;
     this.#active = active;
     this.#context?.render(this.#render);
@@ -97,6 +99,8 @@ export class Window {
         this.#renderListeners.clear();
         this.#context?.release();
         this.#context = undefined;
+        this.#onDisposed?.(this);
+        this.#onDisposed = undefined;
       }
     }
   }

@@ -6,13 +6,13 @@ import { ApplicationLoop } from "./loop.ts";
 import { Subscriptions } from "./subscriptions.ts";
 import type { FixedUpdateEvent, RunOptions } from "./timing.ts";
 
-/** Owns one GLFW session and its window. Construct on the process main thread. */
+/** Owns one GLFW session and its windows. Construct on the process main thread. */
 export class Application {
   /** Rooted until process exit: upstream child GPU objects do not retain their owner. */
   readonly gpu: GPU;
   #native: NativeApplication;
   #loop: ApplicationLoop | undefined;
-  #window: Window | undefined;
+  #windows = new Set<Window>();
   #listeners = new Subscriptions<FixedUpdateEvent>("fixedUpdate", "an application");
 
   constructor() {
@@ -48,15 +48,22 @@ export class Application {
   }
 
   createWindow(options: WindowOptions = {}) {
-    this.#window = new Window(this.#native.createWindow(this.gpu, options));
-    return this.#window;
+    const native = this.#native.createWindow(this.gpu, options);
+    try {
+      const window = new Window(native, disposed => { this.#windows.delete(disposed); });
+      this.#windows.add(window);
+      return window;
+    } catch (error) {
+      native.dispose();
+      throw error;
+    }
   }
 
   /** Pumps native events without rendering. Returns whether any window is open. */
   pollEvents() {
     this.#native.pollEvents();
-    this.#window?.dispatchInput();
-    // Input commands may have closed the window after native polling returned.
+    for(const window of Array.from(this.#windows)) window.dispatchInput();
+    // Input commands may have closed windows after native polling returned.
     return this.#native.hasOpenWindows;
   }
 
@@ -83,7 +90,12 @@ export class Application {
           loop.stop();
           return;
         }
-        this.#window?.dispatchRender(event, active);
+        // Snapshot creation order. Each dispatch rechecks native lifecycle;
+        // fixed-update mutations have already committed before this snapshot.
+        for(const window of Array.from(this.#windows)) {
+          if(!loop.active) break;
+          window.dispatchRender(event, active);
+        }
       }
     });
     function active() { return loop.active; }
@@ -120,8 +132,8 @@ export class Application {
       // disposal leaves it alive and must not cancel an otherwise healthy run.
       if(this.#native.disposed) {
         this.stop();
-        this.#window?.dispose();
-        this.#window = undefined;
+        for(const window of Array.from(this.#windows)) window.dispose();
+        this.#windows.clear();
         this.#listeners.clear();
       }
     }

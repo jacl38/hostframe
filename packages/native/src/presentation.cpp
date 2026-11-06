@@ -147,6 +147,8 @@ bool Presentation::DrainDevice() {
   while(dawn::native::DeviceTick(context_->descriptor.device.Get()) || forceTimeout) {
     if(forceTimeout || std::chrono::steady_clock::now() >= deadline) {
       // A stalled device must release its swapchains before its display dies.
+      // This intentionally loses every other surface sharing the caller device;
+      // their next render rejects and their owners must explicitly clean up.
       context_->destroy_device();
       return false;
     }

@@ -2,6 +2,7 @@
 export const examples = [
   "vanilla/solid-color",
   "vanilla/input",
+  "vanilla/multiple-windows",
   "vanilla/triangle",
   "vanilla/cubes",
   "vanilla/particles",

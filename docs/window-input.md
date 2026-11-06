@@ -279,3 +279,16 @@ Arguments must be signed 32-bit integers. A token identifies a physical GLFW key
 a scancode identifies a platform key, and a display label describes that key in
 the current layout. None is typed text: modifiers, dead keys and IME composition
 require a separate text-input API, which is not implemented here.
+
+### Multiple windows
+
+GLFW routes callbacks and held state to their owning window; polling pumps all
+windows. Hostframe dispatches window batches in creation order. Each batch keeps
+its listener snapshot and deferred capture/close queue independent. Successful
+commands apply before the next window batch; a failure drops the failing batch's
+remaining events/commands, aborts polling, and leaves later windows' native queues
+for the next poll. `stop()`/`pause()` do not interrupt a successful input batch.
+Deferred commands apply only to the window currently dispatching input; calls
+mutating another window remain subject to the native application operation guard.
+Pausing continues polling every window. Closing one window resets only its input
+and ends the run only when no open window remains.
