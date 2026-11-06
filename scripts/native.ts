@@ -50,6 +50,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts")],
       ["node", resolve(root, "packages/native/test/loop.ts")],
       ["bun", resolve(root, "packages/native/test/loop.ts")],
+      ["node", resolve(root, "packages/native/test/subscriptions.ts")],
+      ["bun", resolve(root, "packages/native/test/subscriptions.ts")],
       ["node", resolve(root, "packages/native/test/presentation.ts")],
       ["bun", resolve(root, "packages/native/test/presentation.ts")],
       ["node", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"],
@@ -70,7 +72,9 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["node", resolve(root, "packages/native/test/resize.ts")],
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],
-      ["bun", resolve(root, "packages/native/test/input.ts")]
+      ["bun", resolve(root, "packages/native/test/input.ts")],
+      ["node", resolve(root, "packages/native/test/input-actions.ts")],
+      ["bun", resolve(root, "packages/native/test/input-actions.ts")]
     );
   }
   for(const command of checks) {

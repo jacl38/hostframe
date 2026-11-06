@@ -49,11 +49,9 @@ export async function createExample(title: string, options: {
       app.stop();
     };
     context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
-    let quit = false;
     window.on("key", event => {
-      if(event.action === "press" && ((defaults.escapeQuits && event.key === Key.ESCAPE) || event.key === Key.Q)) quit = true;
+      if(event.action === "press" && ((defaults.escapeQuits && event.key === Key.ESCAPE) || event.key === Key.Q)) window.requestClose();
     });
-    app.on("fixedUpdate", () => { if(quit) app.stop(); });
     console.log(`${title}: Q${defaults.escapeQuits ? "/Escape" : ""} quits; resize the window. Adapter: ${adapter.info.device}`);
     return {
       app,

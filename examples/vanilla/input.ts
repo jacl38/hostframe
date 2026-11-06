@@ -18,15 +18,13 @@ try {
   let x = 0.5;
   let y = 0.5;
   let size = 40;
-  let capture: boolean | undefined;
-  let close = false;
   window.on("key", event => {
     if(event.action !== "press") return; // OS repeat never drives simulation.
-    if(event.key === Key.ESCAPE) capture = false;
-    if(event.key === Key.Q) close = true;
+    if(event.key === Key.ESCAPE) window.setPointerCapture(false);
+    if(event.key === Key.Q) window.requestClose();
   });
   window.on("pointerButton", event => {
-    if(event.button === PointerButton.LEFT && event.action === "press") capture = !window.input.pointerCaptured;
+    if(event.button === PointerButton.LEFT && event.action === "press") window.setPointerCapture(!window.input.pointerCaptured);
   });
   window.on("pointerMove", event => {
     if(event.captured) {
@@ -36,17 +34,10 @@ try {
   });
   window.on("scroll", event => { size = Math.max(10, Math.min(200, size + event.deltaY * 5)); });
   window.on("focus", event => {
-    if(!event.focused) capture = undefined;
     console.log(`Focus ${event.focused ? "gained" : "lost"}; held keys: ${window.input.keys.length}`);
   });
   window.on("pointerCapture", event => { console.log(`Pointer capture ${event.captured ? "on" : "off"}`); });
   app.on("fixedUpdate", ({ dt }) => {
-    // Native mutations are deferred until input dispatch has left its operation guard.
-    if(close) { window.requestClose(); return; }
-    if(capture !== undefined) {
-      if(!capture || window.input.focused) window.setPointerCapture(capture);
-      capture = undefined;
-    }
     x += (Number(window.isKeyDown(Key.D) || window.isKeyDown(Key.RIGHT)) - Number(window.isKeyDown(Key.A) || window.isKeyDown(Key.LEFT))) * dt * 0.5;
     y += (Number(window.isKeyDown(Key.S) || window.isKeyDown(Key.DOWN)) - Number(window.isKeyDown(Key.W) || window.isKeyDown(Key.UP))) * dt * 0.5;
     x = Math.max(0, Math.min(1, x));

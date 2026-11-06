@@ -66,8 +66,6 @@ try {
     assert.throws(() => app.run(), /in progress/);
     assert.throws(() => context.configure({ device: device!, format: app.gpu.getPreferredCanvasFormat() }), /in progress/);
     assert.throws(() => window.dispose(), /in progress/);
-    assert.throws(() => window.requestClose(), /in progress/);
-    assert.throws(() => window.setPointerCapture(true), /in progress/);
     guards++;
   });
   await xdo("keydown", "Shift_L", "a");

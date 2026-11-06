@@ -2,9 +2,12 @@ import type { NativeWindow } from "../native/bridge.ts";
 import { freezeInput, InputListeners } from "./input.ts";
 import type { InputState, WindowInputEvents } from "./input.ts";
 import { WindowGPUContext } from "./context.ts";
+import { Subscriptions } from "./subscriptions.ts";
 import type { RenderEvent } from "./timing.ts";
 
 export type WindowEvents = WindowInputEvents & { render: RenderEvent };
+
+type InputCommand = { type: "close" } | { type: "capture", captured: boolean, rawMotion: boolean };
 
 /** A native window owned by its Application. Dispose before destroying its device. */
 export class Window {
@@ -12,10 +15,11 @@ export class Window {
   #listeners = new InputListeners();
   #input!: InputState;
   #context: WindowGPUContext | undefined;
-  #renderListeners = new Set<{ callback: (event: RenderEvent) => undefined }>();
+  #renderListeners = new Subscriptions<RenderEvent>("render", "a window");
   #renderEvent!: RenderEvent;
   #active!: () => boolean;
   #render: () => undefined;
+  #inputCommands: InputCommand[] | undefined;
 
   /** @internal Created by Application.createWindow. */
   constructor(native: NativeWindow) {
@@ -40,10 +44,7 @@ export class Window {
   on<Event extends keyof WindowEvents>(event: Event, listener: (event: WindowEvents[Event]) => undefined) {
     this.#requireAlive();
     if(event === "render") {
-      if(typeof listener !== "function") throw new TypeError("Expected a window listener");
-      const entry = { callback: listener as (event: RenderEvent) => undefined };
-      this.#renderListeners.add(entry);
-      return () => { this.#renderListeners.delete(entry); };
+      return this.#renderListeners.add(listener as (event: RenderEvent) => undefined);
     }
     return this.#listeners.on(event as keyof WindowInputEvents, listener as (event: WindowInputEvents[keyof WindowInputEvents]) => undefined);
   }
@@ -64,25 +65,28 @@ export class Window {
   }
 
   #emitRender() {
-    const snapshot = Array.from(this.#renderListeners);
-    for(const entry of snapshot) {
-      if(!this.#active()) break;
-      if(!this.#renderListeners.has(entry)) continue;
-      const result: unknown = entry.callback(this.#renderEvent);
-      if(result !== undefined) {
-        void Promise.resolve(result).catch(() => {});
-        throw new TypeError("render listeners must return undefined synchronously");
-      }
-    }
+    this.#renderListeners.snapshot()(this.#renderEvent, this.#active);
     return undefined;
   }
 
-  /** Hidden, unlimited virtual pointer motion. Explicit raw mode throws if unsupported. */
+  /** Hidden virtual pointer motion. In input listeners, applied after the successful batch. */
   setPointerCapture(captured: boolean, rawMotion = false) {
+    if(this.#inputCommands) {
+      if(typeof captured !== "boolean" || typeof rawMotion !== "boolean") throw new TypeError("Pointer capture arguments must be booleans");
+      this.#inputCommands.push({ type: "capture", captured, rawMotion });
+      return;
+    }
     this.#input = freezeInput(this.#native.setPointerCapture(captured, rawMotion));
   }
 
-  requestClose() { this.#input = freezeInput(this.#native.requestClose()); }
+  /** In input listeners, requested after the successful batch; cancels later capture commands. */
+  requestClose() {
+    if(this.#inputCommands) {
+      this.#inputCommands.push({ type: "close" });
+      return;
+    }
+    this.#input = freezeInput(this.#native.requestClose());
+  }
 
   dispose() {
     try {
@@ -100,10 +104,27 @@ export class Window {
   /** @internal Dispatch under the native application operation guard. */
   dispatchInput() {
     if(this.#native.disposed) return;
+    const commands: InputCommand[] = [];
     this.#native.dispatchInput((state, events) => {
       this.#input = freezeInput(state);
-      this.#listeners.dispatch(events);
+      this.#inputCommands = commands;
+      try {
+        this.#listeners.dispatch(events);
+      } finally {
+        this.#inputCommands = undefined;
+      }
     });
+    // Native dispatch must return successfully, releasing ApplicationOperation,
+    // before any commands run. A listener/native failure drops this local queue.
+    // No JavaScript listener is invoked while applying commands; resulting native
+    // notifications stay queued until the next poll, with no recursive dispatch.
+    for(const command of commands) {
+      if(command.type === "close") {
+        this.requestClose();
+        break;
+      }
+      this.setPointerCapture(command.captured, command.rawMotion);
+    }
   }
 
   #requireAlive() {

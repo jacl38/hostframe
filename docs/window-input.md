@@ -90,19 +90,13 @@ listener if a simulation needs per-update scroll totals.
 ## Capture and focus
 
 ```ts
-let capture: boolean | undefined;
 window.on("pointerButton", event => {
-  if(event.button === PointerButton.LEFT && event.action === "press") capture = true;
+  if(event.button === PointerButton.LEFT && event.action === "press") window.setPointerCapture(true);
 });
 window.on("key", event => {
-  if(event.key === Key.ESCAPE && event.action === "press") capture = false;
-});
-window.on("focus", event => { if(!event.focused) capture = undefined; });
-app.on("fixedUpdate", () => {
-  if(capture !== undefined) {
-    if(!capture || window.input.focused) window.setPointerCapture(capture);
-    capture = undefined;
-  }
+  if(event.action !== "press") return;
+  if(event.key === Key.ESCAPE) window.setPointerCapture(false);
+  if(event.key === Key.Q) window.requestClose();
 });
 ```
 
@@ -111,9 +105,9 @@ the cursor, locks it to the window, and allows unlimited virtual movement.
 This is game-style capture, not DOM pointer capture or visible cursor confinement.
 Passing `true` as the second positional argument (`rawMotion`) throws if raw motion
 is unavailable; there is no silent raw-mode fallback. `setPointerCapture(false)`
-restores the cursor and disables raw motion. Successful commands update
-`window.input` immediately; their events arrive at the next poll. Repeating the
-same mode is safe and produces no extra capture event. Capture requires a focused,
+restores the cursor and disables raw motion. Outside input dispatch, successful
+commands update `window.input` immediately; their events arrive at the next poll.
+Repeating the same mode is safe and produces no extra capture event. Capture requires a focused,
 open window. Releasing it remains valid while unfocused or close-requested.
 
 On focus loss, native held keys and buttons are cleared, marked synthetic release
@@ -147,16 +141,48 @@ results, including promises, throw a TypeError (returned rejected promises are
 consumed). Remaining event notifications are discarded but held state has already
 been reconciled, and subsequent polls can recover.
 
-Input dispatch holds the same native application operation guard as drawing.
-Reading input snapshots, subscribing/unsubscribing, and `app.stop()` are safe in
-listeners. Nested polling, drawing, window creation, capture changes, close
-requests, and window/application disposal are rejected. Defer native mutations
-to a fixed update, as in the example above, or to a host task (for example, a
-timer callback) after input dispatch has returned. Render callbacks also hold the
-guard and cannot perform these mutations. Fixed updates do not run while paused;
-a host task can run while the application is paused. Before executing a deferred
-action, account for focus, close, and disposal changes that may have occurred in
-the meantime. Native window operations remain restricted to the process main thread.
+### Actions requested from input listeners
+
+Input dispatch holds the native application operation guard. `requestClose()` and
+`setPointerCapture(captured, rawMotion?)` are supported in input listeners: they
+record typed commands for that window rather than mutating native state there.
+No general deferred-callback API is exposed.
+
+- Commands execute in request order after the **whole successful batch** returns
+  from native dispatch and releases its operation guard, before `pollEvents()`
+  returns or the scheduler starts updates/rendering. All listeners in the batch
+  continue to see the same final polled snapshot. Commands do not skip remaining
+  listeners. Stop and pause do not cancel the batch or its commands.
+- Each successful command refreshes `window.input`. Command-generated capture and
+  synthetic-release events are delivered at the next poll, never recursively in
+  the current batch. `pollEvents()` reports whether a window is open after applying
+  commands, so a close requested by input can return false in that same call.
+- Requests are not coalesced: capture/release/capture applies all three transitions
+  in order. Repeating the same capture mode is a native no-op with no extra event.
+  A successful close releases capture and held controls, ends the command queue,
+  and cancels all later requests in that queue, including duplicate closes.
+- Capture uses native focus/close state at execution. Capture of an unfocused or
+  close-requested window throws; release remains valid. Focus loss clears held
+  state and releases capture before dispatch. A capture request from that batch
+  cannot override focus loss. Focus gain does not recapture automatically.
+- A thrown listener value, invalid synchronous result, or native dispatch failure
+  discards **all commands from that batch**, even those requested by earlier
+  listeners. The original failure is preserved. A command failure stops the queue
+  and discards its remainder; prior successful commands are not rolled back.
+  `pollEvents()` throws the failure, or `run()` rejects with it. Later polls can
+  recover; canceled commands never survive into a later batch.
+- Commands execute during paused polling without fixed updates or host timers.
+  A close request does not dispose resources. Disposal still rejects during input;
+  after successful disposal, queued native notifications and listeners are cleared
+  and both action methods throw. No command queue survives an input dispatch.
+
+Reading snapshots, subscribing/unsubscribing, and `app.stop()`/`pause()`/`resume()`
+remain safe in input listeners (pause/resume require a run). Nested polling,
+drawing, window creation, configuration, key-label queries, and window/application
+disposal remain guarded. Render callbacks cannot request close/capture and retain
+the same acquire → render → present scope. Outside input listeners the two action
+methods execute synchronously under their ordinary native guards. Native window
+operations remain restricted to the process main thread.
 
 ## Validation
 
@@ -166,8 +192,27 @@ keyboard/pointer checks in both Node.js and Bun. Input checks use XTest through
 repeat enabled. They cover physical key press/release/repeat and modifiers,
 held-state snapshots, normal/captured movement, three buttons, both scroll axes,
 focus loss with held controls and capture, paused polling, listener failures,
-reentrancy, close, disposal, and window recreation. They do not establish behavior
+reentrancy, close, disposal, and window recreation. The input-action fixture also
+checks ordered commands, duplicate requests, next-poll notifications, same-call
+close results, cancellation on listener/command failure, and capture/close while
+paused without updates or rendering. They do not establish behavior
 for Wayland, other operating systems, or physical high-DPI/trackpad hardware.
+
+The 2026-11-06 subscription/action change passed lint, typecheck, all 57
+unit/build-script tests, native build/source audit, compute/readback, and the full
+`native:verify --window-interactions` suite in Node.js 26.13.0 and Bun 1.3.14 on
+Linux x64 with private Xvfb/KWin and Mesa lavapipe 26.2.5. Cross-owner subscription
+contracts also passed before the refactor in both runtimes. The full presentation
+and forced-cleanup suite passed with Node.js 26.7.0 and Bun after an initial fault
+run encountered an X11 `BadDrawable` error that did not recur in a fresh display.
+The normal build was restored and smoke-verified afterward. The updated example
+was driven in Node.js 26.7.0 and Bun through movement, click capture, pointer
+motion, Escape release, wheel sizing, and Q close. Inspected before/after captures
+show movement and growth from 40×40 to 45×45 in both runtimes. Diagnostics are in
+`build/validation/desktop-*`; the final example captures/logs are in
+`build/validation/input-example-6Faj3z/` in this validation checkout. These checks
+use injected XTest input and software Vulkan; macOS, Wayland, physical input
+hardware, and hardware GPU presentation were not revalidated for this change.
 
 Validated on 2026-11-01 with Linux x64, Xvfb/KWin, Mesa lavapipe 26.2.5,
 Node.js 26.7.0, and Bun 1.3.14. `native:build`, typecheck, lint, all 28 deterministic

@@ -182,8 +182,9 @@ Use `window.on("key" | "pointerMove" | "pointerButton" | "scroll" | "focus" |
 Events are delivered by `app.pollEvents()` and `app.run()`, including while paused.
 Focus loss clears held controls and releases capture. `setPointerCapture(true)`
 hides and locks the cursor for unlimited game-control motion; the optional second
-argument enables raw motion explicitly. Native mutations must be deferred out of
-input listeners to preserve operation guards.
+argument enables raw motion explicitly. Input listeners can call `requestClose()`
+and `setPointerCapture()` directly: these commands execute after the successful
+input batch, including while paused. Other native mutations retain their guards.
 
 Run `bun run example:input` or `node examples/vanilla/input.ts` for an interactive square:
 WASD/arrows move, click toggles capture, Escape releases it, the wheel changes

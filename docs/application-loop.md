@@ -173,6 +173,15 @@ awaited. A listener failure stops scheduling and rejects the run; resources rema
 available for explicit cleanup or recovery. Registering or starting a run after
 application disposal throws.
 
+Fixed updates, window rendering, and input listeners share internal subscription
+mechanics through composition. Their owners still control lifecycle checks,
+pause/stop handling, and event/frame/batch boundaries. A Node `EventEmitter` is
+not a replacement for this contract: its `on()` returns the emitter, removal
+during emission does not skip a listener already scheduled for that emission,
+and listener results are ignored. Hostframe returns independent unsubscribe
+functions, applies removals immediately, and enforces synchronous results.
+Input additionally snapshots additions across the entire native input batch.
+
 ## Event polling and execution limits
 
 `app.pollEvents()` processes native window/input events without rendering and
@@ -191,5 +200,6 @@ The process-lifetime GPU-owner root is unchanged. This scheduler does not solve
 upstream GPU-object lifetime management or alter caller ownership of devices.
 
 Input events are dispatched during polling before fixed updates and rendering,
-including while paused. Read held controls in fixed updates; native mutations
-inside input listeners are guarded. See [window input](window-input.md).
+including while paused. Read held controls in fixed updates. Close and pointer
+capture requested from input listeners execute after the successful batch; other
+native mutations inside input listeners remain guarded. See [window input](window-input.md).

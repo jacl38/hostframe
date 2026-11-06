@@ -3,6 +3,7 @@ import { getProcessGPU, NativeApplication } from "../native/bridge.ts";
 import type { WindowOptions } from "../native/bridge.ts";
 import { Window } from "./window.ts";
 import { ApplicationLoop } from "./loop.ts";
+import { Subscriptions } from "./subscriptions.ts";
 import type { FixedUpdateEvent, RunOptions } from "./timing.ts";
 
 /** Owns one GLFW session and its window. Construct on the process main thread. */
@@ -12,7 +13,7 @@ export class Application {
   #native: NativeApplication;
   #loop: ApplicationLoop | undefined;
   #window: Window | undefined;
-  #listeners = new Set<{ callback: (event: FixedUpdateEvent) => undefined }>();
+  #listeners = new Subscriptions<FixedUpdateEvent>("fixedUpdate", "an application");
 
   constructor() {
     this.#native = new NativeApplication();
@@ -53,20 +54,17 @@ export class Application {
 
   /** Pumps native events without rendering. Returns whether any window is open. */
   pollEvents() {
-    const open = this.#native.pollEvents();
+    this.#native.pollEvents();
     this.#window?.dispatchInput();
-    return open;
+    // Input commands may have closed the window after native polling returned.
+    return this.#native.hasOpenWindows;
   }
 
   /** Registers a synchronous listener and returns an idempotent unsubscribe function. */
   on(event: "fixedUpdate", listener: (event: FixedUpdateEvent) => undefined) {
     this.#requireAlive();
     if(event !== "fixedUpdate") throw new TypeError(`Unknown application event: ${String(event)}`);
-    const listeners = this.#listeners;
-    if(typeof listener !== "function") throw new TypeError("Expected an application listener");
-    const entry = { callback: listener };
-    listeners.add(entry);
-    return () => { listeners.delete(entry); };
+    return this.#listeners.add(listener);
   }
 
   /** Runs until stopped, disposed, or no window remains open. Callback failures reject. */
@@ -140,24 +138,15 @@ export class Application {
   }
 
   #emitFixedUpdate(value: FixedUpdateEvent) {
-    const listeners = this.#listeners;
-    // Snapshot additions; removals take effect before a listener's turn. Stop,
-    // pause, close requests, and disposal prevent the remaining callbacks.
-    const snapshot = Array.from(listeners);
-    for(const listener of snapshot) {
-      if(!this.#loop?.active) break;
+    // The application owns stop/pause/close policy, independently of listener mechanics.
+    this.#listeners.snapshot()(value, () => {
+      if(!this.#loop?.active) return false;
       if(!this.#native.hasOpenWindows) {
         this.stop();
-        break;
+        return false;
       }
-      if(!listeners.has(listener)) continue;
-      const result: unknown = listener.callback(value);
-      if(result !== undefined) {
-        // Reject async results without leaving a rejected returned promise orphaned.
-        void Promise.resolve(result).catch(() => {});
-        throw new TypeError("fixedUpdate listeners must return undefined synchronously");
-      }
-    }
+      return true;
+    });
   }
 }
 
