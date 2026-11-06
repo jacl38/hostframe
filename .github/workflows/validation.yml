@@ -40,7 +40,7 @@ jobs:
           HOSTFRAME_DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: bun scripts/validation/changes.ts
       - run: bun run lint
-      - run: bun test scripts/native/native.test.ts scripts/native/input-constants.test.ts scripts/release scripts/validation packages/core/test/loop.test.ts packages/core/test/timing.test.ts
+      - run: bun test scripts/native/native.test.ts scripts/native/generate.test.ts scripts/native/input-constants.test.ts scripts/release scripts/validation packages/core/test/loop.test.ts packages/core/test/timing.test.ts
 
   build:
     needs: checks

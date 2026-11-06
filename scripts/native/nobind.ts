@@ -7,6 +7,14 @@ function expectCount(content: string, anchor: string | RegExp, count: number, fi
   if(matches !== count) throw new Error(`nobind patch mismatch in ${file}: expected ${count} matches for ${anchor}, found ${matches}.`);
 }
 
+const expected: Record<string, Array<[string | RegExp, number]>> = {
+  "nobind.h": [["    auto r = napi_add_async_cleanup_hook(", 1], ["    auto instance = env_.GetInstanceData<BaseEnvInstanceData>();", 1], ["    Nobind::InitMainThreadQueue<Nobind::EnvInstanceData<INSTANCE_DATA_TYPE>>(env);", 1], ["    env.SetInstanceData(instance);", 1]],
+  "nohelpers.h": [["template <typename T> void RunOnJSMainThread(Napi::BasicEnv env, std::function<void()> &&job) {", 1]],
+  "noobject.h": [["sizeof...(ARGS)", 3], ["#include <uv.h>", 1]],
+  "notypes.h": [["if (actual != expected)", 1]],
+  "notypescript.h": [["  std::vector<std::string> types{FromTSType<ARGS>()...};", 1], ["    types_text += \"arg\"s + std::to_string(i) + \": \"s + types[i];", 1]]
+};
+
 /**
  * nobind17 2.0.1's module initializer unconditionally calls uv_async_init, which
  * Bun 1.3.14 aborts on. This addon only registers synchronous methods and owns
@@ -22,13 +30,6 @@ export async function prepareNobind() {
   for await (const name of new Bun.Glob("*.h").scan(source)) {
     let content = await Bun.file(resolve(source, name)).text();
     seen.add(name);
-    const expected: Record<string, Array<[string | RegExp, number]>> = {
-      "nobind.h": [["    auto r = napi_add_async_cleanup_hook(", 1], ["    auto instance = env_.GetInstanceData<BaseEnvInstanceData>();", 1], ["    Nobind::InitMainThreadQueue<Nobind::EnvInstanceData<INSTANCE_DATA_TYPE>>(env);", 1], ["    env.SetInstanceData(instance);", 1]],
-      "nohelpers.h": [["template <typename T> void RunOnJSMainThread(Napi::BasicEnv env, std::function<void()> &&job) {", 1]],
-      "noobject.h": [["sizeof...(ARGS)", 3], ["#include <uv.h>", 1]],
-      "notypes.h": [["if (actual != expected)", 1]],
-      "notypescript.h": [["  std::vector<std::string> types{FromTSType<ARGS>()...};", 1], ["    types_text += \"arg\"s + std::to_string(i) + \": \"s + types[i];", 1]]
-    };
     for(const [anchor, count] of expected[name] ?? []) expectCount(content, anchor, count, name);
     if(name === "nofunction.h" || name === "noobject.h") {
       expectCount(content, /} catch \(const std::exception &e\) \{\n(\s*)throw Napi::Error::New\(env, e.what\(\)\);/g, name === "nofunction.h" ? 1 : 2, name);
@@ -37,9 +38,15 @@ export async function prepareNobind() {
     if(name !== "nobind.h") expectCount(content, "    env.SetInstanceData(instance);", 0, name);
     if(name === "nobind.h") {
       const start = content.indexOf("    auto r = napi_add_async_cleanup_hook(");
-      const end = content.indexOf("#ifndef NOBIND_NO_TYPESCRIPT_GENERATOR", start);
-      if(start < 0 || end < 0) throw new Error("nobind synchronous cleanup patch no longer matches.");
-      content = content.slice(0, start) + content.slice(end);
+      const endAnchor = "    if (r != napi_ok) {\n      throw Napi::Error::New(env_, \"Failed to register Object Store cleanup hook\");\n    }\n#ifndef NOBIND_NO_TYPESCRIPT_GENERATOR";
+      expectCount(content, endAnchor, 1, name);
+      const end = content.indexOf(endAnchor, start);
+      if(start < 0 || end < start) throw new Error("nobind synchronous cleanup patch no longer matches.");
+      expectCount(content.slice(start, end), "#ifndef NOBIND_NO_TYPESCRIPT_GENERATOR", 0, name);
+      content = content.slice(0, start) + content.slice(end + endAnchor.indexOf("#ifndef"));
+      for(const [anchor, count] of expected[name] ?? []) {
+        if(anchor !== "    auto r = napi_add_async_cleanup_hook(") expectCount(content, anchor, count, name);
+      }
       content = content.replace("    auto instance = env_.GetInstanceData<BaseEnvInstanceData>();", "    [[maybe_unused]] auto instance = env_.GetInstanceData<BaseEnvInstanceData>();");
       const queue = "    Nobind::InitMainThreadQueue<Nobind::EnvInstanceData<INSTANCE_DATA_TYPE>>(env);";
       if(!content.includes(queue)) throw new Error("nobind synchronous initialization patch no longer matches.");
