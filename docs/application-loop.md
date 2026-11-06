@@ -1,7 +1,7 @@
 # Application loops
 
 The optional scheduler supports fixed simulation steps and separate rendering on
-the process main thread. The application owns scheduling and native polling; windows own rendering. One application and one live window are supported
+the process main thread. The application owns scheduling and native polling; windows own rendering. One application supports multiple live windows; only one application may be live
 at a time. Windows default to fixed 320×240; creation options can customize the
 title, initial screen-coordinate dimensions, and resizability (see the
 [window contract](../README.md)).
@@ -210,3 +210,19 @@ Input events are dispatched during polling before fixed updates and rendering,
 including while paused. Read held controls in fixed updates. Close and pointer
 capture requested from input listeners execute after the successful batch; other
 native mutations inside input listeners remain guarded. See [window input](window-input.md).
+
+## Multiple windows
+
+Input and rendering visit windows in creation order using a new collection
+snapshot for each phase. Disposed windows unregister immediately; closed windows
+skip rendering while retaining their resources. Fixed-update listeners may
+create, configure, close, or dispose windows. The next render phase uses the
+resulting collection. Replacing the last window in the same fixed-update callback
+keeps the run alive; leaving no open windows stops subsequent update listeners.
+Stopping or pausing in a render listener skips subsequent windows that iteration.
+Native application operation guards apply across all windows during an input
+batch or frame, so another window cannot be mutated reentrantly.
+
+Presentation is sequential on the main thread. A FIFO wait in an earlier window
+delays later windows and fixed updates. Neither per-window vsync settings nor
+`maxFPS` isolate window pacing. See [device compatibility and lifetime](window-context.md#multiple-surfaces).

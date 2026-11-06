@@ -53,6 +53,15 @@ if(process.argv.includes("--no-display")) {
     }
     context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
     assert.equal(window.presentMode, "fifo");
+    const second = app.createWindow({ title: "hostframe package second", width: 240, height: 180 });
+    const secondContext = second.getContext("webgpu");
+    secondContext.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
+    let secondFrames = 0;
+    second.on("render", () => {
+      assert.equal(secondContext.getCurrentTexture().width, 240);
+      secondFrames++;
+      if(secondFrames === 5) app.stop();
+    });
     let frames = 0;
     window.on("render", () => {
       const texture = context.getCurrentTexture();
@@ -72,6 +81,12 @@ if(process.argv.includes("--no-display")) {
     });
     await app.run({ maxFPS: 30 });
     assert.equal(frames, 3);
+    assert.equal(secondFrames, 2, "Stopping in first window must skip second");
+    window.requestClose();
+    await app.run({ maxFPS: 30 });
+    assert.equal(frames, 3);
+    assert.equal(secondFrames, 5);
+    second.dispose();
     window.dispose();
     window.dispose();
     assert.throws(() => context.getCurrentTexture(), /disposed/);

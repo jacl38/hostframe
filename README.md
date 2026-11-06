@@ -3,7 +3,7 @@
 Licensed under [Apache-2.0](LICENSE). Third-party components retain their own
 licenses; the package includes their notices in `dist/THIRD_PARTY_NOTICES.txt`.
 
-The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. The application scheduler drives fixed updates and window render events; explicit event polling is also available. Keyboard and pointer input include held-state snapshots and game-style pointer capture. Multiple live windows remain planned.
+The implementation combines existing native components with a small integration layer. Native setup scripts are available under `scripts/`; see [the native build guide](docs/native-build.md). A minimal `Application` now owns native window lifetimes and connects JavaScript rendering to native presentation with optional resizing. The application scheduler drives fixed updates and window render events; explicit event polling is also available. Keyboard and pointer input include held-state snapshots and game-style pointer capture. One application can own multiple independently configured windows.
 
 | Piece | Responsibility | Location |
 |---|---|---|
@@ -43,7 +43,7 @@ prerequisites, and release limitations.
 
 **Examples**
 
-The [example gallery](examples/README.md) contains 16 runnable demos grouped by
+The [example gallery](examples/README.md) contains 17 runnable demos grouped by
 rendering source: vanilla WebGPU, webgpu-utils, TypeGPU, and Three.js, including
 Rapier physics. Run `bun run example --list`, then for example
 `bun run example three/shadows`. Every entry also runs directly in Node.js.
@@ -59,8 +59,8 @@ node examples/vanilla/solid-color.ts
 ```
 
 The [Application](packages/core/application.ts) owns one native GLFW session and
-tracks its window. One application and one live window are supported at a
-time, on the process main thread. The example renders a resizable blue 640×480 window for three
+tracks its windows. One application with multiple live windows is supported on
+the process main thread. The example renders a resizable blue 640×480 window for three
 seconds of simulated time and exits, or stops normally when the window is closed.
 It supports Linux x64 with X11 and Vulkan, and macOS arm64 with Cocoa and Metal.
 
@@ -165,8 +165,8 @@ bun examples/vanilla/solid-color.ts --no-vsync --max-fps=144      # Immediate/Ma
 
 Windows own their surfaces and retain their configured JavaScript device. Devices
 remain caller-owned: dispose/unconfigure the window before destroying its device.
-`window.dispose()` unregisters it and permits `app.createWindow()` again without
-terminating GLFW. `app.dispose()` disposes windows before releasing GLFW. Repeated
+`window.dispose()` unregisters only that window; `app.createWindow()` can also add
+windows while others remain live, without terminating GLFW. `app.dispose()` disposes windows before releasing GLFW. Repeated
 disposal is safe, including a window that was never configured. Closing the last
 window ends `run()` normally but does not dispose resources; use `finally`.
 
@@ -175,6 +175,28 @@ objects do not retain it. Application disposal does not release that root or
 destroy caller-owned devices. **Application ownership does not solve upstream
 GPU-object lifetime management.** Native cleanup drains deferred swapchain deletion;
 a five-second timeout destroys the stalled device and throws after cleanup.
+This also invalidates every other context sharing that device: their next render
+fails with device loss. Dispose or unconfigure those contexts before replacing
+the device. Ordinary window cleanup never destroys a shared device.
+
+See the [two-window example](examples/vanilla/multiple-windows.ts): each window
+has its own context, size, input, and close state, while both use one device.
+`configure()` checks that device's adapter against each surface independently;
+selection through one context does not guarantee support for another surface.
+If a shared device is incompatible, choose a device through the other context
+and keep its GPU resources separate. All devices must come from `app.gpu`.
+
+Input and rendering visit snapshots of live windows in creation order. Each
+window's input batch completes (including its deferred commands) before the next;
+a failure aborts that poll, drops the failing batch's commands, and leaves later
+windows' queued input for the next poll. Fixed updates may create/dispose windows;
+the next render snapshot reflects those changes. Closed windows skip rendering,
+but retain resources until disposal. Only closing/disposing the final open window
+ends `run()`. Paused runs still poll input for every window.
+
+Frames acquire, render, and present sequentially. A FIFO acquisition/presentation
+wait for one window delays later windows and fixed updates on the same main
+thread. Per-window vsync and a scheduler cap do not provide independent pacing.
 
 **Keyboard and pointer input**
 
@@ -223,8 +245,7 @@ Stopping does not dispose resources. Use `finally` to dispose the application an
 then caller-owned devices. See [the loop contract](docs/application-loop.md) for
 catch-up limits, interpolation, listener semantics, and custom loops.
 
-Multiple live windows remain outside this increment. The former experimental free functions have
-been replaced by `Application`.
+The former experimental free functions have been replaced by `Application`.
 
 **Native integration**
 

@@ -6,7 +6,7 @@ const [name, ...args] = process.argv.slice(2);
 if(name === "--verify") {
   if(args.some(arg => arg !== "--representative")) throw new Error("Usage: bun run examples:verify [--representative]");
   const selected = args.includes("--representative")
-    ? examples.filter(example => ["vanilla/triangle", "three/materials", "typegpu/triangle", "webgpu-utils/textures"].includes(example))
+    ? examples.filter(example => ["vanilla/triangle", "vanilla/multiple-windows", "three/materials", "typegpu/triangle", "webgpu-utils/textures"].includes(example))
     : examples;
   for(const runtime of ["bun", "node"]) {
     for(const example of selected) {

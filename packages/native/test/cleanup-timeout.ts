@@ -43,6 +43,9 @@ async function exercise() {
     const weak = new WeakRef(device);
     context.configure({ device, format });
     await renderFrames(app, window);
+    const sibling = app.createWindow({ title: "hostframe shared timeout sibling" });
+    const siblingContext = configureWindow(app, sibling, device);
+    await renderFrames(app, sibling);
 
     // Failed validation and callback errors must preserve their original values
     // and must not consume the fault (neither operation drains the device).
@@ -70,6 +73,15 @@ async function exercise() {
       return true;
     });
     assert.equal((await device.lost).reason, "destroyed", "Timeout must destroy the old caller device");
+    if(operation === "application") {
+      assert.throws(() => siblingContext.getConfiguration(), /disposed/);
+    } else {
+      // The bounded cleanup policy destroys the stalled caller-owned device,
+      // including other surfaces sharing it. They fail explicitly, then dispose.
+      await assert.rejects(renderFrames(app, sibling), /lost or destroyed/);
+    }
+    sibling.dispose();
+    assert.throws(() => siblingContext.getConfiguration(), /disposed/);
     return weak;
   }
   await collected(weakDevice);

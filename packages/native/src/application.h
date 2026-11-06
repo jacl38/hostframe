@@ -21,7 +21,6 @@ class ApplicationState {
   void Register(std::shared_ptr<WindowState> window);
   void Unregister(WindowState* window);
   bool Close();
-  bool HasWindow() const { return !windows_.empty(); }
   bool HasOpenWindows() const;
   bool IsDisposed() const { return !session_; }
   bool executing = false;

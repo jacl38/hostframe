@@ -129,15 +129,15 @@ The former experimental free functions have been removed.
   thread. Only one application may be live at a time. Initialization failures
   release partial state; retries are safe.
 - `app.gpu`: exposes the single GPU owner rooted on `globalThis` until process
-  exit, including runtime teardown. Dawn's WebGPU globals are installed during
-  application construction. Use devices obtained through this GPU for windows.
-- `app.createWindow(device, options?: WindowOptions)`: creates one window. Options
+  exit, including runtime teardown. WebGPU globals require explicit
+  `installWebGPUGlobals()`. Use devices obtained through this GPU for windows.
+- `app.createWindow(options?: WindowOptions)`: creates one window. Options
   `title`, `width`, `height`, `resizable`, and `vsync` default to
   `"hostframe solid color"`, `320`, `240`, `false`, and `true`. Dimensions must be
   positive signed 32-bit integers in GLFW screen coordinates; title must be a string
   without embedded null characters, and flags must be booleans. Omitted/undefined
-  fields use defaults. Only one live window
-  is supported. The application tracks and owns native window state even if the
+  fields use defaults. Multiple live windows are supported. The application tracks
+  and owns native window state even if the
   JavaScript window wrapper is collected. The window owns its surface and
   presentation resources and retains its JavaScript device until disposal;
   callers retain ownership of the device.
@@ -259,7 +259,7 @@ an optional scheduler with bounded catch-up and pause/resume/stop controls. See
 turns for GPU promises and I/O. The render cap is independent of vsync; blocking surface
 acquisition and OS/JavaScript scheduling affect callback execution times.
 
-Broader window/context APIs, multiple live windows,
+Broader window/context APIs,
 further platform expansion, and complete
 GC/shutdown validation are outside this increment. No additional upstream patches are used.
 
@@ -636,3 +636,31 @@ API guide. The first default-ICD run passed compute and label checks but failed
 presentation through Xvfb on Intel (no DRI3); the complete software-ICD run passed.
 These checks establish Linux x64/X11 behavior, not macOS behavior. The pre-existing
 exploratory Dawn throwing-format-getter crash remains outside this change.
+
+### Multiple-window validation (2026-11-06)
+
+On Linux x64, the presentation and `--window-interactions` suites passed with
+Node.js 26.13.0, Bun 1.3.14, Mesa 26.2.5 lavapipe, and a private Xvfb/KWin X11
+session. The same full suite passed with cleanup fault injection enabled,
+including all eight unconfigure/reconfigure/window/application timeout cases
+with a sibling surface sharing the stalled device. The default addon was then
+rebuilt and checked for absence of the fault-control string.
+
+The new two-window regressions exercise independent contexts and presentation
+policies, creation-order dispatch, cross-window native operation guards, failed
+creation/configuration/render/input, fixed-update create/remove/replacement,
+first/final closure, focus and held-state routing, capture release, resize,
+minimize/restore, paused commands, shared-device readback after normal cleanup,
+and device-loss propagation on cleanup timeout. The two-window consumer example
+was run, captured, and inspected in Node and Bun: both colors rendered, clicking
+blue dimmed only blue, closing blue left orange running, and final closure exited.
+The representative gallery also passed in both runtimes. The actual npm tarball
+was installed by npm and Bun; consumer typechecking and two-window compute,
+presentation, close/disposal, and no-display failure checks passed under Node.js
+26.7.0 and Bun 1.3.14. Lint, typecheck, and all 57 unit tests passed.
+
+These checks establish Linux X11/software-Vulkan behavior, not macOS multiwindow
+behavior, multi-monitor or hardware-adapter compatibility across surfaces,
+physical input, independent presentation pacing, or complete GC/shutdown safety.
+The known upstream crash from a throwing canvas-format getter is outside this
+change; the regression uses a throwing device getter to check exception identity.

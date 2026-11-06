@@ -3,7 +3,7 @@
 Create a window with `app.createWindow(options?)`, obtain its stable context with
 `window.getContext("webgpu")`, request an adapter/device, and configure the context.
 See the [complete clear-screen example](../README.md#minimal-application-api).
-Only one application and one live window are currently supported.
+One application can own multiple live windows; only one application may be live at a time.
 
 ## Adapter selection
 
@@ -108,3 +108,22 @@ and rendering passed in clean npm/Bun consumers using both JavaScript runtimes.
 The new API has not been verified on macOS or physical GPU/display hardware in
 this change. Existing historical platform checks in native-build.md do not
 establish that compatibility. No frame-rate or latency claims were measured.
+
+## Multiple surfaces
+
+Every window owns an independent context and surface configuration. A device
+chosen with one context's `requestAdapter()` may be shared with another window;
+`configure()` checks its adapter's capabilities against that specific surface
+and rejects incompatibility before replacing an existing configuration. Use a
+separate adapter/device selected through the second context if necessary. Devices
+must belong to the process GPU instance exposed by `app.gpu`. GPU resources remain
+bound to their device and cannot be shared across different devices.
+
+Dispose/unconfigure all contexts using a caller-owned device before destroying
+it. Normal cleanup drains work without destroying the device, including work
+submitted by other windows. The bounded five-second cleanup timeout destroys the
+stalled device and throws after releasing the cleaned context. All other contexts
+sharing that device then fail rendering with device loss; explicitly clean them
+up before configuring replacement devices. They retain their configuration and
+device references until that cleanup. This fail-fast policy avoids leaving
+deferred native swapchain deletion attached to a destroyed display.
