@@ -10,6 +10,19 @@ Object.defineProperty(inherited, "GPU", {
 assert.throws(installWebGPUGlobals, /Conflicting WebGPU global/);
 assert.equal(Object.hasOwn(globalThis, "GPUBufferUsage"), false);
 Reflect.deleteProperty(inherited, "GPU");
+Object.defineProperty(globalThis, "GPU", {
+  get() { throw new Error("Own getter must not run"); },
+  configurable: true
+});
+assert.throws(installWebGPUGlobals, /Conflicting WebGPU global/);
+assert.equal(Object.hasOwn(globalThis, "GPUBufferUsage"), false);
+Reflect.deleteProperty(globalThis, "GPU");
+Object.defineProperty(globalThis, "GPU", { value: class ForeignGPU {}, configurable: true });
+const foreign = Object.getOwnPropertyDescriptor(globalThis, "GPU");
+assert.throws(installWebGPUGlobals, /Conflicting WebGPU global/);
+assert.deepEqual(Object.getOwnPropertyDescriptor(globalThis, "GPU"), foreign);
+assert.equal(Object.hasOwn(globalThis, "GPUBufferUsage"), false);
+Reflect.deleteProperty(globalThis, "GPU");
 if(process.argv.includes("--nonextensible")) {
   Object.preventExtensions(globalThis);
   assert.throws(installWebGPUGlobals, /nonextensible/);

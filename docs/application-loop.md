@@ -7,6 +7,9 @@ title, initial screen-coordinate dimensions, and resizability (see the
 [window contract](../README.md)).
 
 ```ts
+import { Application, installWebGPUGlobals } from "hostframe";
+
+installWebGPUGlobals();
 const app = new Application();
 let device: GPUDevice | undefined;
 try {
@@ -38,6 +41,10 @@ try {
   }
 }
 ```
+
+Call `installWebGPUGlobals()` when rendering code uses global WebGPU constructors
+or constants. Application construction does not install them; see the
+[global installation policy](../README.md).
 
 ## Timing contract
 

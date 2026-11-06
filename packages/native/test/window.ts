@@ -49,6 +49,10 @@ if(!isMainThread) {
   } else {
     const originalGPU = Object.getOwnPropertyDescriptor(globalThis, "GPU");
     assert.equal(originalGPU, undefined);
+    const plain = new Application();
+    plain.dispose();
+    assert.equal(Object.hasOwn(globalThis, "GPU"), false);
+    assert.equal(Object.hasOwn(globalThis, "GPUBufferUsage"), false);
     Object.defineProperty(globalThis, "GPU", { value: undefined, writable: false, configurable: true });
     const isolated = new Application();
     isolated.dispose();

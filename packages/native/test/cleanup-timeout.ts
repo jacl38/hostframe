@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readdirSync, readlinkSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
-import { Application } from "../../../index.ts";
+import { installWebGPUGlobals, Application } from "../../../index.ts";
 import { assertDeviceAlive } from "./device.ts";
 import { configureWindow, renderFrames } from "./frames.ts";
+
+installWebGPUGlobals();
 
 const operation = process.argv[2]!;
 assert.ok(["unconfigure", "reconfigure", "window", "application"].includes(operation));

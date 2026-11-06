@@ -4,10 +4,12 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
-import { Application, type Window } from "../../../index.ts";
+import { installWebGPUGlobals, Application, type Window } from "../../../index.ts";
 import { checkAdapter } from "./adapter.ts";
 import { assertDeviceAlive } from "./device.ts";
 import { configureWindow, renderFrames } from "./frames.ts";
+
+installWebGPUGlobals();
 
 const execute = promisify(execFile);
 const runtime = process.versions.bun ? "bun" : "node";
