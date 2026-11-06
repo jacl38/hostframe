@@ -7,6 +7,8 @@ import type { RenderEvent } from "./timing.ts";
 
 export type WindowEvents = WindowInputEvents & { render: RenderEvent };
 
+type InputCommand = { type: "close" } | { type: "capture", captured: boolean, rawMotion: boolean };
+
 /** A native window owned by its Application. Dispose before destroying its device. */
 export class Window {
   #native: NativeWindow;
@@ -17,6 +19,7 @@ export class Window {
   #renderEvent!: RenderEvent;
   #active!: () => boolean;
   #render: () => undefined;
+  #inputCommands: InputCommand[] | undefined;
 
   /** @internal Created by Application.createWindow. */
   constructor(native: NativeWindow) {
@@ -66,12 +69,24 @@ export class Window {
     return undefined;
   }
 
-  /** Hidden, unlimited virtual pointer motion. Explicit raw mode throws if unsupported. */
+  /** Hidden virtual pointer motion. In input listeners, applied after the successful batch. */
   setPointerCapture(captured: boolean, rawMotion = false) {
+    if(this.#inputCommands) {
+      if(typeof captured !== "boolean" || typeof rawMotion !== "boolean") throw new TypeError("Pointer capture arguments must be booleans");
+      this.#inputCommands.push({ type: "capture", captured, rawMotion });
+      return;
+    }
     this.#input = freezeInput(this.#native.setPointerCapture(captured, rawMotion));
   }
 
-  requestClose() { this.#input = freezeInput(this.#native.requestClose()); }
+  /** In input listeners, requested after the successful batch; cancels later capture commands. */
+  requestClose() {
+    if(this.#inputCommands) {
+      this.#inputCommands.push({ type: "close" });
+      return;
+    }
+    this.#input = freezeInput(this.#native.requestClose());
+  }
 
   dispose() {
     try {
@@ -89,10 +104,27 @@ export class Window {
   /** @internal Dispatch under the native application operation guard. */
   dispatchInput() {
     if(this.#native.disposed) return;
+    const commands: InputCommand[] = [];
     this.#native.dispatchInput((state, events) => {
       this.#input = freezeInput(state);
-      this.#listeners.dispatch(events);
+      this.#inputCommands = commands;
+      try {
+        this.#listeners.dispatch(events);
+      } finally {
+        this.#inputCommands = undefined;
+      }
     });
+    // Native dispatch must return successfully, releasing ApplicationOperation,
+    // before any commands run. A listener/native failure drops this local queue.
+    // No JavaScript listener is invoked while applying commands; resulting native
+    // notifications stay queued until the next poll, with no recursive dispatch.
+    for(const command of commands) {
+      if(command.type === "close") {
+        this.requestClose();
+        break;
+      }
+      this.setPointerCapture(command.captured, command.rawMotion);
+    }
   }
 
   #requireAlive() {

@@ -54,9 +54,10 @@ export class Application {
 
   /** Pumps native events without rendering. Returns whether any window is open. */
   pollEvents() {
-    const open = this.#native.pollEvents();
+    this.#native.pollEvents();
     this.#window?.dispatchInput();
-    return open;
+    // Input commands may have closed the window after native polling returned.
+    return this.#native.hasOpenWindows;
   }
 
   /** Registers a synchronous listener and returns an idempotent unsubscribe function. */

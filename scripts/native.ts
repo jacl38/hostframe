@@ -72,7 +72,9 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["node", resolve(root, "packages/native/test/resize.ts")],
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],
-      ["bun", resolve(root, "packages/native/test/input.ts")]
+      ["bun", resolve(root, "packages/native/test/input.ts")],
+      ["node", resolve(root, "packages/native/test/input-actions.ts")],
+      ["bun", resolve(root, "packages/native/test/input-actions.ts")]
     );
   }
   for(const command of checks) {

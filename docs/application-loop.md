@@ -200,5 +200,6 @@ The process-lifetime GPU-owner root is unchanged. This scheduler does not solve
 upstream GPU-object lifetime management or alter caller ownership of devices.
 
 Input events are dispatched during polling before fixed updates and rendering,
-including while paused. Read held controls in fixed updates; native mutations
-inside input listeners are guarded. See [window input](window-input.md).
+including while paused. Read held controls in fixed updates. Close and pointer
+capture requested from input listeners execute after the successful batch; other
+native mutations inside input listeners remain guarded. See [window input](window-input.md).

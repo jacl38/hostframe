@@ -70,6 +70,19 @@ function contextContracts(app: Application, device: GPUDevice) {
     const texture: GPUTexture = context.getCurrentTexture();
     void [render, texture];
   });
+  window.on("key", event => {
+    const key: WindowEvents["key"] = event;
+    if(key.action === "press") window.setPointerCapture(true, false);
+    if(key.key === Key.Q) window.requestClose();
+    // @ts-expect-error Event maps keep each callback's specific event shape.
+    void event.deltaX;
+  });
+  // @ts-expect-error Shared subscription mechanics do not expose public emission.
+  window.emit("key", {});
+  // @ts-expect-error Applications do not expose public emission either.
+  app.emit("fixedUpdate", {});
+  // @ts-expect-error Input action arguments remain booleans.
+  window.setPointerCapture("capture");
   // @ts-expect-error Window creation accepts options, not a device.
   app.createWindow(device);
   // @ts-expect-error Device-first construction has no overload.
