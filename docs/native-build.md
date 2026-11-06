@@ -113,7 +113,7 @@ with already prepared dependencies, before typechecking or using these exports.
 Run `bun run example:solid-color` or `node examples/vanilla/solid-color.ts` from a
 macOS desktop session or with an X11 display on Linux. The same example uses 120 Hz fixed updates and renders a resizable blue 640×480
 window for three seconds of simulated time. Native close requests stop it normally.
-For a headless check, use `xvfb-run -a bun run native:verify --presentation`.
+For an isolated headless check, use `bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions`. See [continuous validation](continuous-validation.md) for prerequisites and the command matrix.
 Xvfb is suitable for software presentation checks; Intel Vulkan presentation
 requires DRI3. See [the Intel validation report](intel-presentation.md) for an
 isolated hardware-accelerated Xwayland environment and reproduction commands.

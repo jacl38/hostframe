@@ -101,18 +101,18 @@ test("compiler evaluates expressions, integer suffixes, casts, octal and active 
   expect(values.Key.INACTIVE).toBeUndefined();
 });
 
-test("unresolvable, unsafe or inconsistent definitions fail instead of producing incorrect constants", async () => {
-  for(const header of [
-    fixture.replace("GLFW_MOD_SHIFT 0x0001", "GLFW_MOD_SHIFT 9007199254740992"),
-    fixture.replace("GLFW_MOD_SHIFT 0x0001", "GLFW_MOD_SHIFT 0xffffffffffffffffULL"),
-    fixture.replace("GLFW_MOUSE_BUTTON_LEFT GLFW_MOUSE_BUTTON_1", "GLFW_MOUSE_BUTTON_LEFT GLFW_MOUSE_BUTTON_MISSING"),
-    fixture.replace("GLFW_MOUSE_BUTTON_1 0", "GLFW_MOUSE_BUTTON_1 GLFW_MOUSE_BUTTON_LEFT"),
-    `${fixture}\n#define GLFW_KEY_ZERO 341`,
-    fixture.replace(/^#define GLFW_MOD_.*$/gm, "")
-  ]) {
+for(const [name, header] of [
+  ["unsafe integer", fixture.replace("GLFW_MOD_SHIFT 0x0001", "GLFW_MOD_SHIFT 9007199254740992")],
+  ["unsigned overflow", fixture.replace("GLFW_MOD_SHIFT 0x0001", "GLFW_MOD_SHIFT 0xffffffffffffffffULL")],
+  ["missing alias", fixture.replace("GLFW_MOUSE_BUTTON_LEFT GLFW_MOUSE_BUTTON_1", "GLFW_MOUSE_BUTTON_LEFT GLFW_MOUSE_BUTTON_MISSING")],
+  ["cyclic alias", fixture.replace("GLFW_MOUSE_BUTTON_1 0", "GLFW_MOUSE_BUTTON_1 GLFW_MOUSE_BUTTON_LEFT")],
+  ["duplicate name", `${fixture}\n#define GLFW_KEY_ZERO 341`],
+  ["missing group", fixture.replace(/^#define GLFW_MOD_.*$/gm, "")]
+] as const) {
+  test(`invalid constants fail: ${name}`, async () => {
     await expect(resolveFixture(header)).rejects.toThrow();
-  }
-});
+  });
+}
 
 test("generation recreates missing/stale output, tracks header changes and leaves unchanged output untouched", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "hostframe GLFW constants "));
@@ -165,7 +165,9 @@ await writeFile(process.argv[3]!, JSON.stringify(values));
   expect(await generateInputConstants(header, output)).toBe(true);
   expect(await Bun.file(output).text()).toContain("W: 88");
   expect(await Bun.file(output).text()).not.toBe(content);
-});
+  // This integration test regenerates four compiler fixtures and invokes Node;
+  // give the combined work a budget distinct from a single compiler fixture.
+}, 20_000);
 
 test("invalid headers leave existing generated output intact", async () => {
   const directory = await mkdtemp(resolve(tmpdir(), "hostframe GLFW invalid "));

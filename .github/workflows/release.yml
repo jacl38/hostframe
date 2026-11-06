@@ -24,6 +24,7 @@ jobs:
         shell: bash
     env:
       HOSTFRAME_JOBS: "2"
+      HOSTFRAME_X11_WM: openbox
       VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
     steps:
       - name: Install native and test prerequisites
@@ -33,7 +34,8 @@ jobs:
             gcc gcc-c++ cmake ninja-build python3 pkgconf-pkg-config \
             libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel \
             libXi-devel libXext-devel libXfixes-devel \
-            vulkan-loader mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth
+            vulkan-loader mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth \
+            openbox xdotool xprop ImageMagick dbus-daemon
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
@@ -60,12 +62,36 @@ jobs:
           bun run lint
           bun run typecheck
           bun test scripts packages/core/test
+      - name: Verify desktop failure and cancellation cleanup
+        run: bun scripts/validation/desktop-check.ts
       - name: Verify native presentation
-        run: xvfb-run -d -s '-screen 0 800x600x24' bun run native:verify --presentation
+        run: bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions
+      - name: Verify full gallery and composition output
+        run: |
+          bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
+          bun scripts/validation/desktop.ts node scripts/validation/renderer-output.ts
+          bun scripts/validation/desktop.ts bun scripts/validation/renderer-output.ts
       - name: Verify packed consumers
-        run: xvfb-run -d -s '-screen 0 800x600x24' bun run package:verify
+        run: bun scripts/validation/desktop.ts bun scripts/package/verify.ts
       - name: Prepare release assets
         run: bun run release:prepare
+      - name: Upload desktop diagnostics
+        if: always()
+        # v4's artifact protocol also works with act's local artifact server.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: validation-diagnostics
+          path: |
+            build/validation/lifecycle-*/*.log
+            build/validation/lifecycle-*/*.stderr
+            build/validation/desktop-*/*.log
+            build/validation/desktop-*/*.stderr
+            build/validation/desktop-*/*.json
+            build/validation/desktop-*/*.png
+            build/validation/desktop-*/captures/*.png
+          if-no-files-found: warn
+          compression-level: 0
+          retention-days: 14
       - name: Upload verified assets
         # v4's artifact protocol also works with act's local artifact server.
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
