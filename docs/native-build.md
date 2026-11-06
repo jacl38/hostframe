@@ -601,3 +601,38 @@ The `--window-interactions` suite also exercises real keyboard and pointer input
 through xdotool in Node.js and Bun, including focus loss with held controls, OS
 key repeat, scrolling, and game-style pointer capture. It needs repeat enabled
 and an EWMH X11 desktop. See [window input](window-input.md).
+
+### Session06 input contracts and key labels (2026-11-06)
+
+The isolated worktree reused Session05's pinned vendor checkout and cached
+archives. `bun install --frozen-lockfile` passed. Setup verified archive SHA-256
+values and dependency Git revisions/DEPS alignment, regenerated the native
+bindings, and compiled this worktree's hostframe/GLFW sources with a private
+CMake/cache/output directory against the pinned prebuilt Dawn engine. The Dawn
+engine itself was not compiled from source. Network access was needed for the
+pinned Go generator dependencies.
+
+`bun run native:build`, `bun run lint`, `bun run typecheck`, and the unit suite
+passed. The private desktop command was:
+
+```sh
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+  bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions
+```
+
+This includes the base compute/thread checks, presentation suite and real X11
+interactions on Node and Bun. Native callbacks also have a standalone regression
+executable covering same-batch transitions, independent unknown scancodes,
+focus-loss reconciliation and failure recovery. Its only substitutes are the
+terminal callback observer and Node exception-pending query; held state, event
+queueing and reconciliation use production `input.cpp` and its registered GLFW
+callbacks. No injection controls or test mode were added to the addon.
+
+US and German printable labels passed in separately initialized GLFW sessions,
+including unknown-token scancode lookup and non-printable symbolic fallback.
+Replacing the entire server keymap during one session retained stale Xlib key
+names in the pinned upstream implementation; this is documented in the input
+API guide. The first default-ICD run passed compute and label checks but failed
+presentation through Xvfb on Intel (no DRI3); the complete software-ICD run passed.
+These checks establish Linux x64/X11 behavior, not macOS behavior. The pre-existing
+exploratory Dawn throwing-format-getter crash remains outside this change.

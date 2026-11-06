@@ -35,7 +35,7 @@ jobs:
             libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel \
             libXi-devel libXext-devel libXfixes-devel \
             vulkan-loader mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth \
-            openbox xdotool xprop ImageMagick dbus-daemon
+            openbox xdotool xprop setxkbmap xkeyboard-config ImageMagick dbus-daemon
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false

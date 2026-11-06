@@ -87,6 +87,8 @@ NOBIND_MODULE(hostframe, m) {
   m.def<Application>("Application").cons<napi_env>()
       .def<&Application::CreateWindow>("createWindow")
       .def<&Application::PollEvents>("pollEvents")
+      .def<&Application::GetKeyLabel>("getKeyLabel")
+      .def<&Application::GetKeyScancode>("getKeyScancode")
       .def<&Application::Dispose>("dispose")
       .def<&Application::hasOpenWindows, Nobind::ReadOnly>("hasOpenWindows")
       .def<&Application::disposed, Nobind::ReadOnly>("disposed");

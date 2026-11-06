@@ -10,6 +10,7 @@ const fixture = `
 #define GLFW_KEY_UNKNOWN -1
 #define GLFW_KEY_0 48
 #define GLFW_KEY_W 0x57 /* W */
+#define GLFW_KEY_Z_ALIAS GLFW_KEY_W
 #define GLFW_KEY_LEFT_SHIFT 340
 #define GLFW_KEY_KP_ENTER 335
 #define GLFW_KEY_LAST GLFW_KEY_KP_ENTER
@@ -40,7 +41,7 @@ async function resolveFixture(header: string) {
 
 test("compiler resolves GLFW signed/hex values and forward aliases without exposing sentinels", async () => {
   expect(await resolveFixture(fixture)).toEqual({
-    Key: { UNKNOWN: -1, ZERO: 48, W: 87, LEFT_SHIFT: 340, KP_ENTER: 335 },
+    Key: { UNKNOWN: -1, ZERO: 48, W: 87, Z_ALIAS: 87, LEFT_SHIFT: 340, KP_ENTER: 335 },
     PointerButton: { LEFT: 0, RIGHT: 1, MIDDLE: 2, ONE: 0, TWO: 1, THREE: 2, FOUR: 3 },
     Modifier: { SHIFT: 1, CONTROL: 2 }
   });
@@ -129,6 +130,11 @@ test("generation recreates missing/stale output, tracks header changes and leave
   // Exercise the generated module in both runtimes, including literal-type syntax.
   const generated = await import(pathToFileURL(output).href);
   expect(generated.Key.W).toBe(87);
+  expect(generated.KeyName[87]).toBe("W");
+  expect(generated.Key.Z_ALIAS).toBe(87);
+  expect(generated.KeyName[-1]).toBe("UNKNOWN");
+  expect(generated.KeyName[123456]).toBeUndefined();
+  expect(Object.isFrozen(generated.KeyName)).toBe(true);
   expect(generated.Key.ZERO).toBe(48);
   expect(generated.Key.LEFT_SHIFT).toBe(340);
   expect(generated.Key.KP_ENTER).toBe(335);

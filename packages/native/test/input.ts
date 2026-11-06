@@ -41,10 +41,26 @@ try {
   await xdo("windowactivate", "--sync", id);
   await until(() => window.input.focused, "Focus gain not received");
   assert.equal(window.input.pointerCaptured, false);
+  // Both OS transitions wait in X11 before a single application poll.
+  const batch: string[] = [];
+  const offBatch = [1, 2].map(listener => window.on("key", event => {
+    if(event.key !== Key.B) return;
+    assert.equal(window.isKeyDown(Key.B), false);
+    assert.equal(window.isScancodeDown(event.scancode), false);
+    batch.push(`${listener}:${event.action}`);
+  }));
+  await xdo("keydown", "b");
+  await xdo("keyup", "b");
+  await setTimeout(40);
+  app.pollEvents();
+  assert.deepEqual(batch, ["1:press", "2:press", "1:release", "2:release"]);
+  for(const off of offBatch) off();
   const initial = window.input;
   let guards = 0;
   const offGuards = window.on("key", () => {
     assert.throws(() => app.pollEvents(), /in progress/);
+    assert.throws(() => app.getKeyLabel(Key.A), /in progress/);
+    assert.throws(() => app.getKeyScancode(Key.A), /in progress/);
     assert.throws(() => app.dispose(), /in progress/);
     assert.throws(() => app.createWindow(), /in progress/);
     assert.throws(() => app.run(), /in progress/);
@@ -152,6 +168,32 @@ try {
   offThrow();
   await xdo("keyup", "d");
   await until(() => !window.isKeyDown(Key.D), "State failed to recover after callback exception");
+
+  // A failure during a blur batch must not roll back its final reconciled state.
+  await xdo("keydown", "d");
+  await until(() => window.isKeyDown(Key.D), "Pre-failure key missing");
+  const offBlurThrow = window.on("key", event => {
+    if(event.synthetic) {
+      assert.deepEqual(window.input.keys, []);
+      assert.deepEqual(window.input.scancodes, []);
+      assert.deepEqual(window.input.buttons, []);
+      throw sentinel;
+    }
+  });
+  await xdo("windowminimize", "--sync", id);
+  let blurThrew = false;
+  for(let attempt = 0; attempt < 50 && !blurThrew; attempt++) {
+    await setTimeout(10);
+    try { app.pollEvents(); } catch (error) { assert.equal(error, sentinel); blurThrew = true; }
+  }
+  assert.equal(blurThrew, true);
+  offBlurThrow();
+  app.pollEvents();
+  assert.deepEqual(window.input.keys, []);
+  await xdo("keyup", "d");
+  await xdo("windowmap", "--sync", id);
+  await xdo("windowactivate", "--sync", id);
+  await until(() => window.input.focused, "Focus not restored after listener failure");
 
   const offAsync = Reflect.apply(window.on, window, ["key", async () => { throw new Error("async input"); }]) as () => void;
   await xdo("keydown", "s");
