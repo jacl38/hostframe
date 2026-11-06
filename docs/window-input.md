@@ -151,8 +151,12 @@ Input dispatch holds the same native application operation guard as drawing.
 Reading input snapshots, subscribing/unsubscribing, and `app.stop()` are safe in
 listeners. Nested polling, drawing, window creation, capture changes, close
 requests, and window/application disposal are rejected. Defer native mutations
-to the next fixed update, render callback, or host task, as in the example above.
-Native window operations remain restricted to the process main thread.
+to a fixed update, as in the example above, or to a host task (for example, a
+timer callback) after input dispatch has returned. Render callbacks also hold the
+guard and cannot perform these mutations. Fixed updates do not run while paused;
+a host task can run while the application is paused. Before executing a deferred
+action, account for focus, close, and disposal changes that may have occurred in
+the meantime. Native window operations remain restricted to the process main thread.
 
 ## Validation
 

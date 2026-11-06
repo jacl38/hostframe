@@ -8,33 +8,33 @@ title, initial screen-coordinate dimensions, and resizability (see the
 
 ```ts
 const app = new Application();
-const window = app.createWindow();
-const context = window.getContext("webgpu");
-const adapter = await context.requestAdapter();
-if(!adapter) throw new Error("No compatible adapter");
-const device = await adapter.requestDevice();
-context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
-let previous = 0;
-let position = 0;
-
-const unsubscribe = app.on("fixedUpdate", ({ dt }) => {
-  previous = position;
-  position += dt * 2;
-});
-window.on("render", ({ alpha }) => {
-  const interpolated = previous + (position - previous) * alpha;
-  const texture = context.getCurrentTexture();
-  // Encode and submit synchronously using texture and interpolated.
-});
-
+let device: GPUDevice | undefined;
 try {
+  const window = app.createWindow();
+  const context = window.getContext("webgpu");
+  const adapter = await context.requestAdapter();
+  if(!adapter) throw new Error("No compatible adapter");
+  device = await adapter.requestDevice();
+  context.configure({ device, format: app.gpu.getPreferredCanvasFormat() });
+  let previous = 0;
+  let position = 0;
+
+  app.on("fixedUpdate", ({ dt }) => {
+    previous = position;
+    position += dt * 2;
+  });
+  window.on("render", ({ alpha }) => {
+    const interpolated = previous + (position - previous) * alpha;
+    const texture = context.getCurrentTexture();
+    // Encode and submit synchronously using texture and interpolated.
+  });
+
   await app.run({ updateHz: 120 });
 } finally {
-  unsubscribe();
   try {
     app.dispose();
   } finally {
-    device.destroy();
+    device?.destroy();
   }
 }
 ```
