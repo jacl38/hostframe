@@ -8,3 +8,5 @@ export type { InputEvent, InputState, KeyEvent, PointerMoveEvent, PointerButtonE
 export type { FixedUpdateEvent, RenderEvent, RunOptions } from "./packages/core/timing.ts";
 
 export { installWebGPUGlobals } from "./packages/native/bridge.ts";
+
+export type { WindowMetrics, MetricsEvent } from "./build/native/generated/native";

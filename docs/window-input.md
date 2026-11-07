@@ -292,3 +292,45 @@ Deferred commands apply only to the window currently dispatching input; calls
 mutating another window remain subject to the native application operation guard.
 Pausing continues polling every window. Closing one window resets only its input
 and ends the run only when no open window remains.
+
+### Window metrics and pixel conversion
+
+`window.metrics` is an immutable batch snapshot, available immediately after
+creation and before configuring or rendering. `width` and `height` are client
+sizes in GLFW screen units (excluding decorations); `framebufferWidth` and
+`framebufferHeight` are pixels, available outside rendering. `contentScaleX` and
+`contentScaleY` are GLFW platform UI scale factors, not necessarily the ratio
+between those sizes. `drawable` is false when iconified or either size is zero.
+Minimization can retain nonzero sizes. All metrics access throws after disposal.
+
+Each window samples all fields together on the owning thread after native event
+polling, before calling listeners. A changed snapshot produces one `metrics`
+event before that window's queued input events, then fixed updates and rendering.
+Intermediate resize/scale transitions within one poll are coalesced. All input
+and render listeners can read the cached snapshot under the native operation
+guard. Event metrics equal the current snapshot by value; subscriptions follow
+the same synchronous return, error, addition/removal, and deferred command rules
+as other input listeners. There is no initial notification to new subscribers;
+read `window.metrics` for initial state. No global ordering across windows is
+promised. Capture/close commands preserve metrics until the next batch.
+
+`window.toFramebuffer(x, y)` maps logical pointer coordinates to continuous
+framebuffer pixel coordinates using each axis's measured size ratio. It returns
+`undefined` while non-drawable and rejects nonfinite inputs. It does not clamp or
+round, so captured/outside-window positions remain meaningful. For example:
+
+```ts
+window.on("pointerMove", event => {
+  const pixel = window.toFramebuffer(event.x, event.y);
+  if(pixel) pickAt(pixel.x, pixel.y);
+});
+```
+
+This maps against the latest completed poll, including for earlier pointer events
+in that batch; it is not a historical size for each event. Platform updates can
+arrive across polls. A snapshot is atomic to JavaScript, not a promise that the
+OS changes client and framebuffer sizes simultaneously. During live resize, if a
+render texture's dimensions differ from the snapshot, defer pixel picking until
+the next poll (or map explicitly against that texture's dimensions). Zero sizes
+never cause division. Use content scale for UI density, not pointer conversion.
+The vanilla input example follows the pointer while uncaptured using this API.

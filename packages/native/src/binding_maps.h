@@ -89,6 +89,8 @@ template <class... Types, const ReturnAttribute& Ret> class ToJS<std::variant<Ty
    public: using hostframe::RecordMap<hostframe::T>::RecordMap; \
   }
 TS_RECORD_MAP(WindowOptions);
+TS_RECORD_MAP(WindowMetrics);
+TS_RECORD_MAP(MetricsEvent);
 TS_RECORD_MAP(InputState);
 TS_RECORD_MAP(KeyEvent);
 TS_RECORD_MAP(PointerButtonEvent);

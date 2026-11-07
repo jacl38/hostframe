@@ -106,3 +106,15 @@ function contextContracts(app: Application, device: GPUDevice) {
   void [adapter, configuration];
 }
 void contextContracts;
+
+function metricsContract(window: import("../../../index.ts").Window) {
+  const metrics: import("../../../index.ts").WindowMetrics = window.metrics;
+  window.on("metrics", event => { void event.metrics.framebufferWidth; });
+  const pixel: { x: number, y: number } | undefined = window.toFramebuffer(1, 2);
+  // @ts-expect-error Snapshots are immutable.
+  metrics.width = 10;
+  // @ts-expect-error Metrics listeners must remain synchronous.
+  window.on("metrics", async () => {});
+  void pixel;
+}
+void metricsContract;

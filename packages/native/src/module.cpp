@@ -62,6 +62,8 @@ NOBIND_MODULE(hostframe, m) {
       ToValue(m.Env(), InputEventTypes(std::make_index_sequence<std::variant_size_v<InputEvent>>{})), napi_default));
   // Aliases contain no handwritten object shapes: fields also serialize values.
   m.typescript_fragment(RecordMap<WindowOptions>::Declaration());
+  m.typescript_fragment(RecordMap<WindowMetrics>::Declaration());
+  m.typescript_fragment(RecordMap<MetricsEvent>::Declaration());
   m.typescript_fragment(RecordMap<InputState>::Declaration());
   m.typescript_fragment(RecordMap<KeyEvent>::Declaration());
   m.typescript_fragment(RecordMap<PointerMoveEvent>::Declaration());

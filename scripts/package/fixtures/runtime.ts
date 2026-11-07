@@ -16,6 +16,8 @@ if(process.argv.includes("--no-display")) {
   let device: GPUDevice | undefined;
   try {
     const window = app.createWindow({ title: "hostframe package verification", width: 320, height: 240 });
+    assert.equal(window.metrics.width, 320);
+    assert.deepEqual(window.toFramebuffer(160, 120), { x: window.metrics.framebufferWidth / 2, y: window.metrics.framebufferHeight / 2 });
     const context = window.getContext("webgpu");
     const adapter = await context.requestAdapter();
     assert.ok(adapter, "No compatible GPU adapter");

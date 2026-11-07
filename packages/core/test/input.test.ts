@@ -3,6 +3,8 @@ import { freezeInput, InputListeners } from "../input.ts";
 import type { InputEvent } from "../input.ts";
 import { inputEventTypes } from "../../../build/native/generated/input-events.ts";
 
+const metrics = { width: 100, height: 80, framebufferWidth: 200, framebufferHeight: 160, contentScaleX: 1.5, contentScaleY: 1.5, drawable: true };
+
 const press: InputEvent = { type: "key", key: 65, scancode: 38, action: "press", modifiers: 0, synthetic: false };
 
 test("input snapshots all event types once per batch", () => {
@@ -20,6 +22,7 @@ test("input snapshots all event types once per batch", () => {
 
 test("every native event type can be subscribed to and dispatched without a separate TS allowlist", () => {
   const events: InputEvent[] = [
+    { type: "metrics", metrics },
     press,
     { type: "pointerMove", x: 1, y: 2, deltaX: 3, deltaY: 4, captured: false },
     { type: "pointerButton", button: 0, action: "press", modifiers: 0, synthetic: false },
@@ -84,7 +87,7 @@ test("input contracts reject invalid subscriptions and protect retained snapshot
   const listeners = new InputListeners();
   expect(() => Reflect.apply(listeners.on, listeners, ["unknown", () => {}])).toThrow("Unknown window event");
   expect(() => Reflect.apply(listeners.on, listeners, ["key", null])).toThrow("listener");
-  const snapshot = freezeInput({ keys: [65], scancodes: [38], buttons: [0], focused: true, pointerCaptured: false, rawMotion: false, x: 1.5, y: 2.5 });
+  const snapshot = freezeInput({ metrics, keys: [65], scancodes: [38], buttons: [0], focused: true, pointerCaptured: false, rawMotion: false, x: 1.5, y: 2.5 });
   expect(Object.isFrozen(snapshot)).toBe(true);
   expect(Object.isFrozen(snapshot.keys)).toBe(true);
   expect(Object.isFrozen(snapshot.scancodes)).toBe(true);

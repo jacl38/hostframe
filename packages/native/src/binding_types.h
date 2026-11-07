@@ -31,6 +31,14 @@ using PresentMode = Token<"fifo", "immediate", "mailbox">;
 using KeyAction = Token<"press", "release", "repeat">;
 using ButtonAction = Token<"press", "release">;
 
+struct WindowMetrics {
+  int width = 0, height = 0, framebufferWidth = 0, framebufferHeight = 0;
+  float contentScaleX = 1, contentScaleY = 1;
+  bool drawable = false;
+  bool operator==(const WindowMetrics&) const = default;
+};
+struct MetricsEvent { Token<"metrics"> type; WindowMetrics metrics; };
+
 struct KeyEvent {
   Token<"key"> type;
   int key = 0, scancode = 0;
@@ -53,8 +61,9 @@ struct PointerMoveEvent {
 struct ScrollEvent { Token<"scroll"> type; double deltaX = 0, deltaY = 0; };
 struct FocusEvent { Token<"focus"> type; bool focused = false; };
 struct PointerCaptureEvent { Token<"pointerCapture"> type; bool captured = false, rawMotion = false; };
-using InputEvent = std::variant<KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent>;
+using InputEvent = std::variant<MetricsEvent, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent>;
 struct InputState {
+  WindowMetrics metrics;
   std::vector<int> keys, scancodes, buttons;
   bool focused = false, pointerCaptured = false, rawMotion = false;
   double x = 0, y = 0;

@@ -39,6 +39,17 @@ export class Window {
     return this.#input;
   }
 
+  /** Atomic client screen units, framebuffer pixels, and platform content scale from the last batch. */
+  get metrics() { return this.input.metrics; }
+
+  /** Continuous pixel coordinates; undefined while non-drawable. Does not clamp or round. */
+  toFramebuffer(x: number, y: number) {
+    const metrics = this.metrics;
+    if(!Number.isFinite(x) || !Number.isFinite(y)) throw new TypeError("Coordinates must be finite");
+    if(!metrics.drawable) return undefined;
+    return { x: x * metrics.framebufferWidth / metrics.width, y: y * metrics.framebufferHeight / metrics.height };
+  }
+
   isKeyDown(key: number) { return this.input.keys.includes(key); }
   isScancodeDown(scancode: number) { return this.input.scancodes.includes(scancode); }
   isButtonDown(button: number) { return this.input.buttons.includes(button); }
@@ -78,7 +89,7 @@ export class Window {
       this.#inputCommands.push({ type: "capture", captured, rawMotion });
       return;
     }
-    this.#input = freezeInput(this.#native.setPointerCapture(captured, rawMotion));
+    this.#input = freezeInput({ ...this.#native.setPointerCapture(captured, rawMotion), metrics: this.#input.metrics });
   }
 
   /** In input listeners, requested after the successful batch; cancels later capture commands. */
@@ -87,7 +98,7 @@ export class Window {
       this.#inputCommands.push({ type: "close" });
       return;
     }
-    this.#input = freezeInput(this.#native.requestClose());
+    this.#input = freezeInput({ ...this.#native.requestClose(), metrics: this.#input.metrics });
   }
 
   dispose() {
