@@ -173,14 +173,28 @@ cannot accidentally exercise one window twice. Visibility checks wait for native
 mapping because the WM can apply it after GLFW updates its cached visibility.
 These are software-X11 results; the platform/hardware limits above still apply.
 
-Hosted PR #40 run [42407541713](https://github.com/jacl38/hostframe/actions/runs/42407541713)
-passed the native build and all 59 tests, then exposed a fixture race under
-Openbox: show polling aborted on xdotool's transient no-match exit instead of
-waiting for mapping. The query now treats only exit 1 with empty stderr as an
-empty result for both hide and show; other failures propagate. A real unmapped
-window assertion covers this shared retry path. The corrected full interaction
-suite and packed consumers passed in Node/Bun with isolated Openbox 3.6.1-30.fc44
-as well as KWin (`build/validation/desktop-hqnmtY` and `desktop-9ARXki`). Hosted
-fault and consumer steps were skipped after the original failure; a hosted rerun
-of the correction is still required. Deferred fullscreen/remaining controls are
-tracked in [#39](https://github.com/jacl38/hostframe/issues/39).
+Hosted PR #40 runs [42407541713](https://github.com/jacl38/hostframe/actions/runs/42407541713)
+and [42408367140](https://github.com/jacl38/hostframe/actions/runs/42408367140)
+passed the native build and all 59 tests, then failed in visibility verification.
+The first correction retried xdotool's quiet no-match exit, but the second run
+proved retries alone were insufficient. The exact timeout reproduced locally on
+unmodified `945a4e0` with Openbox and `LC_ALL=C LANG=C`
+(`build/validation/desktop-UOW3Ya`); earlier UTF-8 runs had passed.
+
+Unicode title readback remained correct. The visibility query had reused that
+title through xdotool's locale-sensitive legacy `WM_NAME` search, which is
+[separate from UTF-8 title readback](https://github.com/jordansissel/xdotool/blob/main/xdo_search.c).
+Visibility now queries by PID and checks the already-established distinct window
+IDs; Unicode title readback remains independently asserted. Only exit 1 with
+empty stderr is treated as an empty search result; other failures propagate.
+Hiding both windows exercises the actual no-match path, and showing each checks
+its observed mapping. The native verification runner forces `LC_ALL=C` for both
+lifecycle fixtures so developer UTF-8 locales cannot hide this regression.
+
+The corrected full interaction suite and real npm/Bun packed consumers passed
+under Openbox 3.6.1-30.fc44 in the C locale (`desktop-kaecAC`), with the standalone
+Node/Bun lifecycle fixtures also passing in `C.UTF-8` (`desktop-HMbhii`). Lint,
+typecheck and all 59 tests passed again. Hosted fault and consumer steps were
+skipped after the failures; a hosted rerun of the correction is still required.
+Deferred fullscreen/remaining controls are tracked in
+[#39](https://github.com/jacl38/hostframe/issues/39).

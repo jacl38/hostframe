@@ -65,7 +65,9 @@ try {
   // Observe native title, client geometry and visibility rather than setter success.
   async function visibleIds() {
     try {
-      return (await xdo("search", "--all", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe lifecycle edited — λ$")).split("\n");
+      // Visibility follows established IDs. Legacy WM_NAME searches can differ
+      // from UTF-8 title readback under the C locale used by minimal containers.
+      return (await xdo("search", "--onlyvisible", "--pid", String(process.pid))).split("\n");
     } catch (error) {
       // xdotool exits 1 for no matches. Mapping can lag GLFW's cached visible
       // state on either transition; keep polling without hiding tool failures.
@@ -93,11 +95,21 @@ try {
   assert.match(await xdo("getwindowgeometry", "--shell", firstId), /X=180\nY=160/);
   assert.ok(Object.isFrozen(first.status));
   assert.notEqual(original, first.status);
+  await until(async () => (await visibleIds()).includes(firstId));
   first.setVisible(false);
   await until(() => !first.status.visible);
   await until(async () => !(await visibleIds()).includes(firstId));
-  assert.deepEqual(await visibleIds(), [], "An unmapped window must use the same no-match path that show polling retries");
+  assert.equal(second.status.visible, true, "Hiding one window must preserve its sibling's visibility");
   assert.equal(first.shouldClose, false);
+  // Both hidden exercises the real no-match exit; the same query must also
+  // retry an empty result while either window is being shown asynchronously.
+  second.setVisible(false);
+  await until(() => !second.status.visible);
+  await until(async () => (await visibleIds()).length === 0);
+  assert.deepEqual(await visibleIds(), []);
+  second.setVisible(true);
+  await until(() => second.status.visible);
+  await until(async () => (await visibleIds()).includes(secondId));
   first.setVisible(true);
   await until(() => first.status.visible);
   await until(async () => (await visibleIds()).includes(firstId));
