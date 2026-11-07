@@ -18,7 +18,7 @@ test("declarations and runtime event names are extracted and regenerated togethe
     const content = await Bun.file(output).text();
     const events = await Bun.file(eventsOutput).text();
     const runtime = await import(eventsOutput);
-    expect(runtime.inputEventTypes).toEqual(["metrics", "key", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"]);
+    expect(runtime.inputEventTypes).toEqual(["closeRequest", "minimize", "restore", "metrics", "key", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"]);
     expect(Object.isFrozen(runtime.inputEventTypes)).toBe(true);
     expect(content).toContain("GPUCanvasConfiguration");
     expect(content).toContain("GPURequestAdapterOptions");

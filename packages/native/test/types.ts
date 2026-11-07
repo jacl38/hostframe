@@ -1,5 +1,5 @@
 import type * as Native from "../../../build/native/generated/native";
-import type { Application, InputEvent, WindowOptions, WindowGPUContext, WindowEvents } from "../../../index.ts";
+import type { Application, WindowOptions, WindowGPUContext, WindowEvents } from "../../../index.ts";
 import { Key, Modifier, PointerButton } from "../../../index.ts";
 
 function inputConstantContracts() {
@@ -45,12 +45,12 @@ function nativeContracts(app: Native.Application, gpu: GPU, device: GPUDevice) {
     // @ts-expect-error Input callbacks must see immutable state.
     state.focused = true;
     for(const event of events) {
-      const publicEvent: InputEvent = event;
-      if(publicEvent.type === "key") {
-        const key: number = publicEvent.key;
+      const nativeEvent: Native.InputEvent = event;
+      if(nativeEvent.type === "key") {
+        const key: number = nativeEvent.key;
         void key;
         // @ts-expect-error Discriminated input events must not widen to arbitrary objects.
-        void publicEvent.deltaX;
+        void nativeEvent.deltaX;
       }
     }
   });
@@ -118,3 +118,30 @@ function metricsContract(window: import("../../../index.ts").Window) {
   void pixel;
 }
 void metricsContract;
+
+function lifecycleContract(window: import("../../../index.ts").Window) {
+  const status: import("../../../index.ts").WindowStatus = window.status;
+  window.setTitle("Editor");
+  window.setSize(800, 600);
+  window.setPosition(-100, 200);
+  window.setVisible(false);
+  window.on("closeRequest", event => {
+    const request: import("../../../index.ts").CloseRequestEvent = event;
+    request.preventDefault();
+    const canceled: boolean = request.defaultPrevented;
+    void canceled;
+    // @ts-expect-error Cancellation is controlled by preventDefault.
+    request.defaultPrevented = false;
+  });
+  window.on("minimize", event => { const type: "minimize" = event.type; void type; });
+  window.on("restore", event => { const type: "restore" = event.type; void type; });
+  // @ts-expect-error Status snapshots are immutable.
+  status.visible = true;
+  // @ts-expect-error Lifecycle listeners must remain synchronous.
+  window.on("closeRequest", async () => {});
+  // @ts-expect-error Visibility accepts only booleans.
+  window.setVisible("yes");
+  // @ts-expect-error Fullscreen remains deferred.
+  window.setFullscreen(true);
+}
+void lifecycleContract;

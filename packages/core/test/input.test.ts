@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { freezeInput, InputListeners } from "../input.ts";
 import type { InputEvent } from "../input.ts";
+import type { InputEvent as NativeInputEvent } from "../../../build/native/generated/native";
 import { inputEventTypes } from "../../../build/native/generated/input-events.ts";
 
 const metrics = { width: 100, height: 80, framebufferWidth: 200, framebufferHeight: 160, contentScaleX: 1.5, contentScaleY: 1.5, drawable: true };
@@ -21,7 +22,10 @@ test("input snapshots all event types once per batch", () => {
 });
 
 test("every native event type can be subscribed to and dispatched without a separate TS allowlist", () => {
-  const events: InputEvent[] = [
+  const events: NativeInputEvent[] = [
+    { type: "closeRequest" },
+    { type: "minimize" },
+    { type: "restore" },
     { type: "metrics", metrics },
     press,
     { type: "pointerMove", x: 1, y: 2, deltaX: 3, deltaY: 4, captured: false },
@@ -36,7 +40,8 @@ test("every native event type can be subscribed to and dispatched without a sepa
   const delivered: InputEvent[] = [];
   for(const type of inputEventTypes) listeners.on(type, event => { delivered.push(event); });
   listeners.dispatch(events);
-  expect(delivered).toEqual(events);
+  expect(delivered.map(event => event.type)).toEqual(events.map(event => event.type));
+  expect(delivered.filter(event => event.type !== "closeRequest")).toEqual(events.filter(event => event.type !== "closeRequest"));
 });
 
 test("input additions wait until next batch, removals apply immediately, duplicates are independent", () => {
@@ -87,7 +92,7 @@ test("input contracts reject invalid subscriptions and protect retained snapshot
   const listeners = new InputListeners();
   expect(() => Reflect.apply(listeners.on, listeners, ["unknown", () => {}])).toThrow("Unknown window event");
   expect(() => Reflect.apply(listeners.on, listeners, ["key", null])).toThrow("listener");
-  const snapshot = freezeInput({ metrics, keys: [65], scancodes: [38], buttons: [0], focused: true, pointerCaptured: false, rawMotion: false, x: 1.5, y: 2.5 });
+  const snapshot = freezeInput({ metrics, status: { x: 0, y: 0, visible: true, minimized: false }, keys: [65], scancodes: [38], buttons: [0], focused: true, pointerCaptured: false, rawMotion: false, x: 1.5, y: 2.5 });
   expect(Object.isFrozen(snapshot)).toBe(true);
   expect(Object.isFrozen(snapshot.keys)).toBe(true);
   expect(Object.isFrozen(snapshot.scancodes)).toBe(true);

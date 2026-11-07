@@ -65,6 +65,10 @@ NOBIND_MODULE(hostframe, m) {
   m.typescript_fragment(RecordMap<WindowMetrics>::Declaration());
   m.typescript_fragment(RecordMap<MetricsEvent>::Declaration());
   m.typescript_fragment(RecordMap<InputState>::Declaration());
+  m.typescript_fragment(RecordMap<WindowStatus>::Declaration());
+  m.typescript_fragment(RecordMap<CloseRequestEvent>::Declaration());
+  m.typescript_fragment(RecordMap<MinimizeEvent>::Declaration());
+  m.typescript_fragment(RecordMap<RestoreEvent>::Declaration());
   m.typescript_fragment(RecordMap<KeyEvent>::Declaration());
   m.typescript_fragment(RecordMap<PointerMoveEvent>::Declaration());
   m.typescript_fragment(RecordMap<PointerButtonEvent>::Declaration());
@@ -81,6 +85,10 @@ NOBIND_MODULE(hostframe, m) {
       .def<&Window::DispatchInput>("dispatchInput")
       .def<&Window::SetPointerCapture>("setPointerCapture")
       .def<&Window::RequestClose>("requestClose")
+      .def<&Window::SetTitle>("setTitle")
+      .def<&Window::SetSize>("setSize")
+      .def<&Window::SetPosition>("setPosition")
+      .def<&Window::SetVisible>("setVisible")
       .def<&Window::Dispose>("dispose")
       .def<&Window::disposed, Nobind::ReadOnly>("disposed")
       .def<&Window::configured, Nobind::ReadOnly>("configured")

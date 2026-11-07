@@ -687,3 +687,13 @@ DRI3 was unavailable; selecting the installed llvmpipe ICD resolved that setup
 limitation. No physical monitor scale transitions or macOS behavior were verified.
 Actual live resize also demonstrated that a render texture can lead the last
 poll's metrics; the resize test waits for convergence as specified by the API.
+
+Window lifecycle (#14) extends the same input callback/user-pointer owner with
+cancellable `closeRequest` and native `minimize`/`restore` notifications. The
+existing `metrics` event remains the resize contract. Runtime title, size,
+position and visibility methods have native lifecycle/thread/reentrancy guards;
+fullscreen is explicitly deferred. The Linux-only `native_close_request` test
+executable sends ICCCM `WM_DELETE_WINDOW` messages and is never part of the addon.
+`native:verify --window-interactions` runs the lifecycle regression in Node and
+Bun, and packed consumers check the bundled flow too. See
+[window lifecycle](window-lifecycle.md) for the contract, follow-ups and evidence.

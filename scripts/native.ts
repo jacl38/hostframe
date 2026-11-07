@@ -79,6 +79,8 @@ async function verify(presentation: boolean, interactions: boolean) {
     checks.push(
       ["node", resolve(root, "packages/native/test/context.ts"), "--interactions"],
       ["bun", resolve(root, "packages/native/test/context.ts"), "--interactions"],
+      ["node", resolve(root, "packages/native/test/lifecycle.ts")],
+      ["bun", resolve(root, "packages/native/test/lifecycle.ts")],
       ["node", resolve(root, "packages/native/test/resize.ts")],
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],
@@ -94,6 +96,9 @@ async function verify(presentation: boolean, interactions: boolean) {
     const env = { ...process.env };
     delete env.HOSTFRAME_TEST_STALL_CLEANUP;
     if(command.includes("--no-display")) env.DISPLAY = "";
+    // Minimal hosted containers need locale-independent visibility checks even
+    // when developer desktops use UTF-8. Keep Unicode title readback covered.
+    if(command.some(argument => argument.endsWith("/lifecycle.ts"))) env.LC_ALL = "C";
     if(command.some(argument => argument.endsWith("/cleanup-timeout.ts"))) env.HOSTFRAME_TEST_STALL_CLEANUP = "1";
     const child = Bun.spawn(command, { cwd: root, env, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
     const code = await child.exited;

@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { setTimeout } from "node:timers/promises";
+import { promisify } from "node:util";
 import { installWebGPUGlobals, Application, Key, Modifier, PointerButton } from "hostframe";
 
 installWebGPUGlobals();
+const execute = promisify(execFile);
+async function userClose(title: string) {
+  assert.ok(process.env.HOSTFRAME_CLOSE_REQUEST, "Packed lifecycle verification needs the native X11 close helper");
+  const id = (await execute("xdotool", ["search", "--all", "--pid", String(process.pid), "--name", `^${title}$`], { timeout: 3000 })).stdout.trim().split("\n")[0]!;
+  await execute(process.env.HOSTFRAME_CLOSE_REQUEST, [id], { timeout: 3000 });
+}
 
 assert.equal(Key.W, 87);
 assert.equal(PointerButton.LEFT, 0);
@@ -18,6 +27,27 @@ if(process.argv.includes("--no-display")) {
     const window = app.createWindow({ title: "hostframe package verification", width: 320, height: 240 });
     assert.equal(window.metrics.width, 320);
     assert.deepEqual(window.toFramebuffer(160, 120), { x: window.metrics.framebufferWidth / 2, y: window.metrics.framebufferHeight / 2 });
+    let closeRequests = 0;
+    window.on("closeRequest", event => { closeRequests++; event.preventDefault(); });
+    window.setTitle("hostframe packed runtime controls");
+    window.setPosition(100, 120);
+    window.setVisible(false);
+    app.pollEvents();
+    assert.equal(window.status.visible, false);
+    window.setVisible(true);
+    app.pollEvents();
+    assert.equal(window.status.visible, true);
+    assert.ok(Object.isFrozen(window.status));
+    // Keep the established 320x240 render assertions below.
+    window.setSize(320, 240);
+    await userClose("hostframe packed runtime controls");
+    const closeDeadline = performance.now() + 3000;
+    while(closeRequests === 0) {
+      assert.ok(performance.now() < closeDeadline, "Packed close request was not delivered");
+      app.pollEvents();
+      await setTimeout(10);
+    }
+    assert.equal(window.shouldClose, false);
     const context = window.getContext("webgpu");
     const adapter = await context.requestAdapter();
     assert.ok(adapter, "No compatible GPU adapter");
@@ -92,7 +122,11 @@ if(process.argv.includes("--no-display")) {
     window.dispose();
     window.dispose();
     assert.throws(() => context.getCurrentTexture(), /disposed/);
-    const replacement = app.createWindow();
+    const replacement = app.createWindow({ title: "hostframe packed accepted close" });
+    await userClose("hostframe packed accepted close");
+    await app.run();
+    assert.equal(replacement.shouldClose, true);
+    assert.equal(closeRequests, 1, "Explicit requestClose must not emit another request");
     replacement.dispose();
     await device.queue.onSubmittedWorkDone();
     assert.deepEqual(errors, []);
@@ -104,4 +138,4 @@ if(process.argv.includes("--no-display")) {
     device?.destroy();
   }
 }
-console.log(`${process.versions.bun ? "Bun" : "Node.js"}: packed-package ${process.argv.includes("--no-display") ? "initialization failure" : "compute, presentation, loop, and disposal"} passed.`);
+console.log(`${process.versions.bun ? "Bun" : "Node.js"}: packed-package ${process.argv.includes("--no-display") ? "initialization failure" : "compute, lifecycle controls, native close, presentation, loop, and disposal"} passed.`);

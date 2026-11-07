@@ -1,7 +1,15 @@
-import type { InputEvent, InputState } from "../../build/native/generated/native";
+import type { InputEvent as NativeInputEvent, InputState } from "../../build/native/generated/native";
 import { Subscriptions } from "./subscriptions.ts";
 import { inputEventTypes } from "../../build/native/generated/input-events.ts";
-export type { InputEvent, InputState, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent } from "../../build/native/generated/native";
+export type { InputState, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent } from "../../build/native/generated/native";
+
+/** Cancel only during synchronous delivery. For asynchronous prompts, cancel first, then force-close after saving. */
+export type CloseRequestEvent = Readonly<Extract<NativeInputEvent, { type: "closeRequest" }> & {
+  defaultPrevented: boolean,
+  preventDefault: () => void
+}>;
+
+export type InputEvent = Exclude<NativeInputEvent, { type: "closeRequest" }> | CloseRequestEvent;
 
 export type WindowInputEvents = {
   [Event in InputEvent as Event["type"]]: Event
@@ -9,6 +17,7 @@ export type WindowInputEvents = {
 
 export function freezeInput(state: InputState) {
   Object.freeze(state.metrics);
+  Object.freeze(state.status);
   Object.freeze(state.keys);
   Object.freeze(state.scancodes);
   Object.freeze(state.buttons);
@@ -31,13 +40,32 @@ export class InputListeners {
     return listeners.add(callback as (event: InputEvent) => undefined);
   }
 
-  dispatch(events: InputEvent[]) {
+  dispatch(events: NativeInputEvent[], acceptClose: () => void = () => {}) {
     // Additions during dispatch start next batch; removals take effect immediately.
     const snapshot = new Map(Array.from(this.#listeners, ([type, listeners]) => [type, listeners.snapshot()]));
     for(const event of events) {
-      if(event.type === "metrics") Object.freeze(event.metrics);
-      Object.freeze(event);
-      snapshot.get(event.type)?.(event);
+      if(event.type === "closeRequest") {
+        let active = true;
+        let canceled = false;
+        const request: CloseRequestEvent = Object.freeze({
+          type: "closeRequest",
+          get defaultPrevented() { return canceled; },
+          preventDefault() {
+            if(!active) throw new Error("Close cancellation is only valid during synchronous closeRequest delivery");
+            canceled = true;
+          }
+        });
+        try {
+          snapshot.get(event.type)?.(request);
+        } finally {
+          active = false;
+        }
+        if(!canceled) acceptClose();
+      } else {
+        if(event.type === "metrics") Object.freeze(event.metrics);
+        Object.freeze(event);
+        snapshot.get(event.type)?.(event);
+      }
     }
   }
 

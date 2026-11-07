@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <GLFW/glfw3.h>
 
 #include "src/dawn/node/interop/NodeAPI.h"
 #include "window_options.h"
@@ -16,6 +17,7 @@ class WindowState {
   WindowState(Napi::Env env, DawnGPU gpu, const std::shared_ptr<ApplicationState>& application, const WindowOptions& options);
   ~WindowState();
   bool Close();
+  GLFWwindow* NativeWindow() const;
   WindowInput& Input() { return *input_; }
   bool IsDisposed() const { return !presentation_; }
   bool IsConfigured() const;

@@ -22,6 +22,8 @@ int main() {
   Check(window != nullptr);
   {
     WindowInput input(window);
+    auto close = glfwSetWindowCloseCallback(window, nullptr);
+    glfwSetWindowCloseCallback(window, close);
     auto key = glfwSetKeyCallback(window, nullptr);
     glfwSetKeyCallback(window, key);
     auto focus = glfwSetWindowFocusCallback(window, nullptr);
@@ -87,6 +89,31 @@ int main() {
     key(window, GLFW_KEY_UNKNOWN, 902, GLFW_RELEASE, 0);
     observe = [](const auto& state, const auto& events) { Check(state.keys.empty() && events.size() == 3); };
     input.Dispatch({});
+    // Platforms cannot reliably generate a late callback after an accepted close.
+    // Use the actual installed callback to assert that it cannot reopen the window.
+    glfwSetWindowShouldClose(window, GLFW_TRUE);
+    close(window);
+    close(window);
+    Check(!glfwWindowShouldClose(window));
+    observe = [](const auto&, const auto& events) {
+      Check(events.size() == 1 && std::holds_alternative<CloseRequestEvent>(events[0]));
+      throw std::runtime_error("close listener failure");
+    };
+    bool failed = false;
+    try { input.Dispatch({}); } catch(const std::runtime_error& error) {
+      Check(std::string(error.what()) == "close listener failure");
+      failed = true;
+    }
+    Check(failed);
+    close(window);
+    observe = [](const auto&, const auto& events) {
+      Check(events.size() == 1 && std::holds_alternative<CloseRequestEvent>(events[0]));
+    };
+    input.Dispatch({});
+    glfwSetWindowShouldClose(window, GLFW_TRUE);
+    input.Close();
+    close(window);
+    Check(glfwWindowShouldClose(window));
   }
   glfwDestroyWindow(window);
   glfwTerminate();

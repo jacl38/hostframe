@@ -1,5 +1,6 @@
 #include "input.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <utility>
 
@@ -51,7 +52,22 @@ WindowInput::WindowInput(GLFWwindow* window) : window_(window) {
     input.baseline_ = false;
     input.events_.emplace_back(FocusEvent{.type = {}, .focused = focused != 0});
   });
-  glfwSetWindowCloseCallback(window_, [](GLFWwindow* window) { Get(window).Reset(); });
+  glfwSetWindowCloseCallback(window_, [](GLFWwindow* window) {
+    auto& input = Get(window);
+    if(input.closed_) return;
+    // GLFW sets the close flag before invoking us. Keep the window operational
+    // until JavaScript accepts the request after a successful guarded batch.
+    glfwSetWindowShouldClose(window, GLFW_FALSE);
+    if(!input.close_pending_) {
+      input.close_pending_ = true;
+      input.events_.emplace_back(CloseRequestEvent{});
+    }
+  });
+  glfwSetWindowIconifyCallback(window_, [](GLFWwindow* window, int minimized) {
+    auto& input = Get(window);
+    if(minimized) input.events_.emplace_back(MinimizeEvent{});
+    else input.events_.emplace_back(RestoreEvent{});
+  });
 }
 
 WindowInput::~WindowInput() {
@@ -62,6 +78,7 @@ WindowInput::~WindowInput() {
   glfwSetScrollCallback(window_, nullptr);
   glfwSetWindowFocusCallback(window_, nullptr);
   glfwSetWindowCloseCallback(window_, nullptr);
+  glfwSetWindowIconifyCallback(window_, nullptr);
   glfwSetWindowUserPointer(window_, nullptr);
   glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 }
@@ -104,6 +121,11 @@ void WindowInput::Capture(bool captured, bool raw) {
   events_.emplace_back(PointerCaptureEvent{.type = {}, .captured = captured_, .rawMotion = raw_});
 }
 
+void WindowInput::Close() {
+  closed_ = true;
+  Reset();
+}
+
 void WindowInput::Reset() {
   for(const auto& [scancode, key] : keys_) {
     events_.emplace_back(KeyEvent{.type = {}, .key = key, .scancode = scancode,
@@ -125,11 +147,14 @@ InputState WindowInput::Snapshot() const {
   // GLFW queries use cached platform state on the owning thread. They do not
   // pump events or call JavaScript, so this sample is indivisible to listeners.
   // Sample here instead of installing a second callback/user-pointer owner.
+  glfwGetWindowPos(window_, &state.status.x, &state.status.y);
+  state.status.visible = glfwGetWindowAttrib(window_, GLFW_VISIBLE);
+  state.status.minimized = glfwGetWindowAttrib(window_, GLFW_ICONIFIED);
   auto& metrics = state.metrics;
   glfwGetWindowSize(window_, &metrics.width, &metrics.height);
   glfwGetFramebufferSize(window_, &metrics.framebufferWidth, &metrics.framebufferHeight);
   glfwGetWindowContentScale(window_, &metrics.contentScaleX, &metrics.contentScaleY);
-  metrics.drawable = !glfwGetWindowAttrib(window_, GLFW_ICONIFIED) && metrics.width > 0 && metrics.height > 0 &&
+  metrics.drawable = !state.status.minimized && metrics.width > 0 && metrics.height > 0 &&
       metrics.framebufferWidth > 0 && metrics.framebufferHeight > 0;
   for(const auto& [scancode, key] : keys_) {
     state.keys.push_back(key);
@@ -149,6 +174,10 @@ InputState WindowInput::Snapshot() const {
 
 void WindowInput::Dispatch(InputCallback callback) {
   auto events = std::exchange(events_, {});
+  if(closed_) std::erase_if(events, [](const auto& event) { return std::holds_alternative<CloseRequestEvent>(event); });
+  // A failed listener batch consumes this request as a cancellation. A later
+  // native request must be deliverable, including after arbitrary JS throws.
+  close_pending_ = false;
   const auto state = Snapshot();
   if(!(state.metrics == metrics_)) {
     metrics_ = state.metrics;

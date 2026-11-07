@@ -7,6 +7,7 @@ import type { InputState, InputEvent } from "../input.ts";
 // conversion and listener implementation are production code, not reimplemented.
 test("public metrics consume atomic batches and convert actual anisotropic sizes", () => {
   let state: InputState = {
+    status: { x: 0, y: 0, visible: true, minimized: false },
     metrics: { width: 400, height: 200, framebufferWidth: 800, framebufferHeight: 600, contentScaleX: 1.25, contentScaleY: 1.5, drawable: true },
     keys: [], scancodes: [], buttons: [], focused: true, pointerCaptured: false, rawMotion: false, x: 0, y: 0
   };

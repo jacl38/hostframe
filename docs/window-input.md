@@ -57,7 +57,7 @@ buttons are 3–7 (`FOUR`–`EIGHT`). Wheel input is scroll, not held buttons.
 and `NUM_LOCK`. Synthetic releases have modifiers 0.
 
 `window.input` is an immutable snapshot containing `keys`, `scancodes`, `buttons`,
-`focused`, `pointerCaptured`, `rawMotion`, `x`, and `y`. Retaining a snapshot does
+`focused`, `pointerCaptured`, `rawMotion`, `x`, `y`, `metrics`, and `status`. Retaining a snapshot does
 not retain a live collection. `isKeyDown`, `isScancodeDown`, and `isButtonDown`
 query the latest snapshot. Read held state in fixed updates for continuous game
 controls. A press and release within one poll are both delivered as events but
@@ -108,14 +108,16 @@ is unavailable; there is no silent raw-mode fallback. `setPointerCapture(false)`
 restores the cursor and disables raw motion. Outside input dispatch, successful
 commands update `window.input` immediately; their events arrive at the next poll.
 Repeating the same mode is safe and produces no extra capture event. Capture requires a focused,
-open window. Releasing it remains valid while unfocused or close-requested.
+open window. Releasing it remains valid while unfocused or closed.
 
 On focus loss, native held keys and buttons are cleared, marked synthetic release
 events are queued for each held control, capture/raw motion are released, then a
 `focus: false` event is queued. Later GLFW synthetic releases are suppressed.
 Focus gain starts empty and **does not recapture**, even if a physical key remains
-down. Close requests also clear held input and release capture immediately, then ignore
-new control input while the close-requested window remains alive. Disposal detaches
+down. Accepted native closes and explicit force-close commands clear held input
+and release capture, then ignore new control input while the closed window
+remains alive. A canceled native request keeps input operational; see
+[window lifecycle](window-lifecycle.md). Disposal detaches
 callbacks, clears queued input and listeners, and restores the cursor before the
 native window is destroyed; it does not deliver disposal events. Repeated disposal
 is safe. All other window operations, input queries, and subscriptions throw after
@@ -162,7 +164,7 @@ No general deferred-callback API is exposed.
   A successful close releases capture and held controls, ends the command queue,
   and cancels all later requests in that queue, including duplicate closes.
 - Capture uses native focus/close state at execution. Capture of an unfocused or
-  close-requested window throws; release remains valid. Focus loss clears held
+  closed window throws; release remains valid. Focus loss clears held
   state and releases capture before dispatch. A capture request from that batch
   cannot override focus loss. Focus gain does not recapture automatically.
 - A thrown listener value, invalid synchronous result, or native dispatch failure
