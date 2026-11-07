@@ -64,7 +64,14 @@ try {
 
   // Observe native title, client geometry and visibility rather than setter success.
   async function visibleIds() {
-    return xdo("search", "--all", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe lifecycle edited — λ$");
+    try {
+      return (await xdo("search", "--all", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe lifecycle edited — λ$")).split("\n");
+    } catch (error) {
+      // xdotool exits 1 for no matches. Mapping can lag GLFW's cached visible
+      // state on either transition; keep polling without hiding tool failures.
+      if(error instanceof Error && "code" in error && error.code === 1 && "stderr" in error && error.stderr === "") return [];
+      throw error;
+    }
   }
   const original = first.status;
   first.setTitle("hostframe lifecycle edited — λ");
@@ -88,13 +95,12 @@ try {
   assert.notEqual(original, first.status);
   first.setVisible(false);
   await until(() => !first.status.visible);
-  await until(async () => {
-    try { return !(await visibleIds()).split("\n").includes(firstId); } catch { return true; }
-  });
+  await until(async () => !(await visibleIds()).includes(firstId));
+  assert.deepEqual(await visibleIds(), [], "An unmapped window must use the same no-match path that show polling retries");
   assert.equal(first.shouldClose, false);
   first.setVisible(true);
   await until(() => first.status.visible);
-  await until(async () => (await visibleIds()).split("\n").includes(firstId));
+  await until(async () => (await visibleIds()).includes(firstId));
   // Programmatic sizing also works for a non-resizable window; WM user resizing remains disabled.
   second.setSize(380, 260);
   await until(() => second.metrics.width === 380 && second.metrics.height === 260);

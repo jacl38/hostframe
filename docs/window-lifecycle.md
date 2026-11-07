@@ -172,3 +172,15 @@ xdotool's `--all` matching and asserts distinct window IDs so PID/title searches
 cannot accidentally exercise one window twice. Visibility checks wait for native
 mapping because the WM can apply it after GLFW updates its cached visibility.
 These are software-X11 results; the platform/hardware limits above still apply.
+
+Hosted PR #40 run [42407541713](https://github.com/jacl38/hostframe/actions/runs/42407541713)
+passed the native build and all 59 tests, then exposed a fixture race under
+Openbox: show polling aborted on xdotool's transient no-match exit instead of
+waiting for mapping. The query now treats only exit 1 with empty stderr as an
+empty result for both hide and show; other failures propagate. A real unmapped
+window assertion covers this shared retry path. The corrected full interaction
+suite and packed consumers passed in Node/Bun with isolated Openbox 3.6.1-30.fc44
+as well as KWin (`build/validation/desktop-hqnmtY` and `desktop-9ARXki`). Hosted
+fault and consumer steps were skipped after the original failure; a hosted rerun
+of the correction is still required. Deferred fullscreen/remaining controls are
+tracked in [#39](https://github.com/jacl38/hostframe/issues/39).
