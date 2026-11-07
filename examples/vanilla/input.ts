@@ -28,8 +28,16 @@ try {
   });
   window.on("pointerMove", event => {
     if(event.captured) {
-      x += event.deltaX / 800;
-      y += event.deltaY / 500;
+      if(window.metrics.drawable) {
+        x += event.deltaX / window.metrics.width;
+        y += event.deltaY / window.metrics.height;
+      }
+    } else {
+      const pixel = window.toFramebuffer(event.x, event.y);
+      if(pixel) {
+        x = pixel.x / window.metrics.framebufferWidth;
+        y = pixel.y / window.metrics.framebufferHeight;
+      }
     }
   });
   window.on("scroll", event => { size = Math.max(10, Math.min(200, size + event.deltaY * 5)); });

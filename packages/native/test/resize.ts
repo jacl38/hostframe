@@ -93,6 +93,17 @@ try {
   }
 
   let window: Window = app.createWindow({ title: "hostframe resize interactions", width: 480, height: 300, resizable: true, vsync });
+  assert.equal(window.metrics.width, 480);
+  assert.equal(window.metrics.height, 300);
+  assert.ok(Object.isFrozen(window.metrics));
+  let metricsNotifications = 0;
+  window.on("metrics", event => {
+    metricsNotifications++;
+    assert.deepEqual(event.metrics, window.metrics);
+    assert.ok(Object.isFrozen(event.metrics));
+    assert.throws(() => app.pollEvents(), /in progress/);
+  });
+  window.on("pointerMove", () => { assert.ok(window.metrics.width > 0); });
   let context = configureWindow(app, window, device);
   const id = await findWindow("hostframe resize interactions");
   const mode = window.presentMode;
@@ -110,6 +121,8 @@ try {
     const texture = context.getCurrentTexture();
     frames++;
     dimensions = `${texture.width}x${texture.height}`;
+    assert.equal(window.metrics.drawable, true);
+    assert.deepEqual(window.toFramebuffer(window.metrics.width / 2, window.metrics.height / 2), { x: window.metrics.framebufferWidth / 2, y: window.metrics.framebufferHeight / 2 });
     escaped = texture;
     escapedView = texture.createView();
     assert.throws(() => app.pollEvents(), /in progress/);
@@ -137,9 +150,10 @@ try {
   async function rendered(size: string) {
     await until(() => {
       if(loopError) throw loopError;
-      return dimensions === size;
+      return dimensions === size && `${window.metrics.framebufferWidth}x${window.metrics.framebufferHeight}` === size;
     }, `Expected framebuffer ${size}, got ${dimensions}`);
     assert.equal(window.presentMode, mode);
+    assert.equal(`${window.metrics.framebufferWidth}x${window.metrics.framebufferHeight}`, size);
   }
   async function resize(width: number, height: number) {
     dimensions = "";
@@ -158,6 +172,8 @@ try {
       await setTimeout(10);
     }
     assert.equal(frames, before);
+    assert.equal(window.metrics.drawable, false);
+    assert.equal(window.toFramebuffer(10, 20), undefined);
     assert.ok(ticks > ticksBefore, "Fixed updates must continue while minimized");
     assert.equal(window.shouldClose, false);
   }
@@ -199,6 +215,9 @@ try {
   assert.throws(() => window.presentMode, /disposed/);
   assert.equal(app.pollEvents(), false);
 
+  assert.ok(metricsNotifications >= 7);
+  assert.throws(() => window.metrics, /disposed/);
+  assert.throws(() => window.toFramebuffer(1, 2), /disposed/);
   await assertDeviceAlive(device);
 
   // Application disposal with a live device and a minimized presentation.

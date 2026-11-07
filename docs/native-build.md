@@ -664,3 +664,26 @@ behavior, multi-monitor or hardware-adapter compatibility across surfaces,
 physical input, independent presentation pacing, or complete GC/shutdown safety.
 The known upstream crash from a throwing canvas-format getter is outside this
 change; the regression uses a throwing device getter to check exception identity.
+
+Window metrics (#12) use the existing guarded native input batch. The generated
+`WindowMetrics`/`MetricsEvent` records drive serialization and declarations;
+there is no separate GLFW callback owner. `native_input_check` verifies initial
+metrics delivery and unchanged-batch suppression. The Node/Bun resize fixture
+checks pre-render availability, coalesced notifications, eventual framebuffer
+agreement after real X11 resize, minimized conversion, and disposal. Public
+conversion tests feed native-shaped batches through a narrow transport seam,
+including unequal axis ratios and scale-only changes. These synthetic cases do
+not establish physical high-DPI or monitor-transition support. See
+[the metrics contract](window-input.md#window-metrics-and-pixel-conversion) for
+the intentionally stable poll snapshot and live-resize timing policy.
+
+For #12, Linux x64 private Xvfb/KWin with Mesa llvmpipe passed the full
+`native:verify --window-interactions` suite in both the cleanup-fault and rebuilt
+default configurations, including the existing descriptor exception cases and
+all eight forced cleanup cases. Packed npm/Bun consumers, lint, typecheck, and
+59 unit tests passed. The updated input example was exercised with xdotool and
+its screenshot inspected. Intel Vulkan under Xvfb failed presentation because
+DRI3 was unavailable; selecting the installed llvmpipe ICD resolved that setup
+limitation. No physical monitor scale transitions or macOS behavior were verified.
+Actual live resize also demonstrated that a render texture can lead the last
+poll's metrics; the resize test waits for convergence as specified by the API.

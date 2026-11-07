@@ -29,7 +29,14 @@ int main() {
     auto button = glfwSetMouseButtonCallback(window, nullptr);
     glfwSetMouseButtonCallback(window, button);
     focus(window, GLFW_TRUE);
-    observe = [](const auto&, const auto&) {};
+    observe = [](const auto& state, const auto& events) {
+      Check(state.metrics.width == 100 && state.metrics.height == 100);
+      Check(state.metrics.framebufferWidth > 0 && state.metrics.drawable);
+      Check(!events.empty() && std::holds_alternative<MetricsEvent>(events.front()));
+      Check(std::get<MetricsEvent>(events.front()).metrics == state.metrics);
+    };
+    input.Dispatch({});
+    observe = [](const auto&, const auto& events) { Check(events.empty()); };
     input.Dispatch({});
     key(window, GLFW_KEY_A, 38, GLFW_PRESS, 0);
     key(window, GLFW_KEY_A, 38, GLFW_RELEASE, 0);

@@ -140,6 +140,10 @@ non-resizable, and vsync enabled. Dimensions are positive signed 32-bit integers
 in GLFW screen coordinates. Framebuffer pixels can differ on high-DPI displays;
 size depth/MSAA attachments, viewports, and projections from the current texture's
 `width` and `height`. Framebuffer changes are applied automatically after polling.
+`window.metrics` exposes an immutable snapshot of logical client size, framebuffer
+pixels, platform content scale, and drawability before rendering. Subscribe to
+`"metrics"` for coalesced changes before input; `window.toFramebuffer(x, y)` maps
+pointer screen units using measured sizes. See [units and ordering](docs/window-input.md#window-metrics-and-pixel-conversion).
 
 `context.configure()` accepts `GPUCanvasConfiguration`; the format, usage, alpha
 mode, and view formats are validated. Currently only `"srgb"` color space and

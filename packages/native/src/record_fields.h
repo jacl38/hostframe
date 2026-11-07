@@ -20,7 +20,12 @@ template <class T> struct Fields;
 TS_FIELDS(WindowOptions, true,
     TS_FIELD(WindowOptions, title), TS_FIELD(WindowOptions, width), TS_FIELD(WindowOptions, height),
     TS_FIELD(WindowOptions, resizable), TS_FIELD(WindowOptions, vsync));
-TS_FIELDS(InputState, false,
+TS_FIELDS(WindowMetrics, false,
+    TS_FIELD(WindowMetrics, width), TS_FIELD(WindowMetrics, height),
+    TS_FIELD(WindowMetrics, framebufferWidth), TS_FIELD(WindowMetrics, framebufferHeight),
+    TS_FIELD(WindowMetrics, contentScaleX), TS_FIELD(WindowMetrics, contentScaleY), TS_FIELD(WindowMetrics, drawable));
+TS_FIELDS(MetricsEvent, false, TS_FIELD(MetricsEvent, type), TS_FIELD(MetricsEvent, metrics));
+TS_FIELDS(InputState, false, TS_FIELD(InputState, metrics),
     TS_FIELD(InputState, keys), TS_FIELD(InputState, scancodes), TS_FIELD(InputState, buttons),
     TS_FIELD(InputState, focused), TS_FIELD(InputState, pointerCaptured), TS_FIELD(InputState, rawMotion),
     TS_FIELD(InputState, x), TS_FIELD(InputState, y));
