@@ -8,6 +8,7 @@ export type WindowInputEvents = {
 };
 
 export function freezeInput(state: InputState) {
+  Object.freeze(state.metrics);
   Object.freeze(state.keys);
   Object.freeze(state.scancodes);
   Object.freeze(state.buttons);
@@ -34,6 +35,7 @@ export class InputListeners {
     // Additions during dispatch start next batch; removals take effect immediately.
     const snapshot = new Map(Array.from(this.#listeners, ([type, listeners]) => [type, listeners.snapshot()]));
     for(const event of events) {
+      if(event.type === "metrics") Object.freeze(event.metrics);
       Object.freeze(event);
       snapshot.get(event.type)?.(event);
     }

@@ -22,6 +22,7 @@ class WindowInput {
   void Capture(bool captured, bool raw);
   void Position(double x, double y);
   GLFWwindow* window_;
+  WindowMetrics metrics_;
   bool focused_ = false, captured_ = false, raw_ = false, baseline_ = false;
   bool changing_mode_ = false, capture_failed_ = false;
   double x_ = 0, y_ = 0;

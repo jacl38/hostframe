@@ -122,6 +122,15 @@ void WindowInput::Reset() {
 
 InputState WindowInput::Snapshot() const {
   InputState state;
+  // GLFW queries use cached platform state on the owning thread. They do not
+  // pump events or call JavaScript, so this sample is indivisible to listeners.
+  // Sample here instead of installing a second callback/user-pointer owner.
+  auto& metrics = state.metrics;
+  glfwGetWindowSize(window_, &metrics.width, &metrics.height);
+  glfwGetFramebufferSize(window_, &metrics.framebufferWidth, &metrics.framebufferHeight);
+  glfwGetWindowContentScale(window_, &metrics.contentScaleX, &metrics.contentScaleY);
+  metrics.drawable = !glfwGetWindowAttrib(window_, GLFW_ICONIFIED) && metrics.width > 0 && metrics.height > 0 &&
+      metrics.framebufferWidth > 0 && metrics.framebufferHeight > 0;
   for(const auto& [scancode, key] : keys_) {
     state.keys.push_back(key);
     state.scancodes.push_back(scancode);
@@ -140,7 +149,12 @@ InputState WindowInput::Snapshot() const {
 
 void WindowInput::Dispatch(InputCallback callback) {
   auto events = std::exchange(events_, {});
-  callback.Call(Snapshot(), events);
+  const auto state = Snapshot();
+  if(!(state.metrics == metrics_)) {
+    metrics_ = state.metrics;
+    events.insert(events.begin(), MetricsEvent{.type = {}, .metrics = metrics_});
+  }
+  callback.Call(state, events);
   bool pending = false;
   napi_is_exception_pending(callback.env, &pending);
   if(!pending && std::exchange(capture_failed_, false)) {

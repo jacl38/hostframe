@@ -44,3 +44,15 @@ export function usePublicAPI(app: Application, device: GPUDevice) {
   context.configure({ device: {}, format: "bgra8unorm" });
   return { mode, state, gpu, key: Key.W, button: PointerButton.LEFT, modifier: Modifier.SHIFT };
 }
+
+function metricsContract(window: import("hostframe").Window) {
+  const metrics: import("hostframe").WindowMetrics = window.metrics;
+  window.on("metrics", event => { void event.metrics.framebufferWidth; });
+  const pixel: { x: number, y: number } | undefined = window.toFramebuffer(1, 2);
+  // @ts-expect-error Snapshots are immutable.
+  metrics.width = 10;
+  // @ts-expect-error Metrics listeners must remain synchronous.
+  window.on("metrics", async () => {});
+  void pixel;
+}
+void metricsContract;
