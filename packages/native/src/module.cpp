@@ -70,6 +70,7 @@ NOBIND_MODULE(hostframe, m) {
   m.typescript_fragment(RecordMap<MinimizeEvent>::Declaration());
   m.typescript_fragment(RecordMap<RestoreEvent>::Declaration());
   m.typescript_fragment(RecordMap<KeyEvent>::Declaration());
+  m.typescript_fragment(RecordMap<TextEvent>::Declaration());
   m.typescript_fragment(RecordMap<PointerMoveEvent>::Declaration());
   m.typescript_fragment(RecordMap<PointerButtonEvent>::Declaration());
   m.typescript_fragment(RecordMap<ScrollEvent>::Declaration());

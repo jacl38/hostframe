@@ -27,6 +27,10 @@ WindowInput::WindowInput(GLFWwindow* window) : window_(window) {
         .action = action == GLFW_RELEASE ? "release" : action == GLFW_REPEAT ? "repeat" : "press",
         .modifiers = mods});
   });
+  glfwSetCharCallback(window_, [](GLFWwindow* window, unsigned int codepoint) {
+    auto& input = Get(window);
+    if(input.focused_ && !glfwWindowShouldClose(window)) input.events_.emplace_back(TextEvent{.type = {}, .codepoint = codepoint});
+  });
   glfwSetMouseButtonCallback(window_, [](GLFWwindow* window, int button, int action, int mods) {
     auto& input = Get(window);
     if(!input.focused_ || glfwWindowShouldClose(window)) return;
@@ -73,6 +77,7 @@ WindowInput::WindowInput(GLFWwindow* window) : window_(window) {
 WindowInput::~WindowInput() {
   // No callbacks may retain this object during native window destruction.
   glfwSetKeyCallback(window_, nullptr);
+  glfwSetCharCallback(window_, nullptr);
   glfwSetMouseButtonCallback(window_, nullptr);
   glfwSetCursorPosCallback(window_, nullptr);
   glfwSetScrollCallback(window_, nullptr);

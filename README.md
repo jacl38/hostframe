@@ -217,7 +217,7 @@ deferred. See [the contract and follow-ups](docs/window-lifecycle.md), or run
 
 **Keyboard and pointer input**
 
-Use `window.on("key" | "pointerMove" | "pointerButton" | "scroll" | "focus" |
+Use `window.on("key" | "text" | "pointerMove" | "pointerButton" | "scroll" | "focus" |
 "pointerCapture", listener)` for events and `window.input`, `isKeyDown(Key.W)`,
 `isScancodeDown(scancode)`, and `isButtonDown(PointerButton.LEFT)` for held state.
 Events are delivered by `app.pollEvents()` and `app.run()`, including while paused.
@@ -229,7 +229,8 @@ input batch, including while paused. Other native mutations retain their guards.
 
 Run `bun run example:input` or `node examples/vanilla/input.ts` for an interactive square:
 WASD/arrows move, click toggles capture, Escape releases it, the wheel changes
-size, and Q quits. See [window input](docs/window-input.md) for event types,
+size, and Q quits; other entered text is logged from Unicode `text` events. See
+[window input](docs/window-input.md) for event types, composition limitations,
 coordinate units, repeat behavior, listener failure semantics, and lifecycle rules.
 
 **Optional fixed-update loop**

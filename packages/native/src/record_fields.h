@@ -37,6 +37,7 @@ TS_FIELDS(InputState, false, TS_FIELD(InputState, metrics), TS_FIELD(InputState,
 TS_FIELDS(KeyEvent, false,
     TS_FIELD(KeyEvent, type), TS_FIELD(KeyEvent, key), TS_FIELD(KeyEvent, scancode),
     TS_FIELD(KeyEvent, action), TS_FIELD(KeyEvent, modifiers), TS_FIELD(KeyEvent, synthetic));
+TS_FIELDS(TextEvent, false, TS_FIELD(TextEvent, type), TS_FIELD(TextEvent, codepoint));
 TS_FIELDS(PointerButtonEvent, false,
     TS_FIELD(PointerButtonEvent, type), TS_FIELD(PointerButtonEvent, button), TS_FIELD(PointerButtonEvent, action),
     TS_FIELD(PointerButtonEvent, modifiers), TS_FIELD(PointerButtonEvent, synthetic));

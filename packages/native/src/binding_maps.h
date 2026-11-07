@@ -97,6 +97,7 @@ TS_RECORD_MAP(CloseRequestEvent);
 TS_RECORD_MAP(MinimizeEvent);
 TS_RECORD_MAP(RestoreEvent);
 TS_RECORD_MAP(KeyEvent);
+TS_RECORD_MAP(TextEvent);
 TS_RECORD_MAP(PointerButtonEvent);
 TS_RECORD_MAP(PointerMoveEvent);
 TS_RECORD_MAP(ScrollEvent);

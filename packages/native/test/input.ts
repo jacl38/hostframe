@@ -25,7 +25,7 @@ try {
   const context = configureWindow(app, window, device);
   const id = (await xdo("search", "--onlyvisible", "--pid", String(process.pid), "--name", "^hostframe input verification$")).split("\n")[0]!;
   const events: InputEvent[] = [];
-  for(const name of ["key", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"] as const) {
+  for(const name of ["key", "text", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"] as const) {
     window.on(name, event => { events.push(event); });
   }
   async function until(predicate: () => boolean, message: string) {
@@ -74,6 +74,7 @@ try {
   assert.ok(a?.type === "key");
   assert.ok(a.modifiers & Modifier.SHIFT);
   assert.equal(window.isScancodeDown(a.scancode), true);
+  await until(() => events.some(event => event.type === "text" && event.codepoint === "A".codePointAt(0)), "Shifted text input missing");
   assert.equal(initial.keys.length, 0, "Retained snapshots must not change");
   await until(() => events.some(event => event.type === "key" && event.key === Key.A && event.action === "repeat"), "OS key repeat missing");
   assert.equal(events.filter(event => event.type === "key" && event.key === Key.A && event.action === "press").length, 1);
@@ -232,7 +233,7 @@ try {
   await until(() => replacement.isKeyDown(Key.A), "Replacement held state missing");
   app.dispose(); // Dispose with capture and a held key still active.
   assert.throws(() => replacement.input, /disposed/);
-  console.log(`${process.versions.bun ? "Bun" : "Node.js"}: real X11 keys, repeats, modifiers, pointer, buttons, scroll, capture, focus reset, callback failures and lifecycle passed.`);
+  console.log(`${process.versions.bun ? "Bun" : "Node.js"}: real X11 keys, shifted text, repeats, modifiers, pointer, buttons, scroll, capture, focus reset, callback failures and lifecycle passed.`);
 } finally {
   // Ensure a failed assertion never leaves injected desktop input held.
   await xdo("keyup", "a", "w", "d", "s", "Shift_L").catch(() => {});

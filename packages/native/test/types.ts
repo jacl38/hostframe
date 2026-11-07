@@ -77,6 +77,13 @@ function contextContracts(app: Application, device: GPUDevice) {
     // @ts-expect-error Event maps keep each callback's specific event shape.
     void event.deltaX;
   });
+  window.on("text", event => {
+    const codepoint: number = event.codepoint;
+    const text: string = String.fromCodePoint(codepoint);
+    void text;
+    // @ts-expect-error Text events do not expose physical key tokens.
+    void event.key;
+  });
   // @ts-expect-error Shared subscription mechanics do not expose public emission.
   window.emit("key", {});
   // @ts-expect-error Applications do not expose public emission either.
