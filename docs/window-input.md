@@ -3,7 +3,8 @@
 Input is implemented for the current Linux x64/X11 target in Node.js and Bun.
 Run `bun run example:input` or `node examples/vanilla/input.ts`. WASD/arrows move the
 square, left click toggles capture, Escape releases capture, the wheel changes
-size, and Q closes the window. Losing focus releases held controls and capture.
+size, and Q closes the window. Other entered text is logged using the `text`
+event. Losing focus releases held controls and capture.
 
 `Key`, `PointerButton`, and `Modifier` are generated from the pinned GLFW header
 by `bun run setup` and every `bun run native:build`. Their numeric values are not
@@ -31,8 +32,8 @@ app.on("fixedUpdate", ({ dt }) => {
 independently of the active text layout. `Key.UNKNOWN` is -1. Every key event
 also carries a platform-specific `scancode`, including unknown keys. Use
 `isScancodeDown(scancode)` to distinguish unknown keys; scancodes are not portable
-between operating systems. This API provides controls, not characters, IME, or
-text composition.
+between operating systems. This API provides controls, not characters. Use the
+separate `text` event for text entry.
 
 Names retain GLFW's suffix after removing `GLFW_KEY_`, `GLFW_MOUSE_BUTTON_`, or
 `GLFW_MOD_`. Standalone digits use `ZERO` through `NINE`, so `GLFW_KEY_0` becomes
@@ -44,6 +45,7 @@ previous PascalCase and `Digit0`/`Button4` naming conventions.
 | Subscription | Event fields (in addition to `type`) |
 | --- | --- |
 | `key` | `key`, `scancode`, `action: "press" \| "release" \| "repeat"`, `modifiers`, `synthetic` |
+| `text` | `codepoint` |
 | `pointerMove` | `x`, `y`, `deltaX`, `deltaY`, `captured` |
 | `pointerButton` | `button`, `action: "press" \| "release"`, `modifiers`, `synthetic` |
 | `scroll` | `deltaX`, `deltaY` |
@@ -64,6 +66,53 @@ controls. A press and release within one poll are both delivered as events but
 leave the control up in the snapshot. OS-generated repeats have action `repeat`;
 they do not create additional held entries or additional `press` events. Repeat
 frequency depends on system settings and must not drive simulation movement.
+
+## Text input and composition
+
+`text` is a distinct, generated input event. It carries GLFW's unsigned
+32-bit Unicode code point unchanged as the non-negative JavaScript number
+`codepoint`; it does not carry a `Key`, scancode, action, modifiers, or held
+state. Convert each event with `String.fromCodePoint`, which yields one UTF-16
+string (two code units for a supplementary-plane code point):
+
+```ts
+const text: string[] = [];
+window.on("text", event => {
+  text.push(String.fromCodePoint(event.codepoint));
+  updateTextField(text.join(""));
+});
+```
+
+This is intentionally not a conversion of `key` events. GLFW asks the platform
+text-input system for regular text, so the stream respects the active layout,
+modifiers, and dead keys. One physical key can yield zero, one, or several text
+events; a committed character can require several key presses. Do not associate
+a text event with a particular key event or reconstruct characters from `Key`.
+
+Native callbacks append key, text, pointer, and lifecycle notifications to one
+FIFO queue. Within a poll, `text` therefore has the order in which GLFW invoked
+its character callback relative to the other native callbacks. A platform may
+invoke no character callback for a key, or invoke it later for a dead-key
+composition, so hostframe makes no stronger key-to-text adjacency promise. As
+with all input events, an initial `metrics` notification can be inserted ahead
+of that native sequence when the measured metrics changed.
+
+Text has no entry in `window.input`. It is delivered only while the window is
+focused and open. Text queued before focus loss remains before that loss's
+synthetic releases and `focus: false`; character callbacks after focus loss or
+after an accepted close are ignored. Resetting focus, capture, or held controls
+never synthesizes text. A throwing or asynchronous text listener follows the
+same batch semantics as every other input listener: remaining notifications are
+dropped, no text is replayed, and later polls remain usable.
+
+GLFW character callbacks report committed text, not composition/preedit state.
+On supported backends this includes dead-key output and may include text an IME
+commits, but hostframe currently exposes no composition start/update/cancel,
+preedit string, selection/replacement range, candidate UI, or caret-rectangle
+protocol. It is therefore suitable for committed-value text fields but not for
+an editor that must render an in-progress IME composition. A future composition
+API must be a separate contract built on platform capabilities; it must not
+overload `text` with preedit data.
 
 ## Coordinates
 
@@ -116,7 +165,8 @@ events are queued for each held control, capture/raw motion are released, then a
 Focus gain starts empty and **does not recapture**, even if a physical key remains
 down. Accepted native closes and explicit force-close commands clear held input
 and release capture, then ignore new control input while the closed window
-remains alive. A canceled native request keeps input operational; see
+remains alive, including new text input. A canceled native request keeps input
+operational; see
 [window lifecycle](window-lifecycle.md). Disposal detaches
 callbacks, clears queued input and listeners, and restores the cursor before the
 native window is destroyed; it does not deliver disposal events. Repeated disposal
@@ -192,13 +242,15 @@ operations remain restricted to the process main thread.
 keyboard/pointer checks in both Node.js and Bun. Input checks use XTest through
 `xdotool` in an X11 desktop with an EWMH window manager; they require keyboard
 repeat enabled. They cover physical key press/release/repeat and modifiers,
-held-state snapshots, normal/captured movement, three buttons, both scroll axes,
-focus loss with held controls and capture, paused polling, listener failures,
-reentrancy, close, disposal, and window recreation. The input-action fixture also
-checks ordered commands, duplicate requests, next-poll notifications, same-call
-close results, cancellation on listener/command failure, and capture/close while
-paused without updates or rendering. They do not establish behavior
-for Wayland, other operating systems, or physical high-DPI/trackpad hardware.
+shifted text, a German-layout physical `Key.Z` producing `y`, and US-International
+dead-acute composition producing `é`, as well as held-state snapshots,
+normal/captured movement, three buttons, both scroll axes, focus loss with held
+controls and capture, paused polling, listener failures, reentrancy, close,
+disposal, and window recreation. The input-action fixture also checks ordered
+commands, duplicate requests, next-poll notifications, same-call close results,
+cancellation on listener/command failure, and capture/close while paused without
+updates or rendering. They do not establish behavior for Wayland, other operating
+systems, arbitrary IMEs, or physical high-DPI/trackpad hardware.
 
 The 2026-11-06 subscription/action change passed lint, typecheck, all 57
 unit/build-script tests, native build/source audit, compute/readback, and the full
@@ -279,8 +331,9 @@ session was observed to retain stale Xlib mappings with the pinned GLFW version;
 US and German layouts were verified in separately initialized sessions.
 Arguments must be signed 32-bit integers. A token identifies a physical GLFW key,
 a scancode identifies a platform key, and a display label describes that key in
-the current layout. None is typed text: modifiers, dead keys and IME composition
-require a separate text-input API, which is not implemented here.
+the current layout. None is typed text: use `text` for committed text. Modifiers,
+dead keys, and IME composition cannot be reconstructed from labels; `text` still
+does not provide IME preedit state.
 
 ### Multiple windows
 

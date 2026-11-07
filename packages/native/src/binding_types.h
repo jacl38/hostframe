@@ -53,6 +53,9 @@ struct KeyEvent {
   int modifiers = 0;
   bool synthetic = false;
 };
+// A Unicode code point emitted by GLFW's text input system, independent of a
+// physical key, scancode, or held-state transition.
+struct TextEvent { Token<"text"> type; unsigned int codepoint = 0; };
 struct PointerButtonEvent {
   Token<"pointerButton"> type;
   int button = 0;
@@ -68,7 +71,7 @@ struct PointerMoveEvent {
 struct ScrollEvent { Token<"scroll"> type; double deltaX = 0, deltaY = 0; };
 struct FocusEvent { Token<"focus"> type; bool focused = false; };
 struct PointerCaptureEvent { Token<"pointerCapture"> type; bool captured = false, rawMotion = false; };
-using InputEvent = std::variant<CloseRequestEvent, MinimizeEvent, RestoreEvent, MetricsEvent, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent>;
+using InputEvent = std::variant<CloseRequestEvent, MinimizeEvent, RestoreEvent, MetricsEvent, KeyEvent, TextEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent>;
 struct InputState {
   WindowMetrics metrics;
   WindowStatus status;

@@ -1,7 +1,7 @@
 import type { InputEvent as NativeInputEvent, InputState } from "../../build/native/generated/native";
 import { Subscriptions } from "./subscriptions.ts";
 import { inputEventTypes } from "../../build/native/generated/input-events.ts";
-export type { InputState, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent } from "../../build/native/generated/native";
+export type { InputState, KeyEvent, TextEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent } from "../../build/native/generated/native";
 
 /** Cancel only during synchronous delivery. For asynchronous prompts, cancel first, then force-close after saving. */
 export type CloseRequestEvent = Readonly<Extract<NativeInputEvent, { type: "closeRequest" }> & {

@@ -85,6 +85,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],
       ["bun", resolve(root, "packages/native/test/input.ts")],
+      ["node", resolve(root, "packages/native/test/text-input.ts")],
+      ["bun", resolve(root, "packages/native/test/text-input.ts")],
       ["node", resolve(root, "packages/native/test/multiple-window-input.ts")],
       ["bun", resolve(root, "packages/native/test/multiple-window-input.ts")],
       ["node", resolve(root, "packages/native/test/input-actions.ts")],

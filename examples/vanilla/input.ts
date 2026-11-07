@@ -18,6 +18,7 @@ try {
   let x = 0.5;
   let y = 0.5;
   let size = 40;
+  const enteredText: string[] = [];
   window.on("key", event => {
     if(event.action !== "press") return; // OS repeat never drives simulation.
     if(event.key === Key.ESCAPE) window.setPointerCapture(false);
@@ -45,6 +46,11 @@ try {
     console.log(`Focus ${event.focused ? "gained" : "lost"}; held keys: ${window.input.keys.length}`);
   });
   window.on("pointerCapture", event => { console.log(`Pointer capture ${event.captured ? "on" : "off"}`); });
+  window.on("text", event => {
+    enteredText.push(String.fromCodePoint(event.codepoint));
+    if(enteredText.length > 80) enteredText.shift();
+    console.log(`Text input: ${enteredText.join("")}`);
+  });
   app.on("fixedUpdate", ({ dt }) => {
     x += (Number(window.isKeyDown(Key.D) || window.isKeyDown(Key.RIGHT)) - Number(window.isKeyDown(Key.A) || window.isKeyDown(Key.LEFT))) * dt * 0.5;
     y += (Number(window.isKeyDown(Key.S) || window.isKeyDown(Key.DOWN)) - Number(window.isKeyDown(Key.W) || window.isKeyDown(Key.UP))) * dt * 0.5;
@@ -69,7 +75,7 @@ try {
     pass.end();
     renderingDevice.queue.submit([encoder.finish()]);
   });
-  console.log("WASD/arrows move; left click captures; Escape releases; wheel resizes; Q quits.");
+  console.log("WASD/arrows move; left click captures; Escape releases; wheel resizes; Q quits. Other text logs through the text event.");
   await example.run();
 } finally {
   await example.dispose();

@@ -28,6 +28,7 @@ test("every native event type can be subscribed to and dispatched without a sepa
     { type: "restore" },
     { type: "metrics", metrics },
     press,
+    { type: "text", codepoint: 0xE9 },
     { type: "pointerMove", x: 1, y: 2, deltaX: 3, deltaY: 4, captured: false },
     { type: "pointerButton", button: 0, action: "press", modifiers: 0, synthetic: false },
     { type: "scroll", deltaX: -1, deltaY: 1 },

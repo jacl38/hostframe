@@ -26,6 +26,8 @@ int main() {
     glfwSetWindowCloseCallback(window, close);
     auto key = glfwSetKeyCallback(window, nullptr);
     glfwSetKeyCallback(window, key);
+    auto character = glfwSetCharCallback(window, nullptr);
+    glfwSetCharCallback(window, character);
     auto focus = glfwSetWindowFocusCallback(window, nullptr);
     glfwSetWindowFocusCallback(window, focus);
     auto button = glfwSetMouseButtonCallback(window, nullptr);
@@ -41,12 +43,14 @@ int main() {
     observe = [](const auto&, const auto& events) { Check(events.empty()); };
     input.Dispatch({});
     key(window, GLFW_KEY_A, 38, GLFW_PRESS, 0);
+    character(window, 0x1F642);
     key(window, GLFW_KEY_A, 38, GLFW_RELEASE, 0);
     observe = [](const auto& state, const auto& events) {
       Check(state.keys.empty() && state.scancodes.empty());
-      Check(events.size() == 2);
+      Check(events.size() == 3);
       Check(std::get<KeyEvent>(events[0]).action.value == "press");
-      Check(std::get<KeyEvent>(events[1]).action.value == "release");
+      Check(std::get<TextEvent>(events[1]).codepoint == 0x1F642);
+      Check(std::get<KeyEvent>(events[2]).action.value == "release");
     };
     input.Dispatch({});
     key(window, GLFW_KEY_UNKNOWN, 901, GLFW_PRESS, 0);
@@ -68,6 +72,7 @@ int main() {
     // Late OS releases after reconciliation must not duplicate synthetic releases.
     key(window, GLFW_KEY_UNKNOWN, 902, GLFW_RELEASE, 0);
     button(window, GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);
+    character(window, 0x00E9);
     observe = [](const auto& state, const auto& events) {
       Check(!state.focused && state.keys.empty() && state.scancodes.empty() && state.buttons.empty());
       Check(events.size() == 6);
