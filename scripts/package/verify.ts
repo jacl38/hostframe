@@ -59,7 +59,10 @@ async function main() {
       await run(["node", resolve(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], directory);
       for(const runtime of ["node", "bun"]) {
         await run([runtime, "consumer.ts", "--no-display"], directory, { ...process.env, DISPLAY: "" });
-        await run([runtime, "consumer.ts"], directory);
+        await run([runtime, "consumer.ts"], directory, {
+          ...process.env,
+          HOSTFRAME_CLOSE_REQUEST: resolve(root, "build/native/cmake/native_close_request")
+        });
       }
     }
   } finally {

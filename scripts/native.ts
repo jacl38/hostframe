@@ -79,6 +79,8 @@ async function verify(presentation: boolean, interactions: boolean) {
     checks.push(
       ["node", resolve(root, "packages/native/test/context.ts"), "--interactions"],
       ["bun", resolve(root, "packages/native/test/context.ts"), "--interactions"],
+      ["node", resolve(root, "packages/native/test/lifecycle.ts")],
+      ["bun", resolve(root, "packages/native/test/lifecycle.ts")],
       ["node", resolve(root, "packages/native/test/resize.ts")],
       ["bun", resolve(root, "packages/native/test/resize.ts")],
       ["node", resolve(root, "packages/native/test/input.ts")],

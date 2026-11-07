@@ -74,13 +74,18 @@ void WindowState::RenderFrame(Napi::Env env, Napi::Function callback) {
   presentation_->RenderFrame(env, callback);
 }
 
+GLFWwindow* WindowState::NativeWindow() const {
+  if(ShouldClose()) throw std::runtime_error("Window is closed");
+  return presentation_->NativeWindow();
+}
+
 bool WindowState::ShouldClose() const {
   return !presentation_ || presentation_->ShouldClose();
 }
 
 void WindowState::RequestClose() {
   presentation_->RequestClose();
-  input_->Reset();
+  input_->Close();
 }
 
 const char* WindowState::PresentMode() const {

@@ -42,6 +42,15 @@ export class Window {
   /** Atomic client screen units, framebuffer pixels, and platform content scale from the last batch. */
   get metrics() { return this.input.metrics; }
 
+  /** Polled native content position (screen units), visibility, and minimization. */
+  get status() { return this.input.status; }
+
+  /** Runtime controls are immediate, guarded native mutations. Observe results on the next poll. */
+  setTitle(title: string) { this.#native.setTitle(title); }
+  setSize(width: number, height: number) { this.#native.setSize(width, height); }
+  setPosition(x: number, y: number) { this.#native.setPosition(x, y); }
+  setVisible(visible: boolean) { this.#native.setVisible(visible); }
+
   /** Continuous pixel coordinates; undefined while non-drawable. Does not clamp or round. */
   toFramebuffer(x: number, y: number) {
     const metrics = this.metrics;
@@ -92,7 +101,7 @@ export class Window {
     this.#input = freezeInput({ ...this.#native.setPointerCapture(captured, rawMotion), metrics: this.#input.metrics });
   }
 
-  /** In input listeners, requested after the successful batch; cancels later capture commands. */
+  /** Force-close without closeRequest. In input/lifecycle listeners, applies after a successful batch. */
   requestClose() {
     if(this.#inputCommands) {
       this.#inputCommands.push({ type: "close" });
@@ -124,7 +133,7 @@ export class Window {
       this.#input = freezeInput(state);
       this.#inputCommands = commands;
       try {
-        this.#listeners.dispatch(events);
+        this.#listeners.dispatch(events, () => { commands.push({ type: "close" }); });
       } finally {
         this.#inputCommands = undefined;
       }

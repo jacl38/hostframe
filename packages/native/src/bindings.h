@@ -50,6 +50,10 @@ class Window {
   void DispatchInput(InputCallback callback);
   InputState SetPointerCapture(bool captured, bool rawMotion);
   InputState RequestClose();
+  void SetTitle(std::string title);
+  void SetSize(double width, double height);
+  void SetPosition(double x, double y);
+  void SetVisible(bool visible);
   void Dispose();
   Computed<Window, &Window::Disposed> disposed{this};
   Computed<Window, &Window::Configured> configured{this};

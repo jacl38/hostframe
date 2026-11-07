@@ -58,6 +58,7 @@ add_library(hostframe MODULE
   src/dawn_bridge.cpp
   src/application.cpp
   src/window.cpp
+  src/window_controls.cpp
   src/input.cpp
   src/presentation.cpp
   ${BINDING_SOURCES}
@@ -98,7 +99,7 @@ target_include_directories(hostframe SYSTEM PRIVATE
 target_compile_definitions(hostframe PRIVATE DAWN_HAVE_UTILS_BUILD_CONFIG ${PLATFORM_DEFINITIONS} GLFW_INCLUDE_NONE)
 target_link_libraries(hostframe PRIVATE dawn_engine glfw ${PLATFORM_LIBRARIES} Threads::Threads ${CMAKE_DL_LIBS})
 # Keep warnings on our integration without imposing project style on upstream sources.
-set_source_files_properties(src/module.cpp src/nobind_runtime.cpp src/dawn_bridge.cpp src/application.cpp src/window.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
+set_source_files_properties(src/module.cpp src/nobind_runtime.cpp src/dawn_bridge.cpp src/application.cpp src/window.cpp src/window_controls.cpp src/input.cpp src/presentation.cpp PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Wpedantic")
 
 add_library(dawn_glfw STATIC "${DAWN_SOURCE}/src/dawn/glfw/utils.cpp")
 if(APPLE)
@@ -126,3 +127,9 @@ target_include_directories(native_input_check PRIVATE src "${DAWN_SOURCE}/third_
 target_compile_definitions(native_input_check PRIVATE GLFW_INCLUDE_NONE)
 target_compile_options(native_input_check PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(native_input_check PRIVATE glfw)
+
+if(NOT APPLE)
+  add_executable(native_close_request test/close-request.cpp)
+  target_link_libraries(native_close_request PRIVATE X11::X11)
+  target_compile_options(native_close_request PRIVATE -Wall -Wextra -Wpedantic)
+endif()

@@ -97,7 +97,7 @@ jobs:
           bun test scripts packages/core/test
       - name: Verify desktop failure and cancellation cleanup
         run: bun scripts/validation/desktop-check.ts
-      - name: Verify native presentation and interactions
+      - name: Verify native presentation, lifecycle controls and interactions
         run: bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions
       - name: Verify representative renderers
         if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'

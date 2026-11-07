@@ -44,6 +44,7 @@ explicitly if unsupported. The scheduler cap and presentation mode are separate.
 | --- | --- | --- |
 | Vanilla WebGPU | [solid-color](vanilla/solid-color.ts) | Surface acquisition, clear, submit, present, disposal |
 | | [multiple-windows](vanilla/multiple-windows.ts) | Two sizes and contexts sharing one device; click dims only that window, Q/Escape closes it, final close exits |
+| | [window-lifecycle](vanilla/window-lifecycle.ts) | Native unsaved-work close prompt; S saves, C cancels, R resizes, P moves, H hides briefly; Q/Escape force-close |
 | | [input](vanilla/input.ts) | Held keys, focus, scrolling and pointer capture; WASD/arrows move, click captures, Escape releases capture |
 | | [triangle](vanilla/triangle.ts) | WGSL vertex/fragment stages and interpolated vertex colors |
 | | [cubes](vanilla/cubes.ts) | Vertex buffers, uniforms, depth attachments, instanced drawing and animated transforms |

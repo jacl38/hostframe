@@ -56,3 +56,30 @@ function metricsContract(window: import("hostframe").Window) {
   void pixel;
 }
 void metricsContract;
+
+function lifecycleContract(window: import("hostframe").Window) {
+  const status: import("hostframe").WindowStatus = window.status;
+  window.setTitle("Editor");
+  window.setSize(800, 600);
+  window.setPosition(-100, 200);
+  window.setVisible(false);
+  window.on("closeRequest", event => {
+    const request: import("hostframe").CloseRequestEvent = event;
+    request.preventDefault();
+    const canceled: boolean = request.defaultPrevented;
+    void canceled;
+    // @ts-expect-error Cancellation is controlled by preventDefault.
+    request.defaultPrevented = false;
+  });
+  window.on("minimize", event => { const type: "minimize" = event.type; void type; });
+  window.on("restore", event => { const type: "restore" = event.type; void type; });
+  // @ts-expect-error Status snapshots are immutable.
+  status.visible = true;
+  // @ts-expect-error Lifecycle listeners must remain synchronous.
+  window.on("closeRequest", async () => {});
+  // @ts-expect-error Visibility accepts only booleans.
+  window.setVisible("yes");
+  // @ts-expect-error Fullscreen remains deferred.
+  window.setFullscreen(true);
+}
+void lifecycleContract;

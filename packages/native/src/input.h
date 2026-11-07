@@ -16,6 +16,7 @@ class WindowInput {
   void Dispatch(InputCallback callback);
   void SetCapture(bool captured, bool raw);
   void Reset();
+  void Close();
 
  private:
   static WindowInput& Get(GLFWwindow* window);
@@ -24,6 +25,7 @@ class WindowInput {
   GLFWwindow* window_;
   WindowMetrics metrics_;
   bool focused_ = false, captured_ = false, raw_ = false, baseline_ = false;
+  bool close_pending_ = false, closed_ = false;
   bool changing_mode_ = false, capture_failed_ = false;
   double x_ = 0, y_ = 0;
   std::map<int, int> keys_; // Platform scancode -> GLFW physical key token (including unknown).

@@ -152,3 +152,9 @@ assert its subsequent device-loss failure (or application disposal), and verify
 release of both contexts' references. Packed npm/Bun consumers render two windows
 and keep the second running after closing the first. The two-window example runs
 in both the representative and full gallery gates.
+
+The lifecycle fixture in `native:verify --window-interactions` sends actual
+`WM_DELETE_WINDOW` messages and checks cancellation, retry, acceptance, native
+control/state transport, subscription failure/ordering, pause and multiwindow
+isolation in both runtimes. The `vanilla/window-lifecycle` consumer example is in
+the representative and full gallery selections. See [the lifecycle contract](window-lifecycle.md).

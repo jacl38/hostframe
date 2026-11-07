@@ -43,7 +43,7 @@ prerequisites, and release limitations.
 
 **Examples**
 
-The [example gallery](examples/README.md) contains 17 runnable demos grouped by
+The [example gallery](examples/README.md) contains 18 runnable demos grouped by
 rendering source: vanilla WebGPU, webgpu-utils, TypeGPU, and Three.js, including
 Rapier physics. Run `bun run example --list`, then for example
 `bun run example three/shadows`. Every entry also runs directly in Node.js.
@@ -201,6 +201,19 @@ ends `run()`. Paused runs still poll input for every window.
 Frames acquire, render, and present sequentially. A FIFO acquisition/presentation
 wait for one window delays later windows and fixed updates on the same main
 thread. Per-window vsync and a scheduler cap do not provide independent pacing.
+
+**Window lifecycle and runtime controls**
+
+Native user-close requests emit a synchronous `closeRequest` event. Call
+`event.preventDefault()` to keep the window usable while prompting about unsaved
+work; after saving, `window.requestClose()` force-closes without another prompt.
+Uncanceled requests close after successful event dispatch, before the scheduler
+checks for the final open window. Failed listeners leave the window open.
+`minimize`/`restore` report native transitions; `metrics` remains the resize event.
+`setTitle`, `setSize`, `setPosition`, and `setVisible` are guarded runtime controls;
+`window.status` exposes polled position/visibility/minimization. Fullscreen is
+deferred. See [the contract and follow-ups](docs/window-lifecycle.md), or run
+`bun run example vanilla/window-lifecycle` for the unsaved-work example.
 
 **Keyboard and pointer input**
 

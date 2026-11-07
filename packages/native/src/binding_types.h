@@ -37,6 +37,13 @@ struct WindowMetrics {
   bool drawable = false;
   bool operator==(const WindowMetrics&) const = default;
 };
+struct WindowStatus {
+  int x = 0, y = 0;
+  bool visible = false, minimized = false;
+};
+struct CloseRequestEvent { Token<"closeRequest"> type; };
+struct MinimizeEvent { Token<"minimize"> type; };
+struct RestoreEvent { Token<"restore"> type; };
 struct MetricsEvent { Token<"metrics"> type; WindowMetrics metrics; };
 
 struct KeyEvent {
@@ -61,9 +68,10 @@ struct PointerMoveEvent {
 struct ScrollEvent { Token<"scroll"> type; double deltaX = 0, deltaY = 0; };
 struct FocusEvent { Token<"focus"> type; bool focused = false; };
 struct PointerCaptureEvent { Token<"pointerCapture"> type; bool captured = false, rawMotion = false; };
-using InputEvent = std::variant<MetricsEvent, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent>;
+using InputEvent = std::variant<CloseRequestEvent, MinimizeEvent, RestoreEvent, MetricsEvent, KeyEvent, PointerMoveEvent, PointerButtonEvent, ScrollEvent, FocusEvent, PointerCaptureEvent>;
 struct InputState {
   WindowMetrics metrics;
+  WindowStatus status;
   std::vector<int> keys, scancodes, buttons;
   bool focused = false, pointerCaptured = false, rawMotion = false;
   double x = 0, y = 0;
