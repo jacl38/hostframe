@@ -16,6 +16,11 @@ export function usePublicAPI(app: Application, device: GPUDevice) {
   const context: WindowGPUContext = window.getContext("webgpu");
   const adapter: Promise<GPUAdapter | null> = context.requestAdapter({ powerPreference: "high-performance" });
   context.configure({ device, format: gpu.getPreferredCanvasFormat() });
+  const drew: boolean = context.draw(() => {
+    const texture: GPUTexture = context.getCurrentTexture();
+    void texture;
+    return undefined;
+  });
   const mode: PresentMode = window.presentMode;
   window.on("render", event => {
     const renderEvent: WindowEvents["render"] = event;
@@ -42,7 +47,17 @@ export function usePublicAPI(app: Application, device: GPUDevice) {
   context.requestAdapter({ compatibleSurface: context });
   // @ts-expect-error Configuration requires a standard GPUDevice.
   context.configure({ device: {}, format: "bgra8unorm" });
-  return { mode, state, gpu, key: Key.W, button: PointerButton.LEFT, modifier: Modifier.SHIFT };
+  // @ts-expect-error Application-owned input dispatch is not part of the public API.
+  window.dispatchInput();
+  // @ts-expect-error Application-owned render dispatch is not part of the public API.
+  window.dispatchRender({ alpha: 0, droppedTime: 0, frameTime: 0, frame: 1 }, () => true);
+  // @ts-expect-error draw is the supported frame API; the internal renderer is hidden.
+  context.render(() => undefined);
+  // @ts-expect-error Context cache cleanup is owned by Window disposal.
+  context.release();
+  // @ts-expect-error Manual draw callbacks must remain synchronous.
+  context.draw(async () => {});
+  return { drew, mode, state, gpu, key: Key.W, button: PointerButton.LEFT, modifier: Modifier.SHIFT };
 }
 
 function metricsContract(window: import("hostframe").Window) {

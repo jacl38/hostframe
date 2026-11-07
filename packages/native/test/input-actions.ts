@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
 import { Application, Key } from "../../../index.ts";
+import { getWindowController } from "../../core/window.ts";
 import { configureWindow, renderFrames } from "./frames.ts";
 import { checkAdapter } from "./adapter.ts";
 
@@ -55,7 +56,7 @@ try {
     window.setPointerCapture(true);
     // Rejected nested dispatch must leave the outer queue intact.
     assert.throws(() => app.pollEvents(), /in progress/);
-    assert.throws(() => window.dispatchInput(), /in progress/);
+    assert.throws(() => getWindowController(window).dispatchInput(), /in progress/);
     assert.throws(() => app.createWindow(), /in progress/);
     assert.throws(() => window.dispose(), /in progress/);
     assert.throws(() => app.dispose(), /in progress/);

@@ -1,7 +1,7 @@
 import type { NativeWindow } from "../native/bridge.ts";
 import { freezeInput, InputListeners } from "./input.ts";
 import type { InputState, WindowInputEvents } from "./input.ts";
-import { WindowGPUContext } from "./context.ts";
+import { createWindowGPUContext } from "./context.ts";
 import { Subscriptions } from "./subscriptions.ts";
 import type { RenderEvent } from "./timing.ts";
 
@@ -9,25 +9,51 @@ export type WindowEvents = WindowInputEvents & { render: RenderEvent };
 
 type InputCommand = { type: "close" } | { type: "capture", captured: boolean, rawMotion: boolean };
 
+type WindowController = {
+  dispatchInput(): void,
+  dispatchRender(event: RenderEvent, active: () => boolean): void
+};
+
+const controllers = new WeakMap<Window, WindowController>();
+
+/** @internal Creates a public window with its application-owned controller. */
+export function createWindow(native: NativeWindow, onDisposed: (window: Window) => void, isApplicationRunning: () => boolean) {
+  const window = new Window(native, onDisposed, isApplicationRunning);
+  return { window, controller: controllers.get(window)! };
+}
+
+/** @internal Returns the application-owned controller for integration tests and Application. */
+export function getWindowController(window: Window) {
+  const controller = controllers.get(window);
+  if(!controller) throw new Error("Window has no controller");
+  return controller;
+}
+
 /** A native window owned by its Application. Dispose before destroying its device. */
 export class Window {
   #native: NativeWindow;
   #onDisposed: ((window: Window) => void) | undefined;
   #listeners = new InputListeners();
   #input!: InputState;
-  #context: WindowGPUContext | undefined;
+  #context: ReturnType<typeof createWindowGPUContext> | undefined;
   #renderListeners = new Subscriptions<RenderEvent>("render", "a window");
   #renderEvent!: RenderEvent;
   #active!: () => boolean;
   #render: () => undefined;
+  #isApplicationRunning: () => boolean;
   #inputCommands: InputCommand[] | undefined;
 
   /** @internal Created by Application.createWindow. */
-  constructor(native: NativeWindow, onDisposed?: (window: Window) => void) {
+  constructor(native: NativeWindow, onDisposed?: (window: Window) => void, isApplicationRunning = () => false) {
     this.#native = native;
     this.#onDisposed = onDisposed;
+    this.#isApplicationRunning = isApplicationRunning;
     this.#render = this.#emitRender.bind(this);
-    this.dispatchInput();
+    controllers.set(this, {
+      dispatchInput: () => this.#dispatchInput(),
+      dispatchRender: (event, active) => this.#dispatchRender(event, active)
+    });
+    this.#dispatchInput();
   }
 
   get presentMode() { return this.#native.presentMode; }
@@ -74,16 +100,15 @@ export class Window {
   getContext(type: "webgpu") {
     this.#requireAlive();
     if(type !== "webgpu") throw new TypeError("Only the webgpu context is supported");
-    this.#context ??= new WindowGPUContext(this.#native);
-    return this.#context;
+    this.#context ??= createWindowGPUContext(this.#native, this.#isApplicationRunning);
+    return this.#context.context;
   }
 
-  /** @internal The application owns scheduling; the context owns the native frame. */
-  dispatchRender(event: RenderEvent, active: () => boolean) {
+  #dispatchRender(event: RenderEvent, active: () => boolean) {
     if(this.#native.disposed || this.#native.shouldClose || !this.#renderListeners.size) return;
     this.#renderEvent = event;
     this.#active = active;
-    this.#context?.render(this.#render);
+    this.#context?.controller.render(this.#render);
   }
 
   #emitRender() {
@@ -117,7 +142,7 @@ export class Window {
       if(this.#native.disposed) {
         this.#listeners.clear();
         this.#renderListeners.clear();
-        this.#context?.release();
+        this.#context?.controller.release();
         this.#context = undefined;
         this.#onDisposed?.(this);
         this.#onDisposed = undefined;
@@ -125,8 +150,7 @@ export class Window {
     }
   }
 
-  /** @internal Dispatch under the native application operation guard. */
-  dispatchInput() {
+  #dispatchInput() {
     if(this.#native.disposed) return;
     const commands: InputCommand[] = [];
     this.#native.dispatchInput((state, events) => {

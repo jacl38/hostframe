@@ -1,7 +1,8 @@
 import { Key, getKeyName } from "./keys.ts";
 import { getProcessGPU, NativeApplication } from "../native/bridge.ts";
 import type { WindowOptions } from "../native/bridge.ts";
-import { Window } from "./window.ts";
+import { createWindow, getWindowController } from "./window.ts";
+import type { Window } from "./window.ts";
 import { ApplicationLoop } from "./loop.ts";
 import { Subscriptions } from "./subscriptions.ts";
 import type { FixedUpdateEvent, RunOptions } from "./timing.ts";
@@ -50,7 +51,7 @@ export class Application {
   createWindow(options: WindowOptions = {}) {
     const native = this.#native.createWindow(this.gpu, options);
     try {
-      const window = new Window(native, disposed => { this.#windows.delete(disposed); });
+      const { window } = createWindow(native, disposed => { this.#windows.delete(disposed); }, () => Boolean(this.#loop));
       this.#windows.add(window);
       return window;
     } catch (error) {
@@ -62,7 +63,7 @@ export class Application {
   /** Pumps native events without rendering. Returns whether any window is open. */
   pollEvents() {
     this.#native.pollEvents();
-    for(const window of Array.from(this.#windows)) window.dispatchInput();
+    for(const window of Array.from(this.#windows)) getWindowController(window).dispatchInput();
     // Input commands may have closed windows after native polling returned.
     return this.#native.hasOpenWindows;
   }
@@ -94,7 +95,7 @@ export class Application {
         // fixed-update mutations have already committed before this snapshot.
         for(const window of Array.from(this.#windows)) {
           if(!loop.active) break;
-          window.dispatchRender(event, active);
+          getWindowController(window).dispatchRender(event, active);
         }
       }
     });

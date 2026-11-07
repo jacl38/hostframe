@@ -84,6 +84,13 @@ listeners, while the acquired frame completes presentation. Configuration, polli
 window creation/disposal, close requests, and input mutations inside rendering are
 rejected by native reentrancy guards. `app.stop()` and `app.pause()` remain safe.
 
+For caller-owned scheduling, use `context.draw(callback)` after `app.pollEvents()`.
+It has the same acquisition, synchronous submission, presentation, error, and
+expiration scope as a scheduled render dispatch, but does not invoke render
+listeners and has no scheduler timing event. It returns `true` only when the
+callback received an acquired texture; `false` means unconfigured or temporarily
+non-drawable. It rejects while `app.run()` is active.
+
 ## Ownership
 
 A window owns its native surface and retains its configured JavaScript device;
