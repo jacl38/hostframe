@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Application } from "../../index.ts";
+import { getWindowGPUContextController } from "../../packages/core/context.ts";
 
 // Usage: node|bun scripts/benchmarks/presentation.ts <clear|shader> <on|off> <uncapped|FPS> [milliseconds]
 const [workload = "clear", vsyncArgument = "off", cap = "uncapped", durationArgument = "3000"] = process.argv.slice(2);
@@ -93,11 +94,12 @@ try {
     rendered = true;
   });
   // Measure acquisition, all render listeners, and presentation together.
-  const renderFrame = context.render.bind(context);
-  context.render = function measureFrame(dispatch) {
+  const controller = getWindowGPUContextController(context);
+  const renderFrame = controller.render.bind(controller);
+  controller.render = function measureFrame(dispatch) {
     const before = performance.now();
     rendered = false;
-    renderFrame(dispatch);
+    const didDraw = renderFrame(dispatch);
     const after = performance.now();
     if(!started) {
       if(after >= warmupDeadline) {
@@ -105,7 +107,7 @@ try {
         previous = after;
         cpu = process.cpuUsage();
       }
-      return;
+      return didDraw;
     }
     if(rendered) {
       droppedTime += frameDroppedTime;
@@ -120,6 +122,7 @@ try {
       cpuMilliseconds = (usage.user + usage.system) / 1000;
       app.stop();
     }
+    return didDraw;
   };
   await app.run({ updateHz: 120, maxFPS });
   assert.ok(finished > started && frames > 0, "Benchmark interrupted before completion");

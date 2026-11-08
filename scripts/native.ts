@@ -50,6 +50,8 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", resolve(root, "packages/native/test/bindings.ts")],
       ["node", resolve(root, "packages/native/test/context.ts")],
       ["bun", resolve(root, "packages/native/test/context.ts")],
+      ["node", resolve(root, "packages/native/test/manual-frame.ts")],
+      ["bun", resolve(root, "packages/native/test/manual-frame.ts")],
       ["node", resolve(root, "packages/native/test/configuration-exceptions.ts"), "initial"],
       ["bun", resolve(root, "packages/native/test/configuration-exceptions.ts"), "initial"],
       ["node", resolve(root, "packages/native/test/configuration-exceptions.ts"), "replacement"],

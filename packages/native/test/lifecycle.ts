@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
 import { Application, Key, type CloseRequestEvent } from "../../../index.ts";
+import { getWindowController } from "../../core/window.ts";
 import { getProcessGPU, NativeApplication } from "../bridge.ts";
 import { configureWindow, renderFrames } from "./frames.ts";
 import { checkAdapter } from "./adapter.ts";
@@ -54,7 +55,7 @@ try {
   function guards() {
     for(const control of controls()) assert.throws(control, /in progress/);
     assert.throws(() => app.pollEvents(), /in progress/);
-    assert.throws(() => first.dispatchInput(), /in progress/);
+    assert.throws(() => getWindowController(first).dispatchInput(), /in progress/);
     assert.throws(() => first.dispose(), /in progress/);
     assert.throws(() => app.dispose(), /in progress/);
     assert.throws(() => app.createWindow(), /in progress/);

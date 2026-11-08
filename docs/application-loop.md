@@ -46,6 +46,59 @@ Call `installWebGPUGlobals()` when rendering code uses global WebGPU constructor
 or constants. Application construction does not install them; see the
 [global installation policy](../README.md).
 
+## Caller-owned loops
+
+Use `context.draw(callback)` when the host owns scheduling. Each call either
+opens exactly one native frame scope, invokes `callback` synchronously, presents
+once, and expires the texture/views, or returns `false` when the context is
+unconfigured or the window has no drawable texture (for example, while
+minimized or temporarily unavailable). It does not dispatch `"render"` or
+`"fixedUpdate"` listeners; `app.pollEvents()` remains responsible for input and
+lifecycle delivery. Call `draw` only when `app.run()` is inactive.
+
+```ts
+import { setImmediate } from "node:timers/promises";
+import { Application } from "hostframe";
+
+const app = new Application();
+let device: GPUDevice | undefined;
+try {
+  const window = app.createWindow();
+  const context = window.getContext("webgpu");
+  const adapter = await context.requestAdapter();
+  if(!adapter) throw new Error("No compatible adapter");
+  device = await adapter.requestDevice();
+  const renderingDevice = device;
+  context.configure({ device: renderingDevice, format: app.gpu.getPreferredCanvasFormat() });
+
+  while(app.pollEvents()) {
+    context.draw(() => {
+      const texture = context.getCurrentTexture();
+      const encoder = renderingDevice.createCommandEncoder();
+      const pass = encoder.beginRenderPass({ colorAttachments: [{
+        view: texture.createView(), clearValue: [0, 0, 1, 1], loadOp: "clear", storeOp: "store"
+      }] });
+      pass.end();
+      renderingDevice.queue.submit([encoder.finish()]);
+      return undefined;
+    });
+    await setImmediate(); // Yield for native events, GPU promises, and other host work.
+  }
+} finally {
+  try {
+    app.dispose();
+  } finally {
+    device?.destroy();
+  }
+}
+```
+
+The callback must return `undefined` synchronously. Its thrown value propagates
+from `draw()` after abandoning the frame; a later call can recover. Configuration,
+polling, disposal, and other guarded native mutations remain forbidden from the
+callback. `draw()` rejects while `app.run()` is active so the scheduler and a
+caller-owned loop cannot acquire/present the same window concurrently.
+
 ## Timing contract
 
 `app.run(options)` starts one run and returns a promise. Registration alone does

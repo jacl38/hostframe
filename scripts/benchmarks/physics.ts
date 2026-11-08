@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { Application, Key, type Window } from "../../index.ts";
+import { getWindowGPUContextController } from "../../packages/core/context.ts";
 
 // Load the real example after installing timing hooks. Flags are the example's
 // usual --no-vsync and --max-fps options; measurements are CPU wall times.
@@ -49,21 +50,26 @@ Application.prototype.createWindow = function profileWindow(options) {
     if(event.key === Key.SPACE && event.action === "press") scatterPresses++;
   });
   const context = window.getContext("webgpu");
-  const originalRender = context.render.bind(context);
-  context.render = function profileRender(callback) {
+  const controller = getWindowGPUContextController(context);
+  const originalRender = controller.render.bind(controller);
+  controller.render = function profileRender(callback) {
     const before = performance.now();
     let entered: number | undefined;
     let exited = before;
-    originalRender(() => {
+    const didDraw = originalRender(() => {
       entered = performance.now();
       const result = callback();
       exited = performance.now();
       return result;
     });
     const ended = performance.now();
-    if(!started || before - started < warmup) return;
-    if(entered === undefined) { skipped++; return; }
+    if(!started || before - started < warmup) return didDraw;
+    if(entered === undefined) {
+      skipped++;
+      return didDraw;
+    }
     draws.push({ beforeCallback: entered - before, callback: exited - entered, afterCallback: ended - exited, total: ended - before });
+    return didDraw;
   };
   return window;
 };

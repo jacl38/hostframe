@@ -126,6 +126,10 @@ render listeners, presents once after successful dispatch, and expires the textu
 and its views afterward. `getCurrentTexture()` returns the same object throughout
 that dispatch and throws outside it. A failed listener abandons the frame and
 rejects `app.run()` with the original error. Async listeners are rejected.
+For a caller-owned loop, call `context.draw(callback)` after `app.pollEvents()`;
+it provides the same synchronous frame scope and returns whether a drawable frame
+was acquired. It cannot be used while `app.run()` is active. See the
+[custom-loop example](docs/application-loop.md#caller-owned-loops).
 Configuration, disposal, event polling, and other reentrant native mutations are
 forbidden during rendering; `app.stop()` and `app.pause()` remain safe.
 

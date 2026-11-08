@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { Application } from "../../../index.ts";
+import { getWindowController } from "../../core/window.ts";
 import { assertFramebufferSize } from "./framebuffer.ts";
 import { checkAdapter } from "./adapter.ts";
 import { configureWindow, renderFrames } from "./frames.ts";
@@ -97,8 +98,9 @@ try {
         let ticks = 0;
         const starts: number[] = [];
         const frames: Array<{ dispatch: number, listener?: number, submitted?: number, returned?: number }> = [];
-        const dispatchRender = window.dispatchRender.bind(window);
-        window.dispatchRender = function(event, active) {
+        const controller = getWindowController(window);
+        const dispatchRender = controller.dispatchRender.bind(controller);
+        controller.dispatchRender = function(event, active) {
           // Independent wall-clock observations, rather than event.frameTime.
           const frame: typeof frames[number] = { dispatch: performance.now() };
           frames.push(frame);
