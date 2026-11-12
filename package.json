@@ -1,6 +1,6 @@
 {
   "name": "hostframe",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Native desktop WebGPU applications with Dawn and GLFW for Node.js and Bun.",
   "license": "Apache-2.0",
   "repository": {
