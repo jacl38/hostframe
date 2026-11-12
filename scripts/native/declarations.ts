@@ -16,10 +16,12 @@ export async function generateDeclarations(addon = resolve(buildRoot, "cmake/hos
   const temporary = await mkdtemp(resolve(output, "../.declarations-"));
   let declarations: string;
   let inputEvents: string;
+  let webgpuGlobals: string;
   try {
     const extracted = resolve(temporary, "native.d.ts");
     const extractedEvents = resolve(temporary, "input-events.ts");
-    const child = Bun.spawn(["node", resolve(root, "scripts/native/extract-declarations.ts"), addon, extracted, extractedEvents], {
+    const extractedGlobals = resolve(temporary, "webgpu-globals.ts");
+    const child = Bun.spawn(["node", resolve(root, "scripts/native/extract-declarations.ts"), addon, extracted, extractedEvents, extractedGlobals, resolve(output, "../webgpu-globals.ts")], {
       stdout: "inherit",
       stderr: "inherit",
       timeout: 30_000
@@ -28,6 +30,7 @@ export async function generateDeclarations(addon = resolve(buildRoot, "cmake/hos
     if(code !== 0) throw new Error(`Native declaration extraction failed (${code}).`);
     declarations = await Bun.file(extracted).text();
     inputEvents = await Bun.file(extractedEvents).text();
+    webgpuGlobals = await Bun.file(extractedGlobals).text();
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
@@ -39,5 +42,7 @@ export async function generateDeclarations(addon = resolve(buildRoot, "cmake/hos
   const changed = await writeChanged(output, `// Generated from nobind17 registrations. Do not edit.\n// Addon SHA-256: ${hash}\n/// <reference types="@webgpu/types" />\n\n${declarations}`);
   const eventsChanged = await writeChanged(resolve(output, "../input-events.ts"),
     `// Generated from the native InputEvent variant. Do not edit.\n// Addon SHA-256: ${hash}\n\n${inputEvents}`);
-  return changed || eventsChanged;
+  const globalsChanged = await writeChanged(resolve(output, "../webgpu-globals.ts"),
+    `// Generated from Dawn globals and @webgpu/types. Do not edit.\n${webgpuGlobals}`);
+  return changed || eventsChanged || globalsChanged;
 }

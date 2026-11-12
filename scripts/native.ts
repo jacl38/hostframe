@@ -37,6 +37,8 @@ async function verify(presentation: boolean, interactions: boolean) {
     ["bun", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
     ["node", resolve(root, "packages/native/test/compute.ts")],
     ["bun", resolve(root, "packages/native/test/compute.ts")],
+    ["node", resolve(root, "packages/native/test/headless.ts")],
+    ["bun", resolve(root, "packages/native/test/headless.ts")],
     ["node", resolve(root, "packages/native/test/window.ts"), threadCheck],
     ["bun", resolve(root, "packages/native/test/window.ts"), threadCheck]
   ];
@@ -100,6 +102,10 @@ async function verify(presentation: boolean, interactions: boolean) {
     const env = { ...process.env };
     delete env.HOSTFRAME_TEST_STALL_CLEANUP;
     if(command.includes("--no-display")) env.DISPLAY = "";
+    if(command.some(argument => argument.endsWith("/headless.ts"))) {
+      env.DISPLAY = "";
+      env.WAYLAND_DISPLAY = "";
+    }
     // Minimal hosted containers need locale-independent visibility checks even
     // when developer desktops use UTF-8. Keep Unicode title readback covered.
     if(command.some(argument => argument.endsWith("/lifecycle.ts"))) env.LC_ALL = "C";

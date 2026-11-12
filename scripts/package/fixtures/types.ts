@@ -1,9 +1,11 @@
-import { Application, Key, Modifier, PointerButton } from "hostframe";
+import { gpu as headlessGPU, Application, Key, Modifier, PointerButton } from "hostframe";
 import type { InputEvent, InputState, PresentMode, Window, WindowOptions, WindowGPUContext, WindowEvents } from "hostframe";
 
 // Compiled in a clean consumer without Bun or Node ambient types.
 // @webgpu/types uses DOM base types even when the runtime is native.
 export function usePublicAPI(app: Application, device: GPUDevice) {
+  const sharedGPU: GPU = headlessGPU;
+  void sharedGPU;
   const options = { width: 320, height: 240, vsync: true } satisfies WindowOptions;
   const window: Window = app.createWindow(options);
   const state: InputState = window.input;

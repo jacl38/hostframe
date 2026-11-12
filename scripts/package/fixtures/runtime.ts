@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { setTimeout } from "node:timers/promises";
 import { promisify } from "node:util";
-import { installWebGPUGlobals, Application, Key, Modifier, PointerButton } from "hostframe";
+import { gpu, installWebGPUGlobals, Application, Key, Modifier, PointerButton } from "hostframe";
 
 installWebGPUGlobals();
 const execute = promisify(execFile);
@@ -17,11 +17,16 @@ assert.equal(PointerButton.LEFT, 0);
 assert.equal(Modifier.SHIFT, 1);
 
 if(process.argv.includes("--no-display")) {
+  const adapter = await gpu.requestAdapter();
+  assert.ok(adapter, "Headless GPU access must work without a display");
+  const device = await adapter.requestDevice();
+  device.destroy();
   for(let attempt = 0; attempt < 2; attempt++) {
     assert.throws(() => new Application(), /GLFW initialization failed/);
   }
 } else {
   const app = new Application();
+  assert.equal(app.gpu, gpu);
   let device: GPUDevice | undefined;
   try {
     const window = app.createWindow({ title: "hostframe package verification", width: 320, height: 240 });

@@ -27,6 +27,10 @@ removes `dist/` so an older successful output cannot be packed accidentally.
 `prepack` runs this build automatically for both npm and Bun. Do not use
 `--ignore-scripts` when preparing a release tarball.
 
+The `hostframe` and `hostframe/globals` entry points share their native bridge
+and process GPU owner. Both ship JavaScript and TypeScript declarations;
+shared build chunks are included in `dist/`.
+
 `tsdown.config.ts` replaces the internal native loader's development path with
 `./hostframe.node`. Source examples continue loading the addon from
 `build/native/cmake/`; the installed package has no checkout-relative imports.
@@ -41,8 +45,10 @@ dependencies are shipped. Inspect the contents with `npm pack --dry-run`.
 ## Consumer requirements
 
 - Linux x64 using glibc. Alpine/musl is unsupported.
-- An X11 display (including Xwayland), usable Vulkan loader/driver, and the
-  X11 runtime libraries used by GLFW. The local addon links to `libX11.so.6`,
+- A usable Vulkan loader/driver and the X11 runtime libraries used by GLFW.
+  Creating an `Application` also requires an X11 display (including Xwayland);
+  importing `gpu` for headless rendering or compute does not.
+  The local addon links to `libX11.so.6`,
   `libXfixes.so.3`, `libstdc++.so.6`, `libgcc_s.so.1`, `libm.so.6`, and libc;
   X11 additionally brings in libxcb and libXau on this system.
 - Node.js 22.18+ or Bun. Runtime verification here uses Node.js 26.7.0 and
@@ -78,6 +84,8 @@ bun run typecheck
 bun test scripts packages/core/test
 bun run native:verify
 bun run package:verify
+# Verify installation, declarations and headless access without a desktop:
+bun run package:verify --headless
 ```
 
 `package:verify` requires npm, Node, Bun, tar, a display, and Vulkan. It invokes

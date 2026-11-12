@@ -26,6 +26,7 @@ export function getProcessGPU() {
 }
 
 export const NativeApplication = addon.Application;
+export const webGPUGlobals = addon.globals;
 
 /** Installs missing WebGPU globals; rejects foreign values and accessors before writing. */
 export function installWebGPUGlobals() {

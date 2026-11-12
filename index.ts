@@ -1,4 +1,5 @@
 export { Application } from "./packages/core/application.ts";
+export { gpu } from "./packages/core/gpu.ts";
 export type { Window } from "./packages/core/window.ts";
 export type { WindowEvents } from "./packages/core/window.ts";
 export type { WindowGPUContext } from "./packages/core/context.ts";

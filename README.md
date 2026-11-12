@@ -48,6 +48,54 @@ rendering source: vanilla WebGPU, webgpu-utils, TypeGPU, and Three.js, including
 Rapier physics. Run `bun run example --list`, then for example
 `bun run example three/shadows`. Every entry also runs directly in Node.js.
 
+**Headless GPU access**
+
+Import `gpu` to use Dawn without creating an `Application`, initializing GLFW,
+or connecting to a display:
+
+```ts
+import { gpu, GPUTextureUsage, GPUBufferUsage, GPUMapMode } from "hostframe/globals";
+
+const adapter = await gpu.requestAdapter();
+if(!adapter) throw new Error("No compatible GPU adapter");
+const device = await adapter.requestDevice();
+try {
+  // Use standard WebGPU rendering and compute commands here.
+  // Render into a texture with RENDER_ATTACHMENT | COPY_SRC usage, then
+  // copyTextureToBuffer() and mapAsync() to retrieve CPU image pixels.
+} finally {
+  device.destroy();
+}
+```
+
+The [headless render/readback check](packages/native/test/headless.ts) draws a
+triangle into an offscreen texture and checks its CPU pixels, including padded
+copy rows. `bun run native:verify` runs it in Node.js and Bun with display
+variables cleared.
+
+`hostframe/globals` exports the WebGPU constants and constructors present in
+both the pinned Dawn binding and `@webgpu/types`. These are explicit imports;
+they do not modify `globalThis`. `gpu` is also available from `hostframe`.
+For libraries that expect WebGPU globals, installation remains opt-in:
+
+```ts
+import { installWebGPUGlobals } from "hostframe";
+
+installWebGPUGlobals();
+```
+
+`gpu` is the same process-wide Dawn object exposed by `Application.gpu`. Importing
+the public entry point initializes that object, but does not initialize GLFW.
+It remains rooted until process exit, independently of application disposal;
+callers own and must destroy their devices and resources. Headless work does not
+need `Application.run()` or event polling. Constructing an `Application` still
+initializes GLFW and requires a desktop session on Linux/X11.
+
+Headless access uses the same native addon and GPU drivers as windowed access.
+The Linux addon still requires its linked X11 runtime libraries even when no
+display connection is opened. This does not supply DOM image/video APIs or an
+image encoder; readback produces raw pixels.
+
 **Minimal application API**
 
 After `bun install` and `bun run setup`, run the [solid-color example](examples/vanilla/solid-color.ts):

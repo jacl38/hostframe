@@ -12,6 +12,9 @@ async function run(command: string[], cwd: string, env = process.env, timeout = 
 }
 
 async function main() {
+  const args = process.argv.slice(2);
+  if(args.some(arg => arg !== "--headless")) throw new Error("Usage: bun scripts/package/verify.ts [--headless]");
+  const headless = args.includes("--headless");
   const output = resolve(root, "build/package");
   await mkdir(output, { recursive: true });
   // Exercise npm's real prepack lifecycle and file selection.
@@ -21,7 +24,7 @@ async function main() {
   const contents = await new Response(listing.stdout).text();
   assert.equal(await listing.exited, 0, "Unable to list packed consumer tarball");
   const files = contents.trim().split("\n");
-  for(const required of ["LICENSE", "dist/index.js", "dist/index.d.ts", "dist/hostframe.node", "dist/THIRD_PARTY_NOTICES.txt"]) {
+  for(const required of ["LICENSE", "dist/index.js", "dist/index.d.ts", "dist/globals.js", "dist/globals.d.ts", "dist/hostframe.node", "dist/THIRD_PARTY_NOTICES.txt"]) {
     assert.ok(files.includes(`package/${required}`), `Missing ${required} in tarball`);
   }
   for(const file of files) {
@@ -43,6 +46,7 @@ async function main() {
       else await run(["bun", "install", "--ignore-scripts"], directory);
       await copyFile(resolve(root, "scripts/package/fixtures/runtime.ts"), resolve(directory, "consumer.ts"));
       await copyFile(resolve(root, "scripts/package/fixtures/types.ts"), resolve(directory, "types.ts"));
+      await copyFile(resolve(root, "scripts/package/fixtures/globals.ts"), resolve(directory, "globals.ts"));
       await Bun.write(resolve(directory, "tsconfig.json"), JSON.stringify({
         compilerOptions: {
           strict: true,
@@ -54,15 +58,18 @@ async function main() {
           types: [],
           skipLibCheck: false
         },
-        files: ["types.ts"]
+        files: ["types.ts", "globals.ts"]
       }));
       await run(["node", resolve(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], directory);
       for(const runtime of ["node", "bun"]) {
+        await run([runtime, "globals.ts"], directory, { ...process.env, DISPLAY: "", WAYLAND_DISPLAY: "" });
         await run([runtime, "consumer.ts", "--no-display"], directory, { ...process.env, DISPLAY: "" });
-        await run([runtime, "consumer.ts"], directory, {
-          ...process.env,
-          HOSTFRAME_CLOSE_REQUEST: resolve(root, "build/native/cmake/native_close_request")
-        });
+        if(!headless) {
+          await run([runtime, "consumer.ts"], directory, {
+            ...process.env,
+            HOSTFRAME_CLOSE_REQUEST: resolve(root, "build/native/cmake/native_close_request")
+          });
+        }
       }
     }
   } finally {

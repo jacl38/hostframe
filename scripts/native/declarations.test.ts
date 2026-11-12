@@ -13,10 +13,15 @@ test("declarations and runtime event names are extracted and regenerated togethe
   const directory = await mkdtemp(resolve(tmpdir(), "hostframe declarations "));
   const output = resolve(directory, "native.d.ts");
   const eventsOutput = resolve(directory, "input-events.ts");
+  const globalsOutput = resolve(directory, "webgpu-globals.ts");
   try {
     expect(await generateDeclarations(addon, output)).toBe(true);
     const content = await Bun.file(output).text();
     const events = await Bun.file(eventsOutput).text();
+    const globals = await Bun.file(globalsOutput).text();
+    expect(globals).toContain("GPUBufferUsage");
+    expect(globals).toContain("GPUValidationError");
+    expect(globals).toContain("Pick<typeof globalThis,");
     const runtime = await import(eventsOutput);
     expect(runtime.inputEventTypes).toEqual(["closeRequest", "minimize", "restore", "metrics", "key", "text", "pointerMove", "pointerButton", "scroll", "focus", "pointerCapture"]);
     expect(Object.isFrozen(runtime.inputEventTypes)).toBe(true);
@@ -32,6 +37,12 @@ test("declarations and runtime event names are extracted and regenerated togethe
     await Bun.write(output, "stale");
     expect(await generateDeclarations(addon, output)).toBe(true);
     expect(await Bun.file(output).text()).toBe(content);
+    await Bun.write(globalsOutput, "stale globals");
+    expect(await generateDeclarations(addon, output)).toBe(true);
+    expect(await Bun.file(globalsOutput).text()).toBe(globals);
+    await rm(globalsOutput);
+    expect(await generateDeclarations(addon, output)).toBe(true);
+    expect(await Bun.file(globalsOutput).text()).toBe(globals);
     const refreshed = (await stat(output, { bigint: true })).mtimeNs;
     await Bun.write(eventsOutput, "stale event names");
     expect(await generateDeclarations(addon, output)).toBe(true);
