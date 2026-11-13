@@ -2,7 +2,7 @@
 
 Create a window with `app.createWindow(options?)`, obtain its stable context with
 `window.getContext("webgpu")`, request an adapter/device, and configure the context.
-See the [complete clear-screen example](../README.md#minimal-application-api).
+See the [complete clear-screen example](guide.md#minimal-application-api).
 One application can own multiple live windows; only one application may be live at a time.
 
 ## Adapter selection

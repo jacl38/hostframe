@@ -4,7 +4,7 @@ The optional scheduler supports fixed simulation steps and separate rendering on
 the process main thread. The application owns scheduling and native polling; windows own rendering. One application supports multiple live windows; only one application may be live
 at a time. Windows default to fixed 320×240; creation options can customize the
 title, initial screen-coordinate dimensions, and resizability (see the
-[window contract](../README.md)).
+[window contract](guide.md#minimal-application-api)).
 
 ```ts
 import { Application, installWebGPUGlobals } from "hostframe";
@@ -44,7 +44,7 @@ try {
 
 Call `installWebGPUGlobals()` when rendering code uses global WebGPU constructors
 or constants. Application construction does not install them; see the
-[global installation policy](../README.md).
+[global installation policy](guide.md#headless-gpu-access).
 
 ## Caller-owned loops
 
