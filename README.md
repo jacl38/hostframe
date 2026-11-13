@@ -4,16 +4,18 @@ Build native desktop graphics applications in TypeScript with WebGPU, without a
 browser or WebView. Hostframe combines Dawn and GLFW to provide windows, input,
 and GPU rendering for Node.js and Bun.
 
-The current package is an alpha for Linux x64 with glibc, X11, and Vulkan. Its
-native addon requires system graphics libraries and a compatible Vulkan driver;
-the current build also requires glibc 2.43 and GLIBCXX 3.4.32. See
-[package requirements](docs/packaging.md#consumer-requirements) for details.
+The current package is an alpha for Linux x64 with glibc, X11, and Vulkan, and
+macOS arm64 with Metal. Linux requires compatible system graphics libraries and
+a Vulkan driver. See the [Linux requirements](docs/packaging.md#consumer-requirements)
+and [macOS packaging notes](docs/macos-packaging.md) for details.
 
 ## Installation
 
 Hostframe is not yet published on npm. Install a tarball from
 [GitHub Releases](docs/github-releases.md#install-a-published-release), or build
-one using the [packaging guide](docs/packaging.md#build-and-pack).
+one using the [Linux](docs/packaging.md#build-and-pack) or
+[macOS](docs/macos-packaging.md) packaging guide. Choose the asset matching your
+platform.
 
 ## Render a window
 
