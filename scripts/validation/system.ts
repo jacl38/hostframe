@@ -25,6 +25,7 @@ for(const runtime of ["node", "bun"]) {
   // Three's output fixture exercises its real adapter, composition, resize,
   // stop/restart and teardown, so a second Three gallery smoke adds no boundary.
   await check(`${runtime} Three composition and resize`, [runtime, "scripts/validation/renderer-output.ts"]);
+  await check(`${runtime} Babylon initialization, native output and cleanup`, [runtime, "scripts/validation/babylon-output.ts"]);
   for(const [contract, example] of [
     ["TypeGPU borrowed-device integration", "typegpu/triangle"],
     ["webgpu-utils native texture integration", "webgpu-utils/textures"]

@@ -1,4 +1,5 @@
 import { installWebGPUGlobals, Application, Key } from "../../index.ts";
+import { readExampleOptions } from "./options.ts";
 
 installWebGPUGlobals();
 
@@ -11,21 +12,7 @@ export async function createExample(title: string, options: {
   optionalFeatures?: GPUFeatureName[]
 } = {}) {
   const defaults = { width: 960, height: 640, maxFPS: 60, escapeQuits: true, ...options };
-  const args = process.argv.slice(2);
-  if(args.some(arg => arg !== "--no-vsync" && !/^--(frames|max-fps)=/.test(arg))) {
-    throw new Error("Options: [--frames=<positive integer>] [--max-fps=<positive number>] [--no-vsync]");
-  }
-  function option(name: string) {
-    const argument = args.find(arg => arg.startsWith(`--${name}=`));
-    if(argument === undefined) return undefined;
-    const value = Number(argument.slice(name.length + 3));
-    if(!Number.isFinite(value) || value <= 0 || (name === "frames" && !Number.isSafeInteger(value))) {
-      throw new Error(`--${name} must be a positive ${name === "frames" ? "integer" : "number"}`);
-    }
-    return value;
-  }
-  const frameLimit = option("frames");
-  const maxFPS = option("max-fps") ?? defaults.maxFPS;
+  const { frameLimit, maxFPS, vsync } = readExampleOptions(defaults.maxFPS);
   const app = new Application();
   let device: GPUDevice | undefined;
   const cleanup: Array<() => void | Promise<void>> = [];
@@ -38,7 +25,7 @@ export async function createExample(title: string, options: {
       width: defaults.width,
       height: defaults.height,
       resizable: true,
-      vsync: !args.includes("--no-vsync")
+      vsync
     });
     const context = window.getContext("webgpu");
     const adapter = await context.requestAdapter();

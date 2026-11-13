@@ -96,7 +96,7 @@ distribution gate. Forced cleanup requires its special native build as below.
 | Native input is mistranslated or routed incorrectly | `input.ts`, `text-input.ts`, `input-actions.ts`, `multiple-window-input.ts`: real XTest input, focus/capture, batch failures and per-window state |
 | Closing or disposing one window invalidates another | `multiple-windows.ts`, `lifecycle.ts`: close cancellation/acceptance, shared-device survival, independent windows |
 | Cleanup stalls and retains contexts | `cleanup-timeout.ts` under the forced-timeout build: release references, report failure, sibling device loss |
-| Library adapter no longer connects to native frames | Three composition/resize output; TypeGPU triangle and webgpu-utils textures bounded runs with completion markers |
+| Library adapter no longer connects to native frames | Three composition/resize output; Babylon native output, initialization isolation and device-owning cleanup; TypeGPU triangle and webgpu-utils textures bounded runs with completion markers |
 | Built exports/addon differ from source execution | packed npm/Bun consumers: explicit globals, no-display failure, native close, two-window presentation and cleanup |
 
 Fixture paths in this table are under `packages/native/test/` unless qualified.
@@ -113,6 +113,10 @@ in Node and Bun. Native context tests include clear/readback assertions.
 Library checks cover TypeGPU's borrowed-device integration and webgpu-utils'
 native typed-pixel texture path in Node and Bun, including normal cleanup.
 Three is covered by the composition fixture rather than a duplicate gallery smoke.
+Babylon uses `babylon-output.ts` for scoped initialization shims, synchronous frame
+access, targeted native output after resizing and device-owning cleanup, including
+failed deferred cleanup. The cubes scene remains the full-gallery example; the regular
+gate uses the smaller boundary fixture instead of repeating its visual effects.
 
 The Three adapter composition fixture uses the current Three adapter: a green plane on
 a red background is rendered through its half-float intermediate into the native
@@ -206,3 +210,21 @@ The lifecycle fixture in `native:verify --window-interactions` sends actual
 control/state transport, subscription failure/ordering, pause and multiwindow
 isolation in both runtimes. The `vanilla/window-lifecycle` example remains in the full gallery; its contracts
 are exercised by the native lifecycle fixture in the regular system gate. See [the lifecycle contract](window-lifecycle.md).
+
+## Babylon gallery integration
+
+Babylon 9.36.0 is a development dependency for `babylon/cubes`. The regular
+system gate uses `babylon-output.ts` to verify initialization isolation after
+success/rejection, native frame scope, output after three sizes, and normal,
+repeated and failed deferred cleanup. The gallery scene adds instancing,
+materials, shadows and native camera controls.
+
+The final full-system run was **not clean**: before starting Babylon, the existing
+Bun `packages/native/test/resize.ts:124` assertion observed `metrics.drawable ===
+false` during a render callback. The native interaction suite had passed earlier
+on the same native/core sources; a targeted run of the unchanged resize fixture
+also passed afterward. The cause of this intermittent native metrics/presentation
+failure remains undiagnosed. No assertion or native behavior was changed to make
+it pass. Failure evidence is in `build/validation/desktop-F7hymK/command.stderr`;
+the final adapter/CLI checks and isolated resize result are in `desktop-cXjygX`.
+Earlier full-gallery evidence is in `desktop-GmJGWz`. These local artifacts are ignored.

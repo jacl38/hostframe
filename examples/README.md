@@ -13,6 +13,7 @@ From the repository root, after `bun install` and `bun run setup`:
 bun run example --list
 bun run example vanilla/cubes
 bun run example three/shadows
+bun run example babylon/cubes
 
 # The same entry points run directly in either runtime:
 bun examples/typegpu/particles.ts
@@ -24,8 +25,7 @@ project. Examples use a resizable 960×640 window, a 120 Hz fixed-update loop,
 and a 60 FPS render cap by default. Q or Escape exits. The original solid-color
 demo retains its 640×480 size, uncapped scheduler and three-second lifetime
 (unless `--frames` is supplied). The input demo retains its 800×500 size and
-uses Escape to release capture; Q exits. The three polished studies below use
-1200×800 windows.
+uses Escape to release capture; Q exits. The three polished studies below use 1200×800 windows.
 
 All entries accept:
 
@@ -60,6 +60,7 @@ explicitly if unsupported. The scheduler cap and presentation mode are separate.
 | | [cornell-box](three/cornell-box.ts) | Path-traced Cornell Box, colored bounce light, area-light shadows, glass transmission and offline OIDN denoising |
 | | [kinetic](three/kinetic.ts) | 64 beveled copper leaves, three choreographies, environment reflections and real-time shadow maps |
 | | [flow](three/flow.ts) | 65,536 GPU-computed streamline particles, smooth winding morphs, three palettes and HDR bloom |
+| Babylon.js | [cubes](babylon/cubes.ts) | Instanced cubes, lit materials, shadows, native orbit/zoom and pause |
 
 All Three.js scenes support left drag to orbit and the wheel to zoom, using
 native hostframe input rather than browser controls. Examples generate their assets
@@ -127,9 +128,24 @@ This creates H.264 clips, a combined film, screenshots, a contact sheet and
 encoding/timing validation under `build/examples/polished/final/`. Existing
 videos are protected from overwrite.
 
+## Babylon cubes
+
+```sh
+bun run example babylon/cubes
+node examples/babylon/cubes.ts --frames=120 --max-fps=30
+```
+
+Eight animated cube instances and a lit sphere cast shadows onto a floor.
+Left drag orbits, the wheel zooms, Space pauses animation, and Q/Escape exits.
+The scene uses locally generated geometry and Babylon's built-in WGSL materials;
+no assets or shader compilers are downloaded. Babylon is pinned to 9.36.0.
+DOM controls, GUI, browser image/video loaders, audio, WebXR and automatic
+device-loss recovery are outside this example.
+
 ## Integration boundaries
 
-- `shared/application.ts` owns native startup, the common options, error handling,
+- `shared/options.ts` owns renderer-example command-line parsing.
+  `shared/application.ts` owns native startup, error handling,
   frame limits and cleanup. Renderer setup and example scene logic remain separate.
   Deferred cleanups run in reverse order, then the application closes its surface,
   then the caller-owned device is destroyed. Initializing an adapter can be async;
@@ -153,6 +169,19 @@ videos are protected from overwrite.
   Three's internal animation bookkeeping is driven by hostframe; a temporary `self`
   facade is restored immediately after initialization. Browser image loaders,
   DOM controls, WebXR and arbitrary Three.js plugins are outside these examples.
+- `babylon/adapter.ts` owns Babylon's initialization and distinct device lifecycle.
+  A temporary `navigator.gpu` facade routes adapter requests through the native
+  window surface; Babylon creates and owns the device. The pinned Dawn binding
+  omits `GPUSupportedFeatures.forEach()`, so initialization uses an adapter feature
+  Set and temporarily shadows only the new device's feature getter with a Set.
+  The original getter and navigator descriptor are restored in `finally`, including
+  failed initialization. Native prototypes are never modified.
+  Babylon's eager initialization clear uses an owned bootstrap texture. After
+  initialization, texture access is restricted to synchronous native render events.
+  Acquired framebuffer dimensions drive Babylon's attachments; rendering submits
+  directly to the native frame without a composition pass. Scene/deferred resources
+  are cleaned first, Hostframe releases its surfaces next, then Babylon disposes
+  its device. Cleanup continues after a deferred cleanup throws and is idempotent.
 
 ## Verification
 
@@ -220,3 +249,16 @@ The legacy `--verify --representative` option runs only the adapter portion of t
 suite and requires X11/xdotool, including for Three resize checks. Full-gallery
 verification maintains examples; it is not WebGPU feature coverage. See
 [continuous validation](../docs/continuous-validation.md).
+
+The Babylon adapter has a focused system fixture in
+`scripts/validation/babylon-output.ts`: initialization isolation (including
+rejection after device creation), frame scope, red/green output after three
+native sizes, normal/repeated disposal and cleanup failure handling. This checks
+Hostframe integration, not Babylon shader correctness.
+
+The simplified Babylon cubes scene passed bounded rendering, native pause/resume,
+orbit/zoom, resizing and Q-to-close in Node 26.7.0 and Bun 1.3.14 on Linux
+x64/X11/lavapipe. Captures were inspected; the adapter's output, initialization
+isolation and cleanup-failure checks passed in both runtimes. Evidence is under
+`build/validation/desktop-A1xNX2/` and `build/babylon-smoke/cubes-*`.
+Hardware presentation and macOS remain unverified for this integration.

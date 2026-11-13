@@ -17,5 +17,6 @@ export const examples = [
   "three/physics",
   "three/cornell-box",
   "three/kinetic",
-  "three/flow"
+  "three/flow",
+  "babylon/cubes"
 ] as const;

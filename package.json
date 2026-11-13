@@ -62,6 +62,7 @@
     "@webgpu/types": "^0.1.74"
   },
   "devDependencies": {
+    "@babylonjs/core": "9.36.0",
     "@dimforge/rapier3d-compat": "^0.21.0",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/bun": "latest",
