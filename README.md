@@ -43,8 +43,8 @@ prerequisites, and release limitations.
 
 **Examples**
 
-The [example gallery](examples/README.md) contains 19 runnable demos grouped by
-rendering source: vanilla WebGPU, webgpu-utils, TypeGPU, Three.js, and Babylon.js,
+The [example gallery](examples/README.md) contains 20 runnable demos grouped by
+rendering source: vanilla WebGPU, webgpu-utils, TypeGPU, Three.js, Babylon.js, and vgpu,
 including Rapier physics. Run `bun run example --list`, then for example
 `bun run example three/shadows`. Every entry also runs directly in Node.js.
 

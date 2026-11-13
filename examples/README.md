@@ -14,6 +14,7 @@ bun run example --list
 bun run example vanilla/cubes
 bun run example three/shadows
 bun run example babylon/cubes
+bun run example vgpu/gradient
 
 # The same entry points run directly in either runtime:
 bun examples/typegpu/particles.ts
@@ -61,6 +62,7 @@ explicitly if unsupported. The scheduler cap and presentation mode are separate.
 | | [kinetic](three/kinetic.ts) | 64 beveled copper leaves, three choreographies, environment reflections and real-time shadow maps |
 | | [flow](three/flow.ts) | 65,536 GPU-computed streamline particles, smooth winding morphs, three palettes and HDR bloom |
 | Babylon.js | [cubes](babylon/cubes.ts) | Instanced cubes, lit materials, shadows, native orbit/zoom and pause |
+| vgpu | [gradient](vgpu/gradient.ts) | Prepared WGSL effect, uniform updates, explicit frames, resize and borrowed-device cleanup |
 
 All Three.js scenes support left drag to orbit and the wheel to zoom, using
 native hostframe input rather than browser controls. Examples generate their assets
@@ -142,6 +144,17 @@ no assets or shader compilers are downloaded. Babylon is pinned to 9.36.0.
 DOM controls, GUI, browser image/video loaders, audio, WebXR and automatic
 device-loss recovery are outside this example.
 
+## vgpu gradient
+
+```sh
+bun run example vgpu/gradient
+node examples/vgpu/gradient.ts --frames=120 --max-fps=30
+```
+
+A small animated gradient uses a prepared WGSL effect and uniform updates.
+Space pauses animation; Q/Escape exits. vgpu and `@vgpu/wgsl` are pinned to
+0.6.0. Shader preparation runs directly in TypeScript, without a bundler loader.
+
 ## Integration boundaries
 
 - `shared/options.ts` owns renderer-example command-line parsing.
@@ -182,6 +195,13 @@ device-loss recovery are outside this example.
   directly to the native frame without a composition pass. Scene/deferred resources
   are cleaned first, Hostframe releases its surfaces next, then Babylon disposes
   its device. Cleanup continues after a deferred cleanup throws and is idempotent.
+- `vgpu/adapter.ts` borrows the Hostframe device with `initFromDevice()` and
+  wraps the native context in a canvas-sized surface. Explicit `frame()` calls
+  submit synchronously inside native render events; acquired framebuffer sizes
+  drive the surface and shader uniforms. `run()` waits for vgpu's settled error
+  delivery as well as native work completion. vgpu releases its wrapper/surface
+  before Hostframe closes the application and destroys the caller-owned device.
+  No DOM globals or feature shims are required for this adapter.
 
 ## Verification
 
@@ -262,3 +282,11 @@ x64/X11/lavapipe. Captures were inspected; the adapter's output, initialization
 isolation and cleanup-failure checks passed in both runtimes. Evidence is under
 `build/validation/desktop-A1xNX2/` and `build/babylon-smoke/cubes-*`.
 Hardware presentation and macOS remain unverified for this integration.
+
+The vgpu gradient and `scripts/validation/vgpu-output.ts` passed in Node 26.7.0
+and Bun 1.3.14 on Linux x64/X11/lavapipe. The fixture checks native frame scope,
+output and uniform updates after resizing, and device survival after vgpu wrapper
+disposal before final Hostframe cleanup. The gradient's pause/resume, resize and
+Q exit were exercised, and captures were inspected. Hardware presentation and
+macOS remain unverified. Local evidence is under `build/vgpu-smoke/gradient-*`
+and `build/validation/desktop-6z4J9L/`.

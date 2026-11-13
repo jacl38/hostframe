@@ -18,5 +18,6 @@ export const examples = [
   "three/cornell-box",
   "three/kinetic",
   "three/flow",
-  "babylon/cubes"
+  "babylon/cubes",
+  "vgpu/gradient"
 ] as const;

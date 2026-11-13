@@ -26,6 +26,7 @@ for(const runtime of ["node", "bun"]) {
   // stop/restart and teardown, so a second Three gallery smoke adds no boundary.
   await check(`${runtime} Three composition and resize`, [runtime, "scripts/validation/renderer-output.ts"]);
   await check(`${runtime} Babylon initialization, native output and cleanup`, [runtime, "scripts/validation/babylon-output.ts"]);
+  await check(`${runtime} vgpu native output and borrowed-device cleanup`, [runtime, "scripts/validation/vgpu-output.ts"]);
   for(const [contract, example] of [
     ["TypeGPU borrowed-device integration", "typegpu/triangle"],
     ["webgpu-utils native texture integration", "webgpu-utils/textures"]

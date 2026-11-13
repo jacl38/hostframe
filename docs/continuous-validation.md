@@ -96,7 +96,7 @@ distribution gate. Forced cleanup requires its special native build as below.
 | Native input is mistranslated or routed incorrectly | `input.ts`, `text-input.ts`, `input-actions.ts`, `multiple-window-input.ts`: real XTest input, focus/capture, batch failures and per-window state |
 | Closing or disposing one window invalidates another | `multiple-windows.ts`, `lifecycle.ts`: close cancellation/acceptance, shared-device survival, independent windows |
 | Cleanup stalls and retains contexts | `cleanup-timeout.ts` under the forced-timeout build: release references, report failure, sibling device loss |
-| Library adapter no longer connects to native frames | Three composition/resize output; Babylon native output, initialization isolation and device-owning cleanup; TypeGPU triangle and webgpu-utils textures bounded runs with completion markers |
+| Library adapter no longer connects to native frames | Three composition/resize output; Babylon native output, initialization isolation and device-owning cleanup; vgpu native output and borrowed-device cleanup; TypeGPU triangle and webgpu-utils textures bounded runs with completion markers |
 | Built exports/addon differ from source execution | packed npm/Bun consumers: explicit globals, no-display failure, native close, two-window presentation and cleanup |
 
 Fixture paths in this table are under `packages/native/test/` unless qualified.
@@ -228,3 +228,17 @@ failure remains undiagnosed. No assertion or native behavior was changed to make
 it pass. Failure evidence is in `build/validation/desktop-F7hymK/command.stderr`;
 the final adapter/CLI checks and isolated resize result are in `desktop-cXjygX`.
 Earlier full-gallery evidence is in `desktop-GmJGWz`. These local artifacts are ignored.
+
+## vgpu gallery integration
+
+`vgpu/gradient` uses the Hostframe-owned device through vgpu 0.6.0's
+`initFromDevice()`. The regular system gate uses `vgpu-output.ts` to check
+frame scope, resize/uniform transport into native output, and wrapper disposal
+followed by GPU readback and final application/device cleanup. This preserves
+the integration sequence that originally exposed the recycled-swapchain bug.
+
+The focused fixture and gradient smoke passed in Node 26.7.0 and Bun 1.3.14 on
+Linux x64/X11/lavapipe. Native pause/resume, resize and Q exit were exercised,
+and captured output was inspected. Lint, typecheck and all 59 script/core tests
+passed. The existing intermittent native resize assertion documented above
+remains unresolved; this addition does not change its behavior or assertions.
