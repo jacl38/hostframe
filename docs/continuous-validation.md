@@ -1,14 +1,15 @@
 # Continuous validation
 
 `.github/workflows/validation.yml` runs on pull requests and master pushes.
-Manual dispatch runs the full gallery. The release build
-also runs the full gallery and interaction/output checks before preparing assets.
+Manual validation runs the full gallery. Release builds run the interaction and
+output checks before preparing assets; the gallery remains a separate check.
 
 | Gate | Commands and evidence |
 | --- | --- |
-| Every change, including documentation | Locked install, `bun run lint`, build-independent compiler/tooling, release-tooling, scheduler/timing and validation-runner tests |
+| Every change | Locked install and `bun run lint` |
+| Documentation-only changes | Build-independent compiler/tooling, release-tooling, scheduler/timing and validation-runner tests |
 | Any non-Markdown/non-LICENSE change | `bun run setup`, `bun run typecheck`, full `bun test scripts packages/core/test`, Hostframe system contracts and adapters, real packed consumers |
-| Manual/release | Same native checks plus every entry in the example catalog in both runtimes |
+| Manual validation | Same native checks plus every entry in the example catalog in both runtimes |
 
 The fast job explicitly excludes declaration extraction and input-listener tests:
 these depend on the compiled addon/generated event contract. The full suite runs
@@ -17,13 +18,31 @@ require integration. A missing diff base conservatively runs integration.
 There are no path-filtered required workflows left waiting on documentation PRs.
 
 Native setup uses the pinned Dawn inputs and project-owned CMake source audit.
-Only checksum-verified downloaded archives are cached for native builds, keyed
-by OS, architecture and the Dawn lockfile; CMake output is never restored across
-checkouts. Bun's setup action caches its dependency downloads. Dependency caches
-contain no credentials. All actions use commit pins, checkout disables persisted
-credentials, and validation has `contents: read` with no release/publish step or
-secrets. PR code runs under `pull_request`, never `pull_request_target`.
+Checksum-verified downloaded archives are cached by OS, architecture and the
+Dawn lockfile. Native compiler results use ccache, with an image version,
+architecture and Dawn lockfile prefix and a commit-specific key. Prefix restores
+seed later builds; ccache checks the compiler, options and inputs before reuse.
+CMake output is never restored across checkouts. Cache entries are immutable and
+subject to GitHub cache scope, quota and eviction. Bun's setup action caches
+its dependency downloads. Dependency caches contain no credentials. All actions
+use commit pins, and checkout disables persisted credentials. Validation uses a
+read-only job token for repository contents and package access; it does not publish. PR code runs under `pull_request`, never `pull_request_target`.
 See GitHub's [cache security guidance](https://docs.github.com/en/actions/concepts/workflows-and-actions/dependency-caching).
+
+## CI container image
+
+`.github/container/Dockerfile` defines the Fedora environment. The `Build CI image`
+workflow publishes a commit-tagged image to GHCR when the Dockerfile or publishing
+workflow changes on master, or when manually dispatched. The job summary records
+its immutable digest. The publishing job alone has `packages: write`; it uses
+GitHub's job token. The package may require its repository access or visibility to
+be configured before other workflows, including fork pull requests, can pull it.
+
+The validation and release jobs use the published image by immutable digest.
+The private package requires the repository to have Actions access, and those
+jobs request `packages: read`. Update both workflow digests and the compiler-cache
+prefix deliberately after rebuilding and testing the image; publishing an image
+does not silently change the environment used by existing workflows.
 
 ## Local Linux commands
 

@@ -1,7 +1,7 @@
 # GitHub Releases distribution
 
 The workflow in `.github/workflows/release.yml` builds the Linux x64 package
-in a Fedora 44 container. It uses pinned Node.js 26.7.0, Bun 1.3.14, and
+in a pinned Fedora 44 CI container image. It uses pinned Node.js 26.7.0, Bun 1.3.14, and
 Go 1.26.10 versions, a frozen Bun lockfile, and the pinned Dawn inputs.
 Actions are pinned to commit hashes. Fedora system packages receive updates;
 this establishes a build environment, not bit-for-bit reproducibility or
@@ -19,8 +19,8 @@ compatibility with older Linux distributions.
 
 Build verification includes the native source audit, lint, typecheck, existing
 tests, full native presentation checks, and actual tarball installs in clean
-npm and Bun consumers. The full example gallery and exact Three-adapter
-composition/resize readback also run in both runtimes. Presentation and full
+npm and Bun consumers. The exact Three-adapter composition/resize readback also runs in both runtimes.
+The full example gallery is a separate manual validation check. Presentation and full
 window interactions use an isolated Xvfb/Openbox session and Mesa lavapipe inside
 the container; no host display or physical GPU access is needed.
 
@@ -48,7 +48,14 @@ draft creation for an existing tag fails rather than replacing its assets.
 
 ## Test locally with the GitHub CLI extension
 
-With `gh act` and access to the Docker daemon:
+With `gh act` and access to the Docker daemon, provide an authenticated token
+that can read the private CI image (avoid putting the token in shell history):
+
+```sh
+export GITHUB_TOKEN="$(gh auth token)"
+```
+
+Then run:
 
 ```sh
 gh act workflow_dispatch \
@@ -57,7 +64,8 @@ gh act workflow_dispatch \
   --platform ubuntu-24.04=fedora:44 \
   --container-architecture linux/amd64 \
   --container-daemon-socket - \
-  --artifact-server-path /tmp/hostframe-act-artifacts
+  --artifact-server-path /tmp/hostframe-act-artifacts \
+  --secret GITHUB_TOKEN
 ```
 
 This runs the actual build job and uses act's local artifact server. It does

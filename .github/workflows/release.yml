@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -18,7 +19,11 @@ jobs:
     name: Build and verify Linux x64
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    container: fedora:44
+    container:
+      image: ghcr.io/jacl38/hostframe-ci@sha256:9b29b54fe992e4782328c7fc30795d1fe017641836c9e82508b015ac82544fca
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         shell: bash
@@ -27,15 +32,6 @@ jobs:
       HOSTFRAME_X11_WM: openbox
       VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
     steps:
-      - name: Install native and test prerequisites
-        run: |
-          dnf install -y --setopt=install_weak_deps=False \
-            bash binutils ca-certificates curl git gzip tar unzip nodejs \
-            gcc gcc-c++ cmake ninja-build python3 pkgconf-pkg-config \
-            libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel \
-            libXi-devel libXext-devel libXfixes-devel \
-            vulkan-loader mesa-vulkan-drivers xorg-x11-server-Xvfb xorg-x11-xauth \
-            openbox xdotool xprop setxkbmap xkeyboard-config ImageMagick dbus-daemon
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
@@ -55,6 +51,18 @@ jobs:
         run: bun run release:check
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
+      - name: Cache checksum-verified native archives
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/native/downloads/
+          key: native-archives-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}
+      - name: Cache native compiler results
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/native/cache/ccache
+          key: ccache-fedora44-9b29b54f-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-fedora44-9b29b54f-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}-
       - name: Build pinned native inputs
         run: bun run setup
       - name: Lint, typecheck, and test
@@ -66,15 +74,12 @@ jobs:
         run: bun scripts/validation/desktop-check.ts
       - name: Verify Hostframe system contracts and library adapters
         run: bun run test:system
-      - name: Check example gallery maintenance
-        run: bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
+      - name: Verify packed consumers
+        run: bun scripts/validation/desktop.ts bun scripts/package/verify.ts
       - name: Verify forced cleanup timeouts in both runtimes
         run: |
           HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:build
           HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun scripts/validation/desktop.ts bun scripts/native.ts verify --presentation
-          bun run native:build
-      - name: Verify packed consumers
-        run: bun scripts/validation/desktop.ts bun scripts/package/verify.ts
       - name: Prepare release assets
         run: bun run release:prepare
       - name: Upload desktop diagnostics
