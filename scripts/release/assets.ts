@@ -74,6 +74,14 @@ async function prepareMac() {
     await $`tar -xOf ${packed} package/dist/hostframe.node > ${Bun.file(temporary)}`.quiet();
     const architectures = (await $`lipo -archs ${temporary}`.text()).trim();
     if(architectures !== "arm64") throw new Error(`Unexpected macOS addon architecture: ${architectures}`);
+    const dependencies = (await $`otool -L ${temporary}`.text()).trim().split("\n").slice(1);
+    if(dependencies.length === 0) throw new Error("Cannot determine macOS addon dependencies.");
+    for(const dependency of dependencies) {
+      const library = dependency.trim().split(" ")[0]!;
+      if(!library.startsWith("/usr/lib/") && !library.startsWith("/System/Library/")) {
+        throw new Error(`Unexpected macOS dynamic dependency: ${library}`);
+      }
+    }
   } finally {
     await rm(temporary, { force: true });
   }

@@ -1,5 +1,7 @@
 # Linux x64 packaging
 
+For Apple Silicon builds, see [macOS arm64 packaging](macos-packaging.md).
+
 Start with [GitHub Releases](github-releases.md) for the release workflow,
 local `gh act` verification, draft creation, and installation from release assets.
 
