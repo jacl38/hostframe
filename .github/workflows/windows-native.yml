@@ -86,5 +86,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify Windows runtimes
         run: bun run native:verify
+      - name: Probe native input fixture
+        continue-on-error: true
+        run: ./build/native/cmake/native_input_check.exe
+      - name: Probe window lifecycle
+        continue-on-error: true
+        run: node packages/native/test/key-labels.ts
+      - name: Probe surface presentation
+        continue-on-error: true
+        run: ./build/native/cmake/native_presentation_check.exe
       - name: Verify Windows presentation and lifecycle
         run: bun run native:verify --presentation
