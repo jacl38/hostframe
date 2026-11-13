@@ -140,9 +140,16 @@ test("Git dependencies use pinned commits, reuse clean checkouts, and preserve s
 });
 
 test("the single CLI rejects invalid commands and flags before running tools", async () => {
-  for(const cliArguments of [["invalid"], ["build", "--presentation"], ["verify", "--unknown"]]) {
+  for(const cliArguments of [["invalid"], ["build", "--presentation"], ["verify", "--unknown"], ["verify", "--cleanup-timeouts-only", "--presentation"]]) {
     const result = await $`${process.execPath} ${resolve(root, "scripts/native.ts")} ${cliArguments}`.nothrow().quiet();
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain("Usage:");
   }
+});
+
+test("cleanup-only verification requires the forced-timeout build environment", async () => {
+  const env = { ...process.env, HOSTFRAME_TEST_CLEANUP_TIMEOUT: "0" };
+  const result = await $`${process.execPath} ${resolve(root, "scripts/native.ts")} verify --cleanup-timeouts-only`.env(env).nothrow().quiet();
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("requires HOSTFRAME_TEST_CLEANUP_TIMEOUT=1");
 });

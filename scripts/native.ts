@@ -24,12 +24,15 @@ export async function withBuildLock(action: () => Promise<void>) {
   }
 }
 
-async function verify(presentation: boolean, interactions: boolean) {
+async function verify(presentation: boolean, interactions: boolean, cleanupOnly: boolean) {
   if(interactions && process.platform !== "linux") {
     throw new Error("--window-interactions requires Linux/X11, xdotool, and xprop.");
   }
+  if(cleanupOnly && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT !== "1") {
+    throw new Error("--cleanup-timeouts-only requires HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 and a matching native build.");
+  }
   const threadCheck = process.platform === "darwin" ? "--thread-only" : "--no-display";
-  const checks = [
+  const checks = cleanupOnly ? [] : [
     [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
     ["node", resolve(root, "packages/native/test/globals.ts")],
     ["bun", resolve(root, "packages/native/test/globals.ts")],
@@ -40,7 +43,7 @@ async function verify(presentation: boolean, interactions: boolean) {
     ["node", resolve(root, "packages/native/test/window.ts"), threadCheck],
     ["bun", resolve(root, "packages/native/test/window.ts"), threadCheck]
   ];
-  if(presentation) {
+  if(presentation && !cleanupOnly) {
     checks.push(
       [resolve(buildRoot, "cmake/native_input_check")],
       ["node", resolve(root, "packages/native/test/key-labels.ts")],
@@ -72,7 +75,7 @@ async function verify(presentation: boolean, interactions: boolean) {
       ["bun", "--expose-gc", resolve(root, "packages/native/test/window.ts"), "--shutdown"]
     );
   }
-  if(presentation && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT === "1") {
+  if((presentation || cleanupOnly) && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT === "1") {
     for(const runtime of ["node", "bun"]) {
       for(const operation of ["unconfigure", "reconfigure", "window", "application"]) {
         checks.push([runtime, "--expose-gc", resolve(root, "packages/native/test/cleanup-timeout.ts"), operation]);
@@ -118,15 +121,15 @@ async function verify(presentation: boolean, interactions: boolean) {
 
 async function main() {
   const [command, ...flags] = process.argv.slice(2);
-  const usage = "Usage: bun scripts/native.ts <setup|build|check-build|verify> [--presentation] [--window-interactions]";
+  const usage = "Usage: bun scripts/native.ts <setup|build|check-build|verify> [--presentation] [--window-interactions] [--cleanup-timeouts-only]";
   if(command === "--help") {
     console.log(usage);
     return;
   }
-  if(!command || !["setup", "build", "check-build", "verify"].includes(command) || flags.some(flag => command !== "verify" || !["--presentation", "--window-interactions"].includes(flag))) {
+  if(!command || !["setup", "build", "check-build", "verify"].includes(command) || flags.some(flag => command !== "verify" || !["--presentation", "--window-interactions", "--cleanup-timeouts-only"].includes(flag)) || (flags.includes("--cleanup-timeouts-only") && flags.length !== 1)) {
     throw new Error(usage);
   }
-  if(command === "verify") return verify(flags.includes("--presentation") || flags.includes("--window-interactions"), flags.includes("--window-interactions"));
+  if(command === "verify") return verify(flags.includes("--presentation") || flags.includes("--window-interactions"), flags.includes("--window-interactions"), flags.includes("--cleanup-timeouts-only"));
   if(command === "check-build") return checkBuild();
   checkPrerequisites(command === "setup");
   await withBuildLock(async () => {
