@@ -62,8 +62,8 @@ try {
   }
   async function focus(index: number, otherDisposed = false) {
     await xdo("windowactivate", "--sync", ids[index]!);
-    await until(() => windows[index]!.input.focused);
-    if(!otherDisposed) assert.equal(windows[1 - index]!.input.focused, false);
+    // A new window can already report focus before the previous one's loss is polled.
+    await until(() => windows[index]!.input.focused && (otherDisposed || !windows[1 - index]!.input.focused));
   }
   await focus(0);
   await xdo("keydown", "a");
