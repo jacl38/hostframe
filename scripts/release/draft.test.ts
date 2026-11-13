@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
-import { chmod, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { root } from "../native/release.ts";
 import { sha256 } from "./assets.ts";
 
 test("draft CLI keeps releases unpublished and rejects corrupt assets before invoking gh", async () => {
-  const directory = await mkdtemp(resolve(tmpdir(), "hostframe-draft-"));
+  const directory = await realpath(await mkdtemp(resolve(tmpdir(), "hostframe-draft-")));
   try {
     for(const file of ["scripts/release/assets.ts", "scripts/native/release.ts", "scripts/native/dawn.lock.json"]) {
       const destination = resolve(directory, file);
