@@ -21,3 +21,4 @@ does not imply macOS availability. Hosted validation uses Apple's virtual Metal
 device. Physical GPU behavior, older macOS versions, and Intel Macs are not
 established by this CI run. No macOS minimum version beyond that of the tested
 runner is claimed.
+Code signing, notarization, and Gatekeeper behavior have not been verified.
