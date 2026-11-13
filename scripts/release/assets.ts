@@ -3,13 +3,14 @@ import { createHash } from "node:crypto";
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import manifest from "../../package.json";
-import { lock, root } from "../native/release.ts";
+import { getEngine, lock, root } from "../native/release.ts";
 
 const directory = resolve(root, "build/release");
 const filename = `${manifest.name}-${manifest.version}-linux-x64.tgz`;
 const tarball = resolve(directory, filename);
 
 async function prepare() {
+  if(process.platform === "darwin" && process.arch === "arm64") return prepareMac();
   const tag = releaseTag(manifest.version, process.env.GITHUB_REF);
   if(process.platform !== "linux" || process.arch !== "x64") throw new Error("Release assets require Linux x64.");
   const packed = resolve(root, `build/package/${manifest.name}-${manifest.version}.tgz`);
@@ -55,8 +56,61 @@ bun add hostframe@${url}
 - Dawn ${lock.release}, revision ${lock.revision}; engine archive SHA-256 ${lock.engines["linux-x64"].sha256}.
 
 This is a GitHub Releases distribution; no package has been published to the npm registry. Versioned release URLs pin installs to this release; update the URL to upgrade.
+If macOS arm64 assets are attached, see the accompanying macos-arm64-notes.md and SHA256SUMS-darwin-arm64.
 `);
   console.log(`Release assets prepared in ${directory}`);
+}
+
+async function prepareMac() {
+  const tag = releaseTag(manifest.version, process.env.GITHUB_REF);
+  const packed = resolve(root, `build/package/${manifest.name}-${manifest.version}.tgz`);
+  const metadata = JSON.parse(await $`tar -xOf ${packed} package/package.json`.text());
+  if(metadata.name !== manifest.name || metadata.version !== manifest.version || metadata.license !== manifest.license ||
+    JSON.stringify(metadata.os) !== JSON.stringify(["darwin"]) || JSON.stringify(metadata.cpu) !== JSON.stringify(["arm64"]) || metadata.libc) {
+    throw new Error("Packed macOS metadata does not match the release. Run package:verify first.");
+  }
+  const temporary = resolve(root, "build/release-addon.node");
+  try {
+    await $`tar -xOf ${packed} package/dist/hostframe.node > ${Bun.file(temporary)}`.quiet();
+    const architectures = (await $`lipo -archs ${temporary}`.text()).trim();
+    if(architectures !== "arm64") throw new Error(`Unexpected macOS addon architecture: ${architectures}`);
+    const dependencies = (await $`otool -L ${temporary}`.text()).trim().split("\n").slice(1);
+    if(dependencies.length === 0) throw new Error("Cannot determine macOS addon dependencies.");
+    for(const dependency of dependencies) {
+      const library = dependency.trim().split(" ")[0]!;
+      if(!library.startsWith("/usr/lib/") && !library.startsWith("/System/Library/")) {
+        throw new Error(`Unexpected macOS dynamic dependency: ${library}`);
+      }
+    }
+  } finally {
+    await rm(temporary, { force: true });
+  }
+  const output = resolve(root, "build/release-macos");
+  const name = `${manifest.name}-${manifest.version}-darwin-arm64.tgz`;
+  const bytes = new Uint8Array(await Bun.file(packed).arrayBuffer());
+  await rm(output, { recursive: true, force: true });
+  await mkdir(output, { recursive: true });
+  await copyFile(packed, resolve(output, name));
+  await Bun.write(resolve(output, "SHA256SUMS-darwin-arm64"), `${sha256(bytes)}  ${name}\n`);
+  const repository = manifest.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+  const nodeVersion = (await $`node --version`.text()).trim();
+  await Bun.write(resolve(output, "macos-arm64-notes.md"), `# macOS arm64 package\n\nInstall from ${repository}/releases/download/${tag}/${name} after verifying SHA256SUMS-darwin-arm64.\n\nBuilt and validated on macOS arm64 with Node.js ${nodeVersion} and Bun ${Bun.version}; Metal compute and presentation were tested on the runner. Earlier macOS versions and Intel Macs are not verified.\n\nDawn ${lock.release}, revision ${lock.revision}; engine archive SHA-256 ${getEngine().sha256}.\n`);
+  console.log(`macOS release assets prepared in ${output}`);
+}
+
+async function attachMac() {
+  const { tag, repository } = assertDraftEnvironment(manifest.version, process.env);
+  const output = resolve(directory, "macos");
+  const name = `${manifest.name}-${manifest.version}-darwin-arm64.tgz`;
+  const packed = resolve(output, name);
+  const checksum = resolve(output, "SHA256SUMS-darwin-arm64");
+  const notes = resolve(output, "macos-arm64-notes.md");
+  const expected = `${sha256(new Uint8Array(await Bun.file(packed).arrayBuffer()))}  ${name}\n`;
+  if(await Bun.file(checksum).text() !== expected) throw new Error("macOS release checksum mismatch.");
+  if(!(await Bun.file(notes).exists())) throw new Error("macOS release notes are missing.");
+  const draftState = (await $`gh release view ${tag} --repo ${repository} --json isDraft --jq .isDraft`.text()).trim();
+  if(draftState !== "true") throw new Error("macOS assets require an existing draft release.");
+  await $`gh release upload ${tag} ${packed} ${checksum} ${notes} --repo ${repository}`.cwd(root);
 }
 
 async function draft() {
@@ -69,7 +123,7 @@ async function draft() {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  if(rest.length > 0) throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft>");
+  if(rest.length > 0) throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft|attach-macos>");
   switch(command) {
     case "check-tag":
       console.log(`Release version: ${releaseTag(manifest.version, process.env.GITHUB_REF)}`);
@@ -80,8 +134,11 @@ async function main() {
     case "draft":
       await draft();
       break;
+    case "attach-macos":
+      await attachMac();
+      break;
     default:
-      throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft>");
+      throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft|attach-macos>");
   }
 }
 

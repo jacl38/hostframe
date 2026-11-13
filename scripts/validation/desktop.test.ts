@@ -3,7 +3,7 @@ import { mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-test("desktop runner reports missing tools before attempting a display", async () => {
+test.skipIf(process.platform !== "linux")("desktop runner reports missing tools before attempting a display", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hostframe-prerequisites-"));
   try {
     const child = Bun.spawn([process.execPath, join(import.meta.dir, "desktop.ts"), process.execPath], {
@@ -20,7 +20,7 @@ test("desktop runner reports missing tools before attempting a display", async (
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("missing selected window manager preserves the startup cause in lifecycle diagnostics", async () => {
+test.skipIf(process.platform !== "linux")("missing selected window manager preserves the startup cause in lifecycle diagnostics", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hostframe-missing-wm-"));
   try {
     for(const name of ["Xvfb", "xauth", "dbus-run-session"]) await symlink(process.execPath, join(directory, name));

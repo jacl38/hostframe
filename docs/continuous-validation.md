@@ -1,5 +1,12 @@
 # Continuous validation
 
+The macOS arm64 validation job builds the pinned addon and runs lint, type
+checking, tests, and `native:verify --presentation` on `macos-15` when integration
+checks are required. On November 13, 2026, a manually dispatched probe passed
+on GitHub's macOS 15.8.2 arm64 runner using its Apple paravirtual Metal device,
+Node.js 26.7.0, and Bun 1.3.14. This does not establish physical GPU behavior,
+other macOS versions, or a packaged macOS release.
+
 `.github/workflows/validation.yml` runs on pull requests and master pushes.
 Manual validation runs the full gallery. Release builds run the interaction and
 output checks before preparing assets; the gallery remains a separate check.

@@ -35,7 +35,8 @@ export class Application {
     void this.#native.hasOpenWindows;
     const name = getKeyName(key);
     if(!name || (key === Key.UNKNOWN && scancode < 0)) return name ?? "UNKNOWN";
-    return this.#native.getKeyLabel(key, scancode) || name;
+    const label = this.#native.getKeyLabel(key, scancode);
+    return label && !/\p{Cc}/u.test(label) ? label : name;
   }
 
   /** Platform scancode for a known token, or undefined when unavailable. */

@@ -3,8 +3,8 @@
 Setup supports **Linux x64 with GLFW/X11 and Vulkan** and **macOS arm64
 with GLFW/Cocoa and Metal**. Other platforms
 fail explicitly before downloading an incompatible engine. This is a source
-contributor workflow; see [Linux x64 packaging](packaging.md) for the initial
-prebuilt addon package.
+contributor workflow; see [Linux x64 packaging](packaging.md) and
+[macOS arm64 packaging](macos-packaging.md) for prebuilt addon packaging.
 
 Project-owned bindings use nobind17 typed registrations; both build commands
 produce `build/native/generated/native.d.ts`. Dawn bindings and `@webgpu/types`

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { dawnRoot, lock, root } from "../native/release.ts";
+import { dawnRoot, getEngine, lock, root } from "../native/release.ts";
 
 /** Notices for redistributed native code, including dependencies in the pinned engine. */
 export async function writeNotices() {
@@ -17,7 +17,7 @@ export async function writeNotices() {
     ["node-addon-api (hostframe)", resolve(root, "node_modules/node-addon-api/LICENSE.md")],
     ["nobind17 (adapted for synchronous Bun compatibility)", resolve(root, "node_modules/nobind17/LICENSE")]
   ];
-  let notices = `hostframe native third-party notices\n\nDawn release: ${lock.release}\nDawn revision: ${lock.revision}\nEngine archive SHA-256: ${lock.engines["linux-x64"].sha256}\n`;
+  let notices = `hostframe native third-party notices\n\nDawn release: ${lock.release}\nDawn revision: ${lock.revision}\nEngine archive SHA-256: ${getEngine().sha256}\n`;
   for(const [name, path] of licenses) {
     notices += `\n${"=".repeat(72)}\n${name}\n${"=".repeat(72)}\n\n${await Bun.file(path).text()}\n`;
   }
