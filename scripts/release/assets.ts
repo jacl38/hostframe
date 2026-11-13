@@ -104,11 +104,13 @@ async function attachMac() {
   const name = `${manifest.name}-${manifest.version}-darwin-arm64.tgz`;
   const packed = resolve(output, name);
   const checksum = resolve(output, "SHA256SUMS-darwin-arm64");
+  const notes = resolve(output, "macos-arm64-notes.md");
   const expected = `${sha256(new Uint8Array(await Bun.file(packed).arrayBuffer()))}  ${name}\n`;
   if(await Bun.file(checksum).text() !== expected) throw new Error("macOS release checksum mismatch.");
+  if(!(await Bun.file(notes).exists())) throw new Error("macOS release notes are missing.");
   const draftState = (await $`gh release view ${tag} --repo ${repository} --json isDraft --jq .isDraft`.text()).trim();
   if(draftState !== "true") throw new Error("macOS assets require an existing draft release.");
-  await $`gh release upload ${tag} ${packed} ${checksum} ${resolve(output, "macos-arm64-notes.md")} --repo ${repository}`.cwd(root);
+  await $`gh release upload ${tag} ${packed} ${checksum} ${notes} --repo ${repository}`.cwd(root);
 }
 
 async function draft() {

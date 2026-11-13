@@ -88,6 +88,10 @@ test("release CLI guards draft creation and macOS attachment with checksums", as
     expect((await attach()).stderr).toContain("checksum mismatch");
     expect(await Bun.file(capture).exists()).toBe(false);
     await Bun.write(macChecksums, `${sha256(bytes)}  ${macName}\n`);
+    await rm(resolve(mac, "macos-arm64-notes.md"));
+    expect((await attach()).stderr).toContain("notes are missing");
+    expect(await Bun.file(capture).exists()).toBe(false);
+    await Bun.write(resolve(mac, "macos-arm64-notes.md"), "macOS notes");
     await Bun.write(gh, "#!/bin/sh\nif [ \"$2\" = view ]; then echo false; else printf invoked > \"$HOSTFRAME_TEST_GH_ARGS\"; fi\n");
     expect((await attach()).stderr).toContain("existing draft release");
     expect(await Bun.file(capture).exists()).toBe(false);
