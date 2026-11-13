@@ -237,8 +237,10 @@ disposal, and application disposal. Each process forces one busy/expired drain
 after real submission; it neither hangs a GPU nor replaces application behavior.
 The fixture checks device loss, cached state, weak-reference collection while
 wrappers remain reachable, error propagation, repeated cleanup, X11 session
-release, and subsequent rendering. Existing real success-path checks still run.
-CI runs this variant and then rebuilds the default addon before packaging.
+release, and subsequent rendering. With `--presentation`, existing real
+success-path checks still run. CI checks the default addon and packaged consumers
+first, then uses `--cleanup-timeouts-only` to run just those eight cases against
+the special build. The cleanup-only mode requires the same environment flag.
 Run `bun run native:build` without the build flag to remove the seam. Default
 builds do not read the fault environment variable, expose no fault method or
 public TypeScript API, and retain the same binding ABI. The forced observation

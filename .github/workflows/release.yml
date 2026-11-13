@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container:
-      image: ghcr.io/jacl38/hostframe-ci@sha256:9b29b54fe992e4782328c7fc30795d1fe017641836c9e82508b015ac82544fca
+      image: ghcr.io/jacl38/hostframe-ci@sha256:e1e2649bd8e8603573ebe8f20fcb549885b654bc91d38efe71350791591a1f00
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -60,9 +60,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: build/native/cache/ccache
-          key: ccache-fedora44-9b29b54f-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}-${{ github.sha }}
+          key: ccache-fedora44-e1e2649b-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}-${{ github.sha }}
           restore-keys: |
-            ccache-fedora44-9b29b54f-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}-
+            ccache-fedora44-e1e2649b-${{ runner.arch }}-${{ hashFiles('scripts/native/dawn.lock.json') }}-
       - name: Build pinned native inputs
         run: bun run setup
       - name: Lint, typecheck, and test
@@ -79,7 +79,7 @@ jobs:
       - name: Verify forced cleanup timeouts in both runtimes
         run: |
           HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:build
-          HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun scripts/validation/desktop.ts bun scripts/native.ts verify --presentation
+          HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun scripts/validation/desktop.ts bun scripts/native.ts verify --cleanup-timeouts-only
       - name: Prepare release assets
         run: bun run release:prepare
       - name: Upload desktop diagnostics
