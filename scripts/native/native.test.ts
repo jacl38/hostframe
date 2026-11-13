@@ -35,6 +35,20 @@ test("unsupported hosts fail instead of selecting an incompatible engine", () =>
   expect(() => getEngine("darwin", "x64")).toThrow("No verified build configuration");
 });
 
+test("the experimental Windows engine is pinned but requires explicit opt-in", () => {
+  const previous = process.env.HOSTFRAME_EXPERIMENTAL_WINDOWS;
+  try {
+    process.env.HOSTFRAME_EXPERIMENTAL_WINDOWS = "1";
+    const engine = getEngine("win32", "x64");
+    expect(engine.sentinel).toBe("lib/webgpu_dawn.lib");
+    expect(engine.sha256).toBe("e6814ae86f7ca704903532004839cb4d46429d93647597fc1cefaa98820a46d7");
+    expect(() => getEngine("win32", "arm64")).toThrow();
+  } finally {
+    if(previous === undefined) delete process.env.HOSTFRAME_EXPERIMENTAL_WINDOWS;
+    else process.env.HOSTFRAME_EXPERIMENTAL_WINDOWS = previous;
+  }
+});
+
 test("build audit accepts selected integration sources and rejects engine, Tint, and proc-table entry point", () => {
   expect(assertBuildSources([
     { file: resolve(root, "packages/native/src/module.cpp") },

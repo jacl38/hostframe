@@ -24,6 +24,13 @@
       "strip": 1,
       "sentinel": "lib64/libwebgpu_dawn.a"
     },
+    "win32-x64": {
+      "name": "Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-windows-latest-Release.tar.gz",
+      "url": "https://github.com/google/dawn/releases/download/v20261026.205545/Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-windows-latest-Release.tar.gz",
+      "sha256": "e6814ae86f7ca704903532004839cb4d46429d93647597fc1cefaa98820a46d7",
+      "strip": 1,
+      "sentinel": "lib/webgpu_dawn.lib"
+    },
     "darwin-arm64": {
       "name": "Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-macos-latest-Release.tar.gz",
       "url": "https://github.com/google/dawn/releases/download/v20261026.205545/Dawn-5fbd545292cb7a4a9a275e322abec6007ffe2ae8-macos-latest-Release.tar.gz",

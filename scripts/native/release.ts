@@ -23,7 +23,8 @@ export type GitDependency = typeof gitDependencies[number];
 
 export function getEngine(platform = process.platform, arch = process.arch) {
   const engines: Record<string, typeof lock.source> = lock.engines;
-  const engine = engines[`${platform}-${arch}`];
+  const experimentalWindows = platform === "win32" && process.env.HOSTFRAME_EXPERIMENTAL_WINDOWS !== "1";
+  const engine = experimentalWindows ? undefined : engines[`${platform}-${arch}`];
   if(!engine) {
     throw new Error(`No verified build configuration for ${platform}/${arch} in dawn.lock.json.`);
   }

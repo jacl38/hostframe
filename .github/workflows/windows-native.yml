@@ -29,6 +29,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Check native source audit on Windows
         run: bun test scripts/native/native.test.ts --test-name-pattern "build audit"
+      - name: Check pinned engine selection
+        run: bun test scripts/native/native.test.ts --test-name-pattern "engine|unsupported"
       - name: Inspect operating system and graphics
         shell: pwsh
         run: |
