@@ -15,7 +15,7 @@ concurrency:
 jobs:
   probe:
     name: Inspect Windows runner
-    runs-on: windows-2022
+    runs-on: windows-2025
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -63,6 +63,6 @@ jobs:
           CXX: clang++
           HOSTFRAME_NODE_LIBRARY: ${{ github.workspace }}\node.lib
         run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
           if errorlevel 1 exit /b 1
           bun run setup
