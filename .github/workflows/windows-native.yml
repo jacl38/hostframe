@@ -66,6 +66,14 @@ jobs:
           for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath`) do call "%%i\VC\Auxiliary\Build\vcvars64.bat"
           if errorlevel 1 exit /b 1
           bun run setup
+      # Diagnostic only: the SDK DLL is not the pinned Dawn DEPS revision and
+      # must not be used as a release input.
+      - name: Install runner shader compiler for diagnostics
+        shell: pwsh
+        run: |
+          $sdk = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\10.0.26100.0\x64"
+          Copy-Item "$sdk\dxcompiler.dll" build/native/cmake/
+          Copy-Item "$sdk\dxil.dll" build/native/cmake/
       - name: Probe Node GPU availability
         continue-on-error: true
         run: node packages/native/test/headless.ts
@@ -76,9 +84,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           bun packages/native/test/window.ts --thread-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Find installed DirectX shader compiler
-        shell: pwsh
-        run: |
-          Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits", "${env:ProgramFiles}\Microsoft Visual Studio" -Filter dxcompiler.dll -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
       - name: Verify Windows runtimes
         run: bun run native:verify
