@@ -89,6 +89,7 @@ distribution gate. Forced cleanup requires its special native build as below.
 | --- | --- |
 | Public GPU access requires GLFW/display or mutates globals | `headless.ts`: display variables cleared, shared GPU owner, explicit imports, clear/readback; `globals.ts`: opt-in installation and conflicts |
 | Creation/teardown leaves stale ownership | `window.ts`, `configuration-exceptions.ts`: thread/lifecycle guards, failed configuration, disposal and GC |
+| Unconfiguration leaves a recycled swapchain tied to a closed display | `unconfigured-cleanup.ts`: render/unconfigure, advance GPU work, reuse the window with another device, close the application, then read back and destroy both caller-owned devices |
 | Frame escapes its scope or a callback corrupts execution | `context.ts`, `manual-frame.ts`: texture/view expiration, async/reentrant rejection, callback failure and recovery |
 | Scheduling starves host/GPU callbacks or misorders application work | core timing/loop tests; native `loop.ts`, `subscriptions.ts`: actual host timer and readback progress, pause/resume/stop, listener ordering |
 | Resize/minimize leaves stale presentation state | `context.ts --interactions`, `resize.ts`: actual native resize/minimize/restore, framebuffer state and output |

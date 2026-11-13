@@ -106,8 +106,15 @@ Napi::Value Presentation::Configure(Napi::Env env, Napi::Value value) {
 
 void Presentation::Unconfigure() {
   DeactivateSurface();
+  if(!context_) return;
+  // Dawn keeps an unconfigured swapchain on the surface for recycling. Release
+  // the surface before draining, while its device and GLFW connection are still
+  // available; otherwise Close() can enqueue deletion after context_ is gone.
+  surface_ = nullptr;
   const bool drained = DrainDevice();
   context_.reset();
+  surface_ = wgpu::glfw::CreateSurfaceForWindow(instance_, window_.get());
+  if(!surface_) throw std::runtime_error("Dawn surface creation failed");
   if(!drained) throw std::runtime_error("GPU cleanup timed out; device was destroyed");
 }
 

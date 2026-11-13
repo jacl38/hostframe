@@ -189,6 +189,27 @@ cleanup and the environment cleanup hook close all windows before terminating
 GLFW; surviving wrappers remain safely disposed. Keep the application reachable
 while using it, and use explicit disposal for deterministic cleanup.
 
+Unconfiguration releases and recreates the Dawn surface before dropping its
+configured device. The pinned Dawn `Surface::Unconfigure()` retains a recycled
+swapchain; it does not enqueue all swapchain deletion until that surface is
+released. Draining only the unconfigured surface's work and then releasing the
+surface later, after dropping the device reference, leaves deletion undrained.
+The vgpu smoke exposed this as a Bun abort in Mesa/XCB during final device
+destruction, after GLFW had closed the X11 connection. A dependency-free
+render → unconfigure → GPU readback → application disposal → device destruction
+fixture reproduces it. This is a Hostframe ownership-ordering bug, resolved
+without a Dawn, vgpu or Bun patch. Surface recreation also permits subsequent
+configuration with another device.
+
+The fix was verified on Linux x64/X11 with Mesa lavapipe, Node 26.7.0 and
+Bun 1.3.14. The dependency-free reproducer and vgpu 0.6.0 render/resize/disposal
+smoke both exited cleanly in both runtimes; the resized Bun image was inspected.
+The permanent `unconfigured-cleanup.ts` fixture passed through the full system
+gate, along with existing interactions and library adapters. All eight forced
+cleanup-timeout cases, all 59 script/core tests, lint and typecheck passed.
+The normal native build was restored afterward. macOS, hardware presentation
+and hosted CI were not exercised for this fix.
+
 Disposal advances Dawn's native GPU progress until idle before GLFW releases the
 X11 connection. In this pinned revision, a work-done future alone can leave
 best-effort Vulkan swapchain deletion pending, which crashes if the display is
