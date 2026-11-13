@@ -52,6 +52,8 @@ jobs:
         run: bun run native:verify --presentation
       - name: Verify packed consumers
         run: bun run package:verify
+      - name: Verify macOS release asset preparation
+        run: bun run release:prepare
 
   checks:
     runs-on: ubuntu-24.04
