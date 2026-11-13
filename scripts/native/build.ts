@@ -11,7 +11,10 @@ import { buildRoot, dawnRoot, getEngine, headers, root } from "./release";
 export function checkPrerequisites(forSetup = false) {
   getEngine();
   const tools = ["git", "cmake", "ninja", "node", process.env.CXX || "c++", process.env.CC || "cc"];
-  if(forSetup) tools.push("curl", "tar", "go", "python3", "pkg-config");
+  if(forSetup) {
+    tools.push("curl", "tar", "go", "python3");
+    if(process.platform !== "win32") tools.push("pkg-config");
+  }
   const missing = tools.filter(tool => !Bun.which(tool));
   if(missing.length > 0) {
     throw new Error(`Missing native build prerequisites: ${missing.join(", ")}. Install these tools and retry; setup does not install system packages.`);
