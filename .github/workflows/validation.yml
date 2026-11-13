@@ -5,8 +5,6 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
-  schedule:
-    - cron: "23 5 * * 1"
 
 permissions:
   contents: read
@@ -100,7 +98,7 @@ jobs:
       - name: Verify Hostframe system contracts and library adapters
         run: bun scripts/validation/desktop.ts bun scripts/validation/system.ts
       - name: Check example gallery maintenance
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         run: bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
       - name: Verify forced cleanup timeouts in both runtimes
         run: |

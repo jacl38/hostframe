@@ -1,14 +1,14 @@
 # Continuous validation
 
 `.github/workflows/validation.yml` runs on pull requests and master pushes.
-A weekly schedule and manual dispatch run the full gallery. The release build
+Manual dispatch runs the full gallery. The release build
 also runs the full gallery and interaction/output checks before preparing assets.
 
 | Gate | Commands and evidence |
 | --- | --- |
 | Every change, including documentation | Locked install, `bun run lint`, build-independent compiler/tooling, release-tooling, scheduler/timing and validation-runner tests |
 | Any non-Markdown/non-LICENSE change | `bun run setup`, `bun run typecheck`, full `bun test scripts packages/core/test`, Hostframe system contracts and adapters, real packed consumers |
-| Weekly/manual/release | Same native checks plus every entry in the example catalog in both runtimes |
+| Manual/release | Same native checks plus every entry in the example catalog in both runtimes |
 
 The fast job explicitly excludes declaration extraction and input-listener tests:
 these depend on the compiled addon/generated event contract. The full suite runs
