@@ -4,13 +4,13 @@
 #include <stdexcept>
 #if defined(__APPLE__)
 #include <pthread.h>
-#else
+#elif defined(__linux__)
 #include <sys/syscall.h>
-#endif
 #include <unistd.h>
+#endif
 
 #include <GLFW/glfw3.h>
-#if !defined(__APPLE__)
+#if defined(__linux__)
 #define GLFW_EXPOSE_NATIVE_X11
 #include <GLFW/glfw3native.h>
 #include <X11/extensions/Xfixes.h>
@@ -25,8 +25,11 @@ namespace hostframe {
 void RequireMainThread(Napi::Env env) {
 #if defined(__APPLE__)
   const bool mainThread = pthread_main_np() != 0;
-#else
+#elif defined(__linux__)
   const bool mainThread = syscall(SYS_gettid) == getpid();
+#else
+  // Windows support remains experimental until main-thread detection is implemented.
+  const bool mainThread = false;
 #endif
   if(!mainThread) {
     throw Napi::Error::New(env, "Native applications require the process main thread");
@@ -41,7 +44,7 @@ class GlfwSession {
       glfwTerminate();
       throw std::runtime_error("GLFW initialization failed; check desktop session");
     }
-#if !defined(__APPLE__)
+#if defined(__linux__)
     // Mesa's Vulkan WSI caches extension data by xcb_connection_t address for
     // the instance lifetime. A new GLFW session can reuse a closed connection's
     // address while our process GPU is still alive, skipping XFixes negotiation.

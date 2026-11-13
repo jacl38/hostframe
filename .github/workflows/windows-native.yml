@@ -50,12 +50,18 @@ jobs:
           ninja --version
           node --version
           & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+      - name: Download Node import library
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://nodejs.org/dist/v26.7.0/win-x64/node.lib -OutFile node.lib
+          if ((Get-FileHash node.lib -Algorithm SHA256).Hash -ne "56f06350037085fce04930befd98327afc86ee46f52af6f6f8a68a03630e8380") { throw "Node import library checksum mismatch" }
       - name: Build experimental native addon
         shell: cmd
         env:
           HOSTFRAME_EXPERIMENTAL_WINDOWS: "1"
           CC: clang
           CXX: clang++
+          HOSTFRAME_NODE_LIBRARY: ${{ github.workspace }}\node.lib
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
           if errorlevel 1 exit /b 1
