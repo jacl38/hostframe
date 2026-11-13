@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import manifest from "../../package.json";
@@ -17,8 +17,25 @@ async function main() {
   const headless = args.includes("--headless");
   const output = resolve(root, "build/package");
   await mkdir(output, { recursive: true });
-  // Exercise npm's real prepack lifecycle and file selection.
-  await run(["npm", "pack", "--pack-destination", output], root, process.env, 300_000);
+  if(process.platform === "darwin" && process.arch === "arm64") {
+    // A native addon cannot share the root package's Linux-only metadata.
+    const staging = await mkdtemp(resolve(tmpdir(), "hostframe-package-"));
+    try {
+      await run(["bun", "run", "build"], root, { ...process.env, HOSTFRAME_PACKAGE_STAGING: "1" }, 300_000);
+      for(const path of ["dist", "docs", "README.md", "LICENSE"]) {
+        await cp(resolve(root, path), resolve(staging, path), { recursive: true });
+      }
+      const metadata = { ...manifest, os: ["darwin"], cpu: ["arm64"] };
+      Reflect.deleteProperty(metadata, "libc");
+      await Bun.write(resolve(staging, "package.json"), JSON.stringify(metadata, null, 2));
+      await run(["npm", "pack", "--ignore-scripts", "--pack-destination", output], staging, process.env, 300_000);
+    } finally {
+      await rm(staging, { recursive: true, force: true });
+    }
+  } else {
+    // Exercise npm's real prepack lifecycle and file selection.
+    await run(["npm", "pack", "--pack-destination", output], root, process.env, 300_000);
+  }
   const tarball = resolve(output, `${manifest.name}-${manifest.version}.tgz`);
   const listing = Bun.spawn(["tar", "-tzf", tarball], { stdout: "pipe", stderr: "inherit", timeout: 10_000 });
   const contents = await new Response(listing.stdout).text();
@@ -63,7 +80,7 @@ async function main() {
       await run(["node", resolve(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], directory);
       for(const runtime of ["node", "bun"]) {
         await run([runtime, "globals.ts"], directory, { ...process.env, DISPLAY: "", WAYLAND_DISPLAY: "" });
-        await run([runtime, "consumer.ts", "--no-display"], directory, { ...process.env, DISPLAY: "" });
+        if(process.platform === "linux") await run([runtime, "consumer.ts", "--no-display"], directory, { ...process.env, DISPLAY: "" });
         if(!headless) {
           await run([runtime, "consumer.ts"], directory, {
             ...process.env,

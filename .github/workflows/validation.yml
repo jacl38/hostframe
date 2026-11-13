@@ -15,9 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  macos-probe:
-    name: Probe macOS arm64 native validation
-    if: github.event_name == 'workflow_dispatch'
+  macos:
+    needs: checks
+    if: needs.checks.outputs.integration == 'true'
+    name: Build and verify macOS arm64
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -49,6 +50,8 @@ jobs:
           bun run test
       - name: Verify compute, lifecycle, and presentation
         run: bun run native:verify --presentation
+      - name: Verify packed consumers
+        run: bun run package:verify
 
   checks:
     runs-on: ubuntu-24.04

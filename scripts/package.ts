@@ -8,8 +8,10 @@ import { writeNotices } from "./package/notices.ts";
 
 try {
   const reportHeader = Reflect.get(process.report.getReport(), "header");
-  if(process.platform !== "linux" || process.arch !== "x64" || !reportHeader || !Reflect.get(reportHeader, "glibcVersionRuntime")) {
-    throw new Error("Package builds currently require Linux x64 with glibc.");
+  const linux = process.platform === "linux" && process.arch === "x64" && reportHeader && Reflect.get(reportHeader, "glibcVersionRuntime");
+  const macos = process.platform === "darwin" && process.arch === "arm64" && process.env.HOSTFRAME_PACKAGE_STAGING === "1";
+  if(!linux && !macos) {
+    throw new Error("Package builds require Linux x64 with glibc or a staged macOS arm64 build.");
   }
   // Remove old output even when the native build fails; never pack a stale addon.
   await rm(resolve(root, "dist"), { recursive: true, force: true });
