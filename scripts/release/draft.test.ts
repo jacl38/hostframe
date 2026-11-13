@@ -62,6 +62,35 @@ test("draft CLI keeps releases unpublished and rejects corrupt assets before inv
     expect(rejected.code).not.toBe(0);
     expect(rejected.stderr).toContain("checksum mismatch");
     expect(await Bun.file(capture).exists()).toBe(false);
+
+    const mac = resolve(release, "macos");
+    await mkdir(mac);
+    const macName = "fixture-1.2.3-alpha.1-darwin-arm64.tgz";
+    await Bun.write(resolve(mac, macName), bytes);
+    const macChecksums = resolve(mac, "SHA256SUMS-darwin-arm64");
+    await Bun.write(macChecksums, `${sha256(bytes)}  ${macName}\n`);
+    await Bun.write(resolve(mac, "macos-arm64-notes.md"), "macOS notes");
+    await Bun.write(gh, "#!/bin/sh\nif [ \"$2\" = view ]; then echo true; else printf \"%s\\n\" \"$@\" > \"$HOSTFRAME_TEST_GH_ARGS\"; fi\n");
+    async function attach() {
+      const child = Bun.spawn([process.execPath, "scripts/release/assets.ts", "attach-macos"], {
+        cwd: directory, env, stdout: "pipe", stderr: "pipe", timeout: 10_000
+      });
+      const stderr = await new Response(child.stderr).text();
+      return { code: await child.exited, stderr };
+    }
+    expect(await attach()).toEqual({ code: 0, stderr: "" });
+    const attached = (await Bun.file(capture).text()).trim().split("\n");
+    expect(attached.slice(0, 3)).toEqual(["release", "upload", "v1.2.3-alpha.1"]);
+    expect(attached).toContain(resolve(mac, macName));
+    expect(attached).toContain(macChecksums);
+    await rm(capture);
+    await Bun.write(macChecksums, "corrupt checksum\n");
+    expect((await attach()).stderr).toContain("checksum mismatch");
+    expect(await Bun.file(capture).exists()).toBe(false);
+    await Bun.write(macChecksums, `${sha256(bytes)}  ${macName}\n`);
+    await Bun.write(gh, "#!/bin/sh\nif [ \"$2\" = view ]; then echo false; else printf invoked > \"$HOSTFRAME_TEST_GH_ARGS\"; fi\n");
+    expect((await attach()).stderr).toContain("existing draft release");
+    expect(await Bun.file(capture).exists()).toBe(false);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
