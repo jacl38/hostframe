@@ -69,5 +69,16 @@ jobs:
       - name: Probe Node GPU availability
         continue-on-error: true
         run: node packages/native/test/headless.ts
+      - name: Check application thread guard
+        continue-on-error: true
+        run: |
+          node packages/native/test/window.ts --thread-only
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          bun packages/native/test/window.ts --thread-only
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Find installed DirectX shader compiler
+        shell: pwsh
+        run: |
+          Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits", "${env:ProgramFiles}\Microsoft Visual Studio" -Filter dxcompiler.dll -Recurse -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName
       - name: Verify Windows runtimes
         run: bun run native:verify
