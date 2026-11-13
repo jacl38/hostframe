@@ -19,7 +19,9 @@ jobs:
     needs: checks
     if: needs.checks.outputs.integration == 'true'
     name: Build and verify macOS arm64
-    runs-on: macos-15
+    runs-on: macos-26
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -54,20 +56,14 @@ jobs:
         run: bun run package:verify
       - name: Verify macOS release asset preparation
         run: bun run release:prepare
-      - name: Verify published alpha.5 package on macOS 15
+      - name: Inspect deployment target
         run: |
-          asset_url=https://github.com/jacl38/hostframe/releases/download/v0.1.0-alpha.5
-          consumer_dir=$(mktemp -d)
-          trap 'rm -rf "$consumer_dir"' EXIT
-          curl -fsSL "$asset_url/hostframe-0.1.0-alpha.5-darwin-arm64.tgz" -o "$consumer_dir/hostframe-0.1.0-alpha.5-darwin-arm64.tgz"
-          curl -fsSL "$asset_url/SHA256SUMS-darwin-arm64" -o "$consumer_dir/SHA256SUMS-darwin-arm64"
-          cd "$consumer_dir"
-          shasum -a 256 -c SHA256SUMS-darwin-arm64
-          printf '{"type":"module","private":true}\n' > package.json
-          npm install --ignore-scripts --no-audit --no-fund ./hostframe-0.1.0-alpha.5-darwin-arm64.tgz
-          cp "$GITHUB_WORKSPACE/scripts/package/fixtures/runtime.ts" consumer.ts
-          node consumer.ts
-          bun consumer.ts
+          vtool -show-build build/native/cmake/hostframe.node
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: macos15-deployment-prototype
+          path: build/release-macos/
+          if-no-files-found: error
 
   checks:
     runs-on: ubuntu-24.04
