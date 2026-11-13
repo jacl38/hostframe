@@ -54,6 +54,20 @@ jobs:
         run: bun run package:verify
       - name: Verify macOS release asset preparation
         run: bun run release:prepare
+      - name: Verify published alpha.5 package on macOS 15
+        run: |
+          asset_url=https://github.com/jacl38/hostframe/releases/download/v0.1.0-alpha.5
+          consumer_dir=$(mktemp -d)
+          trap 'rm -rf "$consumer_dir"' EXIT
+          curl -fsSL "$asset_url/hostframe-0.1.0-alpha.5-darwin-arm64.tgz" -o "$consumer_dir/hostframe-0.1.0-alpha.5-darwin-arm64.tgz"
+          curl -fsSL "$asset_url/SHA256SUMS-darwin-arm64" -o "$consumer_dir/SHA256SUMS-darwin-arm64"
+          cd "$consumer_dir"
+          shasum -a 256 -c SHA256SUMS-darwin-arm64
+          printf '{"type":"module","private":true}\n' > package.json
+          npm install --ignore-scripts --no-audit --no-fund ./hostframe-0.1.0-alpha.5-darwin-arm64.tgz
+          cp "$GITHUB_WORKSPACE/scripts/package/fixtures/runtime.ts" consumer.ts
+          node consumer.ts
+          bun consumer.ts
 
   checks:
     runs-on: ubuntu-24.04
