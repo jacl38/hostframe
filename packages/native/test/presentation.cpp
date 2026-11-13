@@ -165,6 +165,8 @@ void CheckPresentation() {
   wgpu::RequestAdapterOptions options;
 #if defined(__APPLE__)
   options.backendType = wgpu::BackendType::Metal;
+#elif defined(_WIN32)
+  options.backendType = wgpu::BackendType::D3D12;
 #else
   options.backendType = wgpu::BackendType::Vulkan;
 #endif

@@ -86,3 +86,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify Windows runtimes
         run: bun run native:verify
+      - name: Verify Windows presentation and lifecycle
+        run: bun run native:verify --presentation
