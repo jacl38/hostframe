@@ -119,4 +119,6 @@ if(process.argv.includes("--no-display")) {
     device?.destroy();
   }
 }
-console.log(`${process.versions.bun ? "Bun" : "Node.js"}: packed-package ${process.argv.includes("--no-display") ? "initialization failure" : "lifecycle controls, native close, presentation, loop, and disposal"} passed.`);
+const checks = process.argv.includes("--no-display") ? "initialization failure" :
+  process.platform === "linux" ? "lifecycle controls, native close, presentation, loop, and disposal" : "lifecycle controls, presentation, loop, and disposal";
+console.log(`${process.versions.bun ? "Bun" : "Node.js"}: packed-package ${checks} passed.`);
