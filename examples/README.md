@@ -215,4 +215,8 @@ TypeGPU 0.12.9 currently prints an `external-omitted` warning for `in.color` in
 the WGSL fragment templates. The generated shaders still receive that varying;
 their interpolated output was rendered and inspected. No warning is suppressed.
 
-Use `--representative` after `--verify` for the four renderer families. See [continuous validation](../docs/continuous-validation.md) for output readback and resize checks.
+Use `bun run test:system` for Hostframe contracts and representative library integrations.
+The legacy `--verify --representative` option runs only the adapter portion of that
+suite and requires X11/xdotool, including for Three resize checks. Full-gallery
+verification maintains examples; it is not WebGPU feature coverage. See
+[continuous validation](../docs/continuous-validation.md).

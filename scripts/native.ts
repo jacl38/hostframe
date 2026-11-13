@@ -35,8 +35,6 @@ async function verify(presentation: boolean, interactions: boolean) {
     ["bun", resolve(root, "packages/native/test/globals.ts")],
     ["node", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
     ["bun", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
-    ["node", resolve(root, "packages/native/test/compute.ts")],
-    ["bun", resolve(root, "packages/native/test/compute.ts")],
     ["node", resolve(root, "packages/native/test/headless.ts")],
     ["bun", resolve(root, "packages/native/test/headless.ts")],
     ["node", resolve(root, "packages/native/test/window.ts"), threadCheck],
@@ -112,7 +110,7 @@ async function verify(presentation: boolean, interactions: boolean) {
     if(command.some(argument => argument.endsWith("/cleanup-timeout.ts"))) env.HOSTFRAME_TEST_STALL_CLEANUP = "1";
     const child = Bun.spawn(command, { cwd: root, env, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
     const code = await child.exited;
-    if(code !== 0) throw new Error(`${command[0]} verification failed (exit ${code}, signal ${child.signalCode || "none"}).`);
+    if(code !== 0) throw new Error(`${command.join(" ")} verification failed (exit ${code}, signal ${child.signalCode || "none"}).`);
   }
 }
 

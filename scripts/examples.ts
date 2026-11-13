@@ -5,11 +5,14 @@ const root = fileURLToPath(new URL("../", import.meta.url));
 const [name, ...args] = process.argv.slice(2);
 if(name === "--verify") {
   if(args.some(arg => arg !== "--representative")) throw new Error("Usage: bun run examples:verify [--representative]");
-  const selected = args.includes("--representative")
-    ? examples.filter(example => ["vanilla/triangle", "vanilla/multiple-windows", "vanilla/window-lifecycle", "three/materials", "typegpu/triangle", "webgpu-utils/textures"].includes(example))
-    : examples;
+  if(args.includes("--representative")) {
+    const child = Bun.spawn([process.execPath, "scripts/validation/system.ts", "--adapters-only"], {
+      cwd: root, stdout: "inherit", stderr: "inherit"
+    });
+    process.exit(await child.exited);
+  }
   for(const runtime of ["bun", "node"]) {
-    for(const example of selected) {
+    for(const example of examples) {
       const child = Bun.spawn([runtime, `examples/${example}.ts`, "--frames=12"], {
         cwd: root, stdout: "pipe", stderr: "pipe", timeout: 60_000
       });

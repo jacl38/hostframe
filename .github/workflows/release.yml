@@ -64,13 +64,10 @@ jobs:
           bun test scripts packages/core/test
       - name: Verify desktop failure and cancellation cleanup
         run: bun scripts/validation/desktop-check.ts
-      - name: Verify native presentation
-        run: bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions
-      - name: Verify full gallery and composition output
-        run: |
-          bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
-          bun scripts/validation/desktop.ts node scripts/validation/renderer-output.ts
-          bun scripts/validation/desktop.ts bun scripts/validation/renderer-output.ts
+      - name: Verify Hostframe system contracts and library adapters
+        run: bun run test:system
+      - name: Check example gallery maintenance
+        run: bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
       - name: Verify forced cleanup timeouts in both runtimes
         run: |
           HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:build

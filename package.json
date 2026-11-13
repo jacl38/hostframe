@@ -46,6 +46,7 @@
     "test": "bun test scripts packages/core/test",
     "native:verify": "bun scripts/native.ts verify",
     "example": "bun scripts/examples.ts",
+    "test:system": "bun scripts/validation/desktop.ts bun scripts/validation/system.ts",
     "examples:verify": "bun scripts/examples.ts --verify",
     "example:solid-color": "bun examples/vanilla/solid-color.ts",
     "example:input": "bun examples/vanilla/input.ts",

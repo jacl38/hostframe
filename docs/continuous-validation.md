@@ -7,7 +7,7 @@ also runs the full gallery and interaction/output checks before preparing assets
 | Gate | Commands and evidence |
 | --- | --- |
 | Every change, including documentation | Locked install, `bun run lint`, build-independent compiler/tooling, release-tooling, scheduler/timing and validation-runner tests |
-| Any non-Markdown/non-LICENSE change | `bun run setup`, `bun run typecheck`, full `bun test scripts packages/core/test`, native interactions, representative examples, composition readback, real packed consumers |
+| Any non-Markdown/non-LICENSE change | `bun run setup`, `bun run typecheck`, full `bun test scripts packages/core/test`, Hostframe system contracts and adapters, real packed consumers |
 | Weekly/manual/release | Same native checks plus every entry in the example catalog in both runtimes |
 
 The fast job explicitly excludes declaration extraction and input-listener tests:
@@ -37,10 +37,7 @@ bun test scripts packages/core/test
 export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
 export HOSTFRAME_X11_WM=openbox
 bun scripts/validation/desktop-check.ts
-bun scripts/validation/desktop.ts bun scripts/native.ts verify --window-interactions
-bun scripts/validation/desktop.ts bun scripts/examples.ts --verify --representative
-bun scripts/validation/desktop.ts node scripts/validation/renderer-output.ts
-bun scripts/validation/desktop.ts bun scripts/validation/renderer-output.ts
+bun run test:system
 bun scripts/validation/desktop.ts bun scripts/package/verify.ts
 # Full gallery, including slower scenes:
 bun scripts/validation/desktop.ts bun scripts/examples.ts --verify
@@ -75,15 +72,48 @@ failure screenshots are retained. CI uploads only these intended files, excludin
 Xauthority, sockets and private config/cache directories. Inspect command.stderr
 when a nested failure points to the session log. No automatic rerun masks failures.
 
+## Coverage policy
+
+Dawn and GLFW are trusted dependencies. This suite protects Hostframe's ownership,
+execution and transport boundaries, not WebGPU conformance. Do not add CTS cases,
+feature-by-feature GPU checks, or snapshots of arbitrary library scenes. Add a
+case when it protects a distinct Hostframe contract or reproduces a glue defect.
+The full gallery is an example-maintenance check, separate from system coverage.
+
+`bun run test:system` runs native contracts and library integrations in a private
+X11 session. `scripts/validation/system.ts --adapters-only` runs just the library
+portion on an existing display. Packed-consumer verification remains a separate
+distribution gate. Forced cleanup requires its special native build as below.
+
+| Failure mode | Fixture / assertion |
+| --- | --- |
+| Public GPU access requires GLFW/display or mutates globals | `headless.ts`: display variables cleared, shared GPU owner, explicit imports, clear/readback; `globals.ts`: opt-in installation and conflicts |
+| Creation/teardown leaves stale ownership | `window.ts`, `configuration-exceptions.ts`: thread/lifecycle guards, failed configuration, disposal and GC |
+| Frame escapes its scope or a callback corrupts execution | `context.ts`, `manual-frame.ts`: texture/view expiration, async/reentrant rejection, callback failure and recovery |
+| Scheduling starves host/GPU callbacks or misorders application work | core timing/loop tests; native `loop.ts`, `subscriptions.ts`: actual host timer and readback progress, pause/resume/stop, listener ordering |
+| Resize/minimize leaves stale presentation state | `context.ts --interactions`, `resize.ts`: actual native resize/minimize/restore, framebuffer state and output |
+| Native input is mistranslated or routed incorrectly | `input.ts`, `text-input.ts`, `input-actions.ts`, `multiple-window-input.ts`: real XTest input, focus/capture, batch failures and per-window state |
+| Closing or disposing one window invalidates another | `multiple-windows.ts`, `lifecycle.ts`: close cancellation/acceptance, shared-device survival, independent windows |
+| Cleanup stalls and retains contexts | `cleanup-timeout.ts` under the forced-timeout build: release references, report failure, sibling device loss |
+| Library adapter no longer connects to native frames | Three composition/resize output; TypeGPU triangle and webgpu-utils textures bounded runs with completion markers |
+| Built exports/addon differ from source execution | packed npm/Bun consumers: explicit globals, no-display failure, native close, two-window presentation and cleanup |
+
+Fixture paths in this table are under `packages/native/test/` unless qualified.
+Library smoke completion establishes initialization, submission and teardown;
+it does not establish image correctness. Three's targeted pixels establish our
+composition wiring, not Three's rendering correctness. New library scenes should
+only enter this gate when they exercise an additional Hostframe boundary.
+
 ## What the evidence establishes
 
 The native interaction suite runs context resize/minimize/restore, real XTest
 keys/repeat/modifiers, pointer buttons/scroll/capture and focus lifecycle checks
 in Node and Bun. Native context tests include clear/readback assertions.
-Representative examples cover vanilla triangle, Three materials, TypeGPU triangle
-and webgpu-utils textures in both runtimes, including normal cleanup.
+Library checks cover TypeGPU's borrowed-device integration and webgpu-utils'
+native typed-pixel texture path in Node and Bun, including normal cleanup.
+Three is covered by the composition fixture rather than a duplicate gallery smoke.
 
-The separate composition fixture uses the current Three adapter: a green plane on
+The Three adapter composition fixture uses the current Three adapter: a green plane on
 a red background is rendered through its half-float intermediate into the native
 surface. Exact background/center pixels are read back at 320×240, 480×280 and
 256×320, exercising output allocation, camera sizing and composition after resize.
@@ -91,7 +121,7 @@ This deliberately uses primary colors; it does not establish precise color-trans
 or alternate-view correctness. Animated scenes use bounded smoke runs rather than
 brittle whole-image equality. Full-gallery completion does not prove every pixel.
 Packed verification executes npm's prepack build, checks tarball contents, installs
-into clean npm and Bun consumers and runs both runtimes' compute/presentation and
+into clean npm and Bun consumers and runs both runtimes' presentation and
 lifecycle checks.
 
 Linux X11/lavapipe/XTest evidence does not establish hardware GPU, high-DPI,
@@ -99,7 +129,24 @@ Wayland or other-platform behavior. Local `gh act` checks do not establish GitHu
 hosted permissions, cache isolation or artifact service behavior; hosted CI remains
 a separate validation step. See [release workflow local execution](github-releases.md#test-locally-with-the-github-cli-extension).
 
-## Local evidence for this change
+## Validation of the contract-focused gate
+
+On Linux x64/X11 with Mesa lavapipe and Bun 1.3.14, `bun run test:system`
+passed all native contracts and the Three, TypeGPU and webgpu-utils checks in
+both runtimes (the local Node shim selected Node 26.13.1). Lint, typecheck,
+all 59 script/core tests and the audited native build passed. A restored-window
+capture was inspected. Clean npm and Bun packed consumers passed using installed
+Node 26.7.0 and Bun 1.3.14, bypassing the local npm shim.
+
+The initial sandboxed Xvfb startup could not allocate a display. Outside the
+sandbox, the hardware driver lacked DRI3 presentation under Xvfb; explicitly
+selecting lavapipe passed. One concurrent private KWin startup failed readiness;
+the packed-consumer check passed when run separately with installed npm.
+No assertions were weakened. Hardware presentation, macOS and hosted workflow
+execution were not verified by this change. The existing forced-cleanup build
+gate is retained, but was not rerun for this orchestration/fixture change.
+
+## Historical validation evidence
 
 On Linux x64 with Node 26.7.0, Bun 1.3.14 and Mesa lavapipe, a fresh local
 CMake build passed the source audit. The full suite passed 51 tests (the prior
@@ -150,11 +197,11 @@ and independent disposal. Its screenshots are included in desktop diagnostics.
 The eight forced-cleanup cases also configure a sibling on the stalled device,
 assert its subsequent device-loss failure (or application disposal), and verify
 release of both contexts' references. Packed npm/Bun consumers render two windows
-and keep the second running after closing the first. The two-window example runs
-in both the representative and full gallery gates.
+and keep the second running after closing the first. The two-window example remains in the full gallery; native fixtures cover its
+contracts in the regular system gate.
 
 The lifecycle fixture in `native:verify --window-interactions` sends actual
 `WM_DELETE_WINDOW` messages and checks cancellation, retry, acceptance, native
 control/state transport, subscription failure/ordering, pause and multiwindow
-isolation in both runtimes. The `vanilla/window-lifecycle` consumer example is in
-the representative and full gallery selections. See [the lifecycle contract](window-lifecycle.md).
+isolation in both runtimes. The `vanilla/window-lifecycle` example remains in the full gallery; its contracts
+are exercised by the native lifecycle fixture in the regular system gate. See [the lifecycle contract](window-lifecycle.md).

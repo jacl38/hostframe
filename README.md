@@ -68,10 +68,9 @@ try {
 }
 ```
 
-The [headless render/readback check](packages/native/test/headless.ts) draws a
-triangle into an offscreen texture and checks its CPU pixels, including padded
-copy rows. `bun run native:verify` runs it in Node.js and Bun with display
-variables cleared.
+The [headless render/readback check](packages/native/test/headless.ts) clears an
+offscreen texture and checks its CPU pixel through the public GPU entry point.
+`bun run native:verify` runs it in Node.js and Bun with display variables cleared.
 
 `hostframe/globals` exports the WebGPU constants and constructors present in
 both the pinned Dawn binding and `@webgpu/types`. These are explicit imports;
