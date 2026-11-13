@@ -24,8 +24,10 @@ jobs:
       - name: Inspect operating system and graphics
         shell: pwsh
         run: |
-          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture
-          Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, Status
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture | Format-List
+          $adapters = @(Get-CimInstance Win32_VideoController)
+          Write-Output "Detected video controllers: $($adapters.Count)"
+          $adapters | Select-Object Name, DriverVersion, Status | Format-List
           cmake --version
           ninja --version
           node --version
