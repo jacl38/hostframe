@@ -31,9 +31,12 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
   if(cleanupOnly && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT !== "1") {
     throw new Error("--cleanup-timeouts-only requires HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 and a matching native build.");
   }
-  const threadCheck = process.platform === "darwin" ? "--thread-only" : "--no-display";
+  const threadCheck = process.platform === "linux" ? "--no-display" : "--thread-only";
+  function executable(name: string) {
+    return resolve(buildRoot, `cmake/${name}${process.platform === "win32" ? ".exe" : ""}`);
+  }
   const checks = cleanupOnly ? [] : [
-    [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
+    [executable("native_presentation_check"), "--modes-only"],
     ["node", resolve(root, "packages/native/test/globals.ts")],
     ["bun", resolve(root, "packages/native/test/globals.ts")],
     ["node", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
@@ -45,10 +48,10 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
   ];
   if(presentation && !cleanupOnly) {
     checks.push(
-      [resolve(buildRoot, "cmake/native_input_check")],
+      [executable("native_input_check")],
       ["node", resolve(root, "packages/native/test/key-labels.ts")],
       ["bun", resolve(root, "packages/native/test/key-labels.ts")],
-      [resolve(buildRoot, "cmake/native_presentation_check")],
+      [executable("native_presentation_check")],
       ["node", resolve(root, "packages/native/test/bindings.ts")],
       ["bun", resolve(root, "packages/native/test/bindings.ts")],
       ["node", resolve(root, "packages/native/test/context.ts")],

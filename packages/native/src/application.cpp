@@ -28,8 +28,12 @@ void RequireMainThread(Napi::Env env) {
 #elif defined(__linux__)
   const bool mainThread = syscall(SYS_gettid) == getpid();
 #else
-  // Windows support remains experimental until main-thread detection is implemented.
-  const bool mainThread = false;
+  Napi::Object process = env.Global().Get("process").As<Napi::Object>();
+  Napi::Function getBuiltinModule = process.Get("getBuiltinModule").As<Napi::Function>();
+  Napi::Object workers = getBuiltinModule.Call(process, {Napi::String::New(env, "node:worker_threads")}).As<Napi::Object>();
+  Napi::Value isMainThread = workers.Get("isMainThread");
+  if(!isMainThread.IsBoolean()) throw Napi::Error::New(env, "Could not determine application main thread");
+  const bool mainThread = isMainThread.As<Napi::Boolean>().Value();
 #endif
   if(!mainThread) {
     throw Napi::Error::New(env, "Native applications require the process main thread");
