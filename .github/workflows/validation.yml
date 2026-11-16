@@ -53,7 +53,7 @@ jobs:
           if errorlevel 1 exit /b 1
           call bun run typecheck
           if errorlevel 1 exit /b 1
-          call bun test scripts/native/native.test.ts scripts/native/input-constants.test.ts scripts/validation/process.test.ts packages/core/test
+          call bun test scripts packages/core/test
           if errorlevel 1 exit /b 1
           call node packages/native/test/globals.ts
           if errorlevel 1 exit /b 1

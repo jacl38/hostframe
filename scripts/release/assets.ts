@@ -4,6 +4,7 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import manifest from "../../package.json";
 import { getEngine, lock, root } from "../native/release.ts";
+import { requireWindowsDxcRevision, windowsDxc, windowsDxcHash } from "../native/dxc.ts";
 
 const directory = resolve(root, "build/release");
 const filename = `${manifest.name}-${manifest.version}-linux-x64.tgz`;
@@ -11,6 +12,7 @@ const tarball = resolve(directory, filename);
 
 async function prepare() {
   if(process.platform === "darwin" && process.arch === "arm64") return prepareMac();
+  if(process.platform === "win32" && process.arch === "x64") return prepareWindows();
   const tag = releaseTag(manifest.version, process.env.GITHUB_REF);
   if(process.platform !== "linux" || process.arch !== "x64") throw new Error("Release assets require Linux x64.");
   const packed = resolve(root, `build/package/${manifest.name}-${manifest.version}.tgz`);
@@ -59,6 +61,78 @@ This is a GitHub Releases distribution; no package has been published to the npm
 If macOS arm64 assets are attached, see the accompanying macos-arm64-notes.md and SHA256SUMS-darwin-arm64.
 `);
   console.log(`Release assets prepared in ${directory}`);
+}
+
+async function prepareWindows() {
+  await requireWindowsDxcRevision();
+  const tag = releaseTag(manifest.version, process.env.GITHUB_REF);
+  const packed = resolve(root, `build/package/${manifest.name}-${manifest.version}.tgz`);
+  const metadata = JSON.parse(await $`tar -xOf ${packed} package/package.json`.text());
+  if(metadata.name !== manifest.name || metadata.version !== manifest.version || metadata.license !== manifest.license ||
+    JSON.stringify(metadata.os) !== JSON.stringify(["win32"]) || JSON.stringify(metadata.cpu) !== JSON.stringify(["x64"]) || metadata.libc) {
+    throw new Error("Packed Windows metadata does not match the release. Run package:verify first.");
+  }
+  const contents = (await $`tar -tzf ${packed}`.text()).trim().split(/\r?\n/);
+  for(const file of ["hostframe.node", "dxcompiler.dll", "DXC-LICENSE.txt", "DXC-DirectX-Headers-LICENSE.txt"]) {
+    if(!contents.includes(`package/dist/${file}`)) throw new Error(`Windows package is missing ${file}.`);
+  }
+  const dxcHash = await windowsDxcHash();
+  for(const file of ["hostframe.node", "dxcompiler.dll"]) {
+    const child = Bun.spawn(["tar", "-xOf", packed, `package/dist/${file}`], { stdout: "pipe", stderr: "inherit", timeout: 30_000 });
+    const bytes = new Uint8Array(await new Response(child.stdout).arrayBuffer());
+    if(await child.exited !== 0) throw new Error(`Unable to extract ${file} from Windows package.`);
+    if(peMachine(bytes) !== 0x8664) throw new Error(`Windows package ${file} is not x64.`);
+    if(file === "dxcompiler.dll" && sha256(bytes) !== dxcHash) {
+      throw new Error(`Windows package ${file} does not match the verified DXC build.`);
+    }
+  }
+  const output = resolve(root, "build/release-windows");
+  const name = `${manifest.name}-${manifest.version}-win32-x64.tgz`;
+  const bytes = new Uint8Array(await Bun.file(packed).arrayBuffer());
+  const proofFile = Bun.file(resolve(root, "build/package/windows-verified.json"));
+  if(!await proofFile.exists()) throw new Error("Windows package needs full consumer verification. Run package:verify.");
+  const proof = await proofFile.json();
+  assertWindowsPackageProof(proof, sha256(bytes));
+  await rm(output, { recursive: true, force: true });
+  await mkdir(output, { recursive: true });
+  await copyFile(packed, resolve(output, name));
+  await Bun.write(resolve(output, "SHA256SUMS-win32-x64"), `${sha256(bytes)}  ${name}\n`);
+  const repository = manifest.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+  await Bun.write(resolve(output, "windows-x64-notes.md"), `# Windows x64 package
+
+Install from ${repository}/releases/download/${tag}/${name} after verifying SHA256SUMS-win32-x64.
+
+Built and verified on Windows x64 with Node.js ${proof.nodeVersion} and Bun ${proof.bunVersion}. A compatible D3D12 GPU and driver and Microsoft C++ runtime are required; other systems and GPUs are not established by this build.
+
+Dawn ${lock.release}, revision ${lock.revision}; engine archive SHA-256 ${getEngine().sha256}.
+DirectX Shader Compiler source ${windowsDxc.url}, revision ${windowsDxc.revision}, DLL SHA-256 ${dxcHash}. The package contains the upstream license files.
+`);
+  console.log(`Windows release assets prepared in ${output}`);
+}
+
+export function assertWindowsPackageProof(proof: unknown, digest: string): asserts proof is { sha256: string, nodeVersion: string, bunVersion: string } {
+  if(typeof proof !== "object" || proof === null || Reflect.get(proof, "sha256") !== digest ||
+      typeof Reflect.get(proof, "nodeVersion") !== "string" || typeof Reflect.get(proof, "bunVersion") !== "string") {
+    throw new Error("Windows package differs from the fully verified tarball. Run package:verify.");
+  }
+}
+
+async function attachWindows() {
+  const { tag, repository } = assertDraftEnvironment(manifest.version, process.env);
+  const output = resolve(directory, "windows");
+  const name = `${manifest.name}-${manifest.version}-win32-x64.tgz`;
+  const packed = resolve(output, name);
+  const checksum = resolve(output, "SHA256SUMS-win32-x64");
+  const notes = resolve(output, "windows-x64-notes.md");
+  const expected = `${sha256(new Uint8Array(await Bun.file(packed).arrayBuffer()))}  ${name}\n`;
+  if(await Bun.file(checksum).text() !== expected) throw new Error("Windows release checksum mismatch.");
+  if(!await Bun.file(notes).exists()) throw new Error("Windows release notes are missing.");
+  if(!(await Bun.file(notes).text()).includes(`revision ${windowsDxc.revision}, DLL SHA-256 `)) {
+    throw new Error("Windows release notes do not identify the pinned DXC revision.");
+  }
+  const draftState = (await $`gh release view ${tag} --repo ${repository} --json isDraft --jq .isDraft`.text()).trim();
+  if(draftState !== "true") throw new Error("Windows assets require an existing draft release.");
+  await $`gh release upload ${tag} ${packed} ${checksum} ${notes} --repo ${repository}`.cwd(root);
 }
 
 async function prepareMac() {
@@ -123,7 +197,7 @@ async function draft() {
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
-  if(rest.length > 0) throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft|attach-macos>");
+  if(rest.length > 0) throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft|attach-macos|attach-windows>");
   switch(command) {
     case "check-tag":
       console.log(`Release version: ${releaseTag(manifest.version, process.env.GITHUB_REF)}`);
@@ -137,8 +211,11 @@ async function main() {
     case "attach-macos":
       await attachMac();
       break;
+    case "attach-windows":
+      await attachWindows();
+      break;
     default:
-      throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft|attach-macos>");
+      throw new Error("Usage: bun scripts/release/assets.ts <check-tag|prepare|draft|attach-macos|attach-windows>");
   }
 }
 
@@ -185,4 +262,13 @@ export function symbolRequirements(symbols: string) {
 
 export function sha256(bytes: Uint8Array) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+/** Return the PE machine type only after validating the DOS and PE headers. */
+export function peMachine(bytes: Uint8Array) {
+  if(bytes.length < 64 || bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error("Invalid PE executable.");
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const offset = view.getUint32(0x3c, true);
+  if(offset > bytes.length - 6 || view.getUint32(offset, true) !== 0x00004550) throw new Error("Invalid PE header.");
+  return view.getUint16(offset + 4, true);
 }

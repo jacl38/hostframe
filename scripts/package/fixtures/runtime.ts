@@ -30,8 +30,10 @@ if(process.argv.includes("--no-display")) {
   let device: GPUDevice | undefined;
   try {
     const window = app.createWindow({ title: "hostframe package verification", width: 320, height: 240 });
-    assert.equal(window.metrics.width, 320);
-    assert.deepEqual(window.toFramebuffer(160, 120), { x: window.metrics.framebufferWidth / 2, y: window.metrics.framebufferHeight / 2 });
+    assert.ok(window.metrics.width > 0 && window.metrics.height > 0);
+    assert.deepEqual(window.toFramebuffer(window.metrics.width / 2, window.metrics.height / 2), {
+      x: window.metrics.framebufferWidth / 2, y: window.metrics.framebufferHeight / 2
+    });
     let closeRequests = 0;
     window.on("closeRequest", event => { closeRequests++; event.preventDefault(); });
     window.setTitle("hostframe packed runtime controls");

@@ -8,15 +8,17 @@ The current package is an alpha for Linux x64 with glibc, X11, and Vulkan, and
 macOS arm64 with Metal. Linux requires compatible system graphics libraries and
 a Vulkan driver. See the [Linux requirements](docs/packaging.md#consumer-requirements)
 and [macOS packaging notes](docs/macos-packaging.md) for details.
-An experimental Windows x64 source build is described in the
-[native build guide](docs/native-build.md); Windows packages are not yet available.
+An experimental Windows x64 source build and package are described in the
+[native build guide](docs/native-build.md) and [Windows packaging guide](docs/windows-packaging.md).
+Windows release assets have not yet been published.
 
 ## Installation
 
 Hostframe is not yet published on npm. Install a tarball from
 [GitHub Releases](docs/github-releases.md#install-a-published-release), or build
-one using the [Linux](docs/packaging.md#build-and-pack) or
-[macOS](docs/macos-packaging.md) packaging guide. Choose the asset matching your
+one using the [Linux](docs/packaging.md#build-and-pack),
+[macOS](docs/macos-packaging.md), or [Windows](docs/windows-packaging.md)
+packaging guide. Choose the asset matching your
 platform.
 
 ## Render a window

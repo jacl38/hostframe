@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { copyFile, cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -17,7 +18,9 @@ async function main() {
   const headless = args.includes("--headless");
   const output = resolve(root, "build/package");
   await mkdir(output, { recursive: true });
-  if(process.platform === "darwin" && process.arch === "arm64") {
+  const windowsProof = resolve(output, "windows-verified.json");
+  if(process.platform === "win32") await rm(windowsProof, { force: true });
+  if((process.platform === "darwin" && process.arch === "arm64") || (process.platform === "win32" && process.arch === "x64")) {
     // A native addon cannot share the root package's Linux-only metadata.
     const staging = await mkdtemp(resolve(tmpdir(), "hostframe-package-"));
     try {
@@ -25,7 +28,7 @@ async function main() {
       for(const path of ["dist", "docs", "README.md", "LICENSE"]) {
         await cp(resolve(root, path), resolve(staging, path), { recursive: true });
       }
-      const metadata = { ...manifest, os: ["darwin"], cpu: ["arm64"] };
+      const metadata = { ...manifest, os: [process.platform], cpu: [process.arch] };
       Reflect.deleteProperty(metadata, "libc");
       await Bun.write(resolve(staging, "package.json"), JSON.stringify(metadata, null, 2));
       await run(["npm", "pack", "--ignore-scripts", "--pack-destination", output], staging, process.env, 300_000);
@@ -40,9 +43,14 @@ async function main() {
   const listing = Bun.spawn(["tar", "-tzf", tarball], { stdout: "pipe", stderr: "inherit", timeout: 10_000 });
   const contents = await new Response(listing.stdout).text();
   assert.equal(await listing.exited, 0, "Unable to list packed consumer tarball");
-  const files = contents.trim().split("\n");
+  const files = contents.trim().split(/\r?\n/);
   for(const required of ["LICENSE", "dist/index.js", "dist/index.d.ts", "dist/globals.js", "dist/globals.d.ts", "dist/hostframe.node", "dist/THIRD_PARTY_NOTICES.txt"]) {
     assert.ok(files.includes(`package/${required}`), `Missing ${required} in tarball`);
+  }
+  if(process.platform === "win32") {
+    for(const required of ["dxcompiler.dll", "DXC-LICENSE.txt", "DXC-DirectX-Headers-LICENSE.txt"]) {
+      assert.ok(files.includes(`package/dist/${required}`), `Missing ${required} in tarball`);
+    }
   }
   for(const file of files) {
     assert.match(file, /^package\/(?:dist\/|docs\/|package\.json$|README\.md$|LICENSE$)/);
@@ -54,10 +62,11 @@ async function main() {
     for(const manager of ["npm", "bun"]) {
       const directory = resolve(temporary, manager);
       await mkdir(directory);
+      await copyFile(tarball, resolve(directory, "hostframe.tgz"));
       await Bun.write(resolve(directory, "package.json"), JSON.stringify({
         private: true,
         type: "module",
-        dependencies: { hostframe: `file:${tarball}` }
+        dependencies: { hostframe: "file:./hostframe.tgz" }
       }));
       if(manager === "npm") await run(["npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"], directory);
       else await run(["bun", "install", "--ignore-scripts"], directory);
@@ -91,6 +100,13 @@ async function main() {
     }
   } finally {
     await rm(temporary, { recursive: true, force: true });
+  }
+  if(process.platform === "win32" && !headless) {
+    const node = Bun.spawn(["node", "--version"], { stdout: "pipe", stderr: "inherit" });
+    const nodeVersion = (await new Response(node.stdout).text()).trim();
+    if(await node.exited !== 0) throw new Error("Unable to determine Node.js version.");
+    const sha256 = createHash("sha256").update(new Uint8Array(await Bun.file(tarball).arrayBuffer())).digest("hex");
+    await Bun.write(windowsProof, JSON.stringify({ sha256, nodeVersion, bunVersion: Bun.version }) + "\n");
   }
   console.log(`Verified packed package in npm and Bun consumers: ${tarball}`);
 }

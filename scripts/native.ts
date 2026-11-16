@@ -5,6 +5,7 @@ import { buildNative, checkBuild, checkPrerequisites } from "./native/build";
 import { prepareDependencies } from "./native/dependencies";
 import { generateBindings } from "./native/generate";
 import { buildRoot, root } from "./native/release";
+import { buildWindowsDxc } from "./native/dxc";
 
 export async function withBuildLock(action: () => Promise<void>) {
   await mkdir(buildRoot, { recursive: true });
@@ -87,6 +88,8 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
   }
   if(interactions && process.platform === "win32") {
     checks.push(
+      ["node", resolve(root, "packages/native/test/windows-thread-performance.ts")],
+      ["bun", resolve(root, "packages/native/test/windows-thread-performance.ts")],
       ["node", resolve(root, "packages/native/test/windows-interactions.ts")],
       ["bun", resolve(root, "packages/native/test/windows-interactions.ts")]
     );
@@ -131,16 +134,17 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
 
 async function main() {
   const [command, ...flags] = process.argv.slice(2);
-  const usage = "Usage: bun scripts/native.ts <setup|build|check-build|verify> [--presentation] [--window-interactions] [--cleanup-timeouts-only]";
+  const usage = "Usage: bun scripts/native.ts <setup|build|dxc|check-build|verify> [--presentation] [--window-interactions] [--cleanup-timeouts-only]";
   if(command === "--help") {
     console.log(usage);
     return;
   }
-  if(!command || !["setup", "build", "check-build", "verify"].includes(command) || flags.some(flag => command !== "verify" || !["--presentation", "--window-interactions", "--cleanup-timeouts-only"].includes(flag)) || (flags.includes("--cleanup-timeouts-only") && flags.length !== 1)) {
+  if(!command || !["setup", "build", "dxc", "check-build", "verify"].includes(command) || flags.some(flag => command !== "verify" || !["--presentation", "--window-interactions", "--cleanup-timeouts-only"].includes(flag)) || (flags.includes("--cleanup-timeouts-only") && flags.length !== 1)) {
     throw new Error(usage);
   }
   if(command === "verify") return verify(flags.includes("--presentation") || flags.includes("--window-interactions"), flags.includes("--window-interactions"), flags.includes("--cleanup-timeouts-only"));
   if(command === "check-build") return checkBuild();
+  if(command === "dxc") return withBuildLock(buildWindowsDxc);
   checkPrerequisites(command === "setup");
   await withBuildLock(async () => {
     if(command === "setup") {

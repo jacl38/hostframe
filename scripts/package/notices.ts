@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { dawnRoot, getEngine, lock, root } from "../native/release.ts";
+import { windowsDxc } from "../native/dxc.ts";
 
 /** Notices for redistributed native code, including dependencies in the pinned engine. */
 export async function writeNotices() {
@@ -18,6 +19,9 @@ export async function writeNotices() {
     ["nobind17 (adapted for synchronous Bun compatibility)", resolve(root, "node_modules/nobind17/LICENSE")]
   ];
   let notices = `hostframe native third-party notices\n\nDawn release: ${lock.release}\nDawn revision: ${lock.revision}\nEngine archive SHA-256: ${getEngine().sha256}\n`;
+  if(process.platform === "win32") {
+    notices += `\nDirectX Shader Compiler source: ${windowsDxc.url}\nRevision: ${windowsDxc.revision}\nSee the accompanying DXC license files for the upstream terms.\n`;
+  }
   for(const [name, path] of licenses) {
     notices += `\n${"=".repeat(72)}\n${name}\n${"=".repeat(72)}\n\n${await Bun.file(path).text()}\n`;
   }

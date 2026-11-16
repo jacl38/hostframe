@@ -6,8 +6,9 @@ Python, Node.js, and Bun. Run setup from an x64 Visual Studio developer
 environment with `CC=clang` and `CXX=clang++`. Setup downloads the pinned
 Dawn library and the Node import library; the build copies DXC runtime DLLs
 from the selected Windows SDK beside the addon. These files are required for
-D3D12 device creation. Windows package distribution is not yet supported.
-On Windows x64 with an Intel Arc 140V and driver 32.0.101.5737, local
+D3D12 device creation. See [Windows packaging](windows-packaging.md) for
+building a package with the pinned DXC source.
+On Windows x64 with an Intel Arc 140V and driver 32.0.101.5737,
 the native build and `native:verify --presentation` passed with Node.js
 22.18.0 and 26.1.0 and Bun 1.4.4. The Windows interaction suite passed on
 this desktop with Node.js 22.18.0 and 26.1.0 and Bun 1.4.4, including keyboard, Unicode,
@@ -94,7 +95,12 @@ bun run native:verify --window-interactions
   and uncapped rendering in both runtimes, checks fixed `dt`, option validation,
   selected modes, and recovery from abandoned frames. Unsupported vsync-off
   requests must fail explicitly and permit a FIFO retry.
-- `native:verify --window-interactions` (Linux only): includes `--presentation` and additionally
+- `native:verify --window-interactions` on Windows requires an unlocked
+  interactive desktop. It includes `--presentation` and exercises real Win32
+  keyboard, Unicode, pointer, focus, resize, minimize, restore and close events
+  in Node.js and Bun. It temporarily moves and restores the pointer, and checks
+  repeated native event polls for the former thread-snapshot performance regression.
+- `native:verify --window-interactions` on Linux includes `--presentation` and additionally
   runs `packages/native/test/resize.ts` in Node.js and Bun. Requires an EWMH X11
   window manager (such as KWin), `xdotool`, and `xprop`. It checks default and
   custom titles/sizes/resizability, repeated large/small framebuffer transitions,
