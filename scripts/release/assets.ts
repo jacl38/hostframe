@@ -101,7 +101,7 @@ async function prepareWindows() {
 
 Install from ${repository}/releases/download/${tag}/${name} after verifying SHA256SUMS-win32-x64.
 
-Built and verified on Windows x64 with Node.js ${proof.nodeVersion} and Bun ${proof.bunVersion}. A compatible D3D12 GPU and driver and Microsoft C++ runtime are required; other systems and GPUs are not established by this build.
+Built and verified on Windows x64 with Node.js ${proof.nodeVersion} and Bun ${proof.bunVersion}. Hosted CI uses Microsoft Basic Render Driver; physical GPU compatibility requires separate validation. A compatible D3D12 GPU and driver and Microsoft C++ runtime are required.
 
 Dawn ${lock.release}, revision ${lock.revision}; engine archive SHA-256 ${getEngine().sha256}.
 DirectX Shader Compiler ${windowsDxc.version}, ${windowsDxc.url}, revision ${windowsDxc.revision}, DLL SHA-256 ${dxcHash}. The package contains the upstream license files.

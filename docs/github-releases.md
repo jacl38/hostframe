@@ -1,8 +1,8 @@
 # GitHub Releases distribution
 
-The workflow in `.github/workflows/release.yml` builds the Linux x64 package
-in a pinned Fedora 44 CI container image and the macOS arm64 package on a
-GitHub-hosted macOS runner. It uses pinned Node.js 26.7.0, Bun 1.3.14, and
+The workflow in `.github/workflows/release.yml` builds Linux x64 in a pinned
+Fedora 44 CI container and macOS arm64 and Windows x64 on GitHub-hosted
+runners. It uses pinned Node.js 26.7.0, Bun 1.3.14, and
 Go 1.26.10 versions, a frozen Bun lockfile, and the pinned Dawn inputs.
 Actions are pinned to commit hashes. Fedora system packages receive updates;
 this establishes a build environment, not bit-for-bit reproducibility or
@@ -14,9 +14,9 @@ compatibility with older Linux distributions.
   artifacts. It does not create a release.
 - Pushing a **`v*` tag** runs the same checks, then creates a **draft** GitHub
   release. The tag must exactly match `v` plus `package.json`'s version.
-- Once the macOS job passes, its tarball, checksum, and notes are attached to
-  the draft. The Linux draft can exist before macOS verification completes;
-  check that all expected assets are present before publishing.
+- The draft is created after all three platform builds pass. The macOS and
+  Windows tarballs, checksums, and notes are then attached to it. Check that
+  all expected assets have been attached before publishing.
 - Versions containing a prerelease suffix are marked as prereleases.
 - The draft remains unpublished until a maintainer publishes it on GitHub.
   No npm registry publication occurs.
@@ -43,8 +43,8 @@ actual GLIBC and GLIBCXX symbol requirements, the verified runtimes, and the
 pinned Dawn revision. The tarball and checksums become downloadable release
 assets; `release-notes.md` supplies the release description.
 
-The build job has read-only repository permissions. Only the draft-release
-job receives `contents: write`. Draft creation checks the downloaded tarball
+The build jobs have read-only repository permissions. The draft-release and
+asset-attachment jobs receive `contents: write`. Draft creation checks the downloaded tarball
 against `SHA256SUMS`, requires a matching tag-push event, and refuses to run
 under `act`. It uses the workflow's `GITHUB_TOKEN`; no npm token or personal
 access token is needed. An existing release is not overwritten: rerunning

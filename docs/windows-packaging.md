@@ -20,14 +20,14 @@ revision; the combination has been tested on the Windows system described in
 [native build](native-build.md). No DXC source compilation is needed.
 
 `package:verify` stages Windows package metadata, packs the addon and DXC,
-and exercises fresh npm and Bun consumers with Node and Bun. Full verification
-requires an interactive desktop. The hosted CI job runs the headless checks.
+and exercises fresh npm and Bun consumers with Node and Bun, including window
+presentation. The Windows release job runs these checks on a GitHub-hosted
+runner using Microsoft Basic Render Driver; physical GPU testing is separate.
 
 `release:prepare` requires a full `package:verify` run for the same tarball;
 it writes a Windows-named tarball, checksum and release notes under
-`build/release-windows`. To attach these to an existing draft, copy them to
-`build/release/windows` and run `bun scripts/release/assets.ts attach-windows`
-in the tagged release environment. This does not publish the draft.
+`build/release-windows`. On a matching tag push, the release workflow attaches
+the verified assets to the draft. The draft still requires manual publication.
 
 The package requires a compatible D3D12 GPU and driver and the Microsoft C++
 runtime. Only the systems and runtimes actually tested in the release notes

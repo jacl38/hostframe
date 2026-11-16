@@ -111,7 +111,7 @@ jobs:
 
   draft-release:
     name: Create draft GitHub release
-    needs: build
+    needs: [build, macos, windows]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -179,6 +179,78 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+  windows:
+    name: Build and verify Windows x64
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 30
+    steps:
+      - name: Keep source line endings consistent
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "26.7.0"
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+          no-cache: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.10"
+          cache: false
+      - run: bun run release:check
+      - run: bun install --frozen-lockfile
+      - name: Build and verify Windows package
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          set CC=clang
+          set CXX=clang++
+          call bun run setup
+          if errorlevel 1 exit /b 1
+          call bun run package:verify
+          if errorlevel 1 exit /b 1
+          call bun run release:prepare
+          if errorlevel 1 exit /b 1
+      - name: Upload verified Windows assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hostframe-win32-x64
+          path: build/release-windows/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+  attach-windows:
+    name: Attach verified Windows assets to draft
+    needs: [windows, draft-release]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+          no-cache: true
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: hostframe-win32-x64
+          path: build/release/windows/
+      - name: Attach checksum-verified assets
+        if: ${{ !env.ACT }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun scripts/release/assets.ts attach-windows
 
   attach-macos:
     name: Attach verified macOS assets to draft
