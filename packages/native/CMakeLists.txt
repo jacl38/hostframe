@@ -94,6 +94,11 @@ elseif(NOT WIN32)
 endif()
 if(WIN32)
   target_compile_options(hostframe PRIVATE -Xclang -fms-memptr-rep=virtual)
+  # Resolve Node-API against the hosting executable (Node or Bun), without
+  # requiring a separate node.exe on the DLL search path.
+  target_sources(hostframe PRIVATE src/windows_delay_load.cpp)
+  target_link_options(hostframe PRIVATE "LINKER:/DELAYLOAD:node.exe")
+  target_link_libraries(hostframe PRIVATE delayimp)
   set(HOSTFRAME_NODE_LIBRARY "" CACHE FILEPATH "Node import library")
   if(NOT EXISTS "${HOSTFRAME_NODE_LIBRARY}")
     message(FATAL_ERROR "Set HOSTFRAME_NODE_LIBRARY to node.lib.")
