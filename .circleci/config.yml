@@ -1,0 +1,128 @@
+version: 2.1
+
+jobs:
+  macos-validation:
+    macos:
+      xcode: "26.6"
+    resource_class: m4pro.medium
+    environment:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
+    steps:
+      - checkout
+      - run:
+          name: Install pinned runtimes and build tools
+          command: |
+            set -euo pipefail
+            mkdir -p "$HOME/.local"
+            curl -fsSL https://nodejs.org/dist/v26.7.0/node-v26.7.0-darwin-arm64.tar.gz | tar -xz -C "$HOME/.local"
+            curl -fsSL https://go.dev/dl/go1.26.10.darwin-arm64.tar.gz | tar -xz -C "$HOME/.local"
+            curl -fsSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-aarch64.zip -o /tmp/bun.zip
+            unzip -qo /tmp/bun.zip -d "$HOME/.local"
+            echo 'export PATH="$HOME/.local/node-v26.7.0-darwin-arm64/bin:$HOME/.local/go/bin:$HOME/.local/bun-darwin-aarch64:$PATH"' >> "$BASH_ENV"
+            brew list cmake >/dev/null 2>&1 || brew install cmake
+            brew list ninja >/dev/null 2>&1 || brew install ninja
+      - run: bun install --frozen-lockfile
+      - run: bun run setup
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run native:verify --presentation
+      - run: bun run package:verify
+      - run: bun run release:prepare
+
+  windows-validation:
+    machine:
+      image: windows-server-2022-gui:current
+    resource_class: windows.medium
+    shell: powershell.exe -ExecutionPolicy Bypass
+    steps:
+      - run: git config --global core.autocrlf false
+      - checkout
+      - run:
+          name: Install pinned runtimes
+          command: |
+            $ErrorActionPreference = "Stop"
+            $ProgressPreference = "SilentlyContinue"
+            New-Item -ItemType Directory -Force C:\ci-tools | Out-Null
+            Invoke-WebRequest https://nodejs.org/dist/v26.7.0/node-v26.7.0-win-x64.zip -OutFile C:\ci-tools\node.zip
+            Expand-Archive C:\ci-tools\node.zip C:\ci-tools -Force
+            Invoke-WebRequest https://go.dev/dl/go1.26.10.windows-amd64.zip -OutFile C:\ci-tools\go.zip
+            Expand-Archive C:\ci-tools\go.zip C:\ci-tools -Force
+            Invoke-WebRequest https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64.zip -OutFile C:\ci-tools\bun.zip
+            Expand-Archive C:\ci-tools\bun.zip C:\ci-tools -Force
+            choco install llvm --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - run:
+          name: Build and check Windows
+          command: |
+            $ErrorActionPreference = "Stop"
+            $env:PATH = "C:\Program Files\LLVM\bin;C:\ci-tools\node-v26.7.0-win-x64;C:\ci-tools\go\bin;C:\ci-tools\bun-windows-x64;$env:PATH"
+            bun install --frozen-lockfile
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+            $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if (-not $vs) { throw "Visual Studio C++ tools not found" }
+            $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
+            cmd /c "`"$vcvars`" && set CC=clang && set CXX=clang++ && bun run setup && bun run typecheck && bun run test && node packages/native/test/globals.ts && bun packages/native/test/globals.ts && build\native\cmake\native_presentation_check.exe --modes-only && bun scripts/package/verify.ts --headless"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  linux-validation:
+    docker:
+      - image: fedora:44
+    resource_class: medium
+    environment:
+      HOSTFRAME_JOBS: "2"
+      HOSTFRAME_X11_WM: openbox
+      VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+    steps:
+      - run:
+          name: Install build prerequisites
+          command: |
+            dnf install -y --setopt=install_weak_deps=False \
+              bash binutils ca-certificates curl git gzip tar unzip xz nodejs \
+              gcc gcc-c++ ccache cmake ninja-build python3 pkgconf-pkg-config \
+              libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel \
+              libXi-devel libXext-devel libXfixes-devel vulkan-loader mesa-vulkan-drivers \
+              xorg-x11-server-Xvfb xorg-x11-xauth openbox xdotool xprop setxkbmap \
+              xkeyboard-config ImageMagick dbus-daemon
+      - checkout
+      - run:
+          name: Install pinned runtimes
+          command: |
+            set -euo pipefail
+            mkdir -p "$HOME/.local"
+            curl -fsSL https://nodejs.org/dist/v26.7.0/node-v26.7.0-linux-x64.tar.xz | tar -xJ -C "$HOME/.local"
+            curl -fsSL https://go.dev/dl/go1.26.10.linux-amd64.tar.gz | tar -xz -C "$HOME/.local"
+            curl -fsSL https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip -o /tmp/bun.zip
+            unzip -qo /tmp/bun.zip -d "$HOME/.local"
+            echo 'export PATH="$HOME/.local/node-v26.7.0-linux-x64/bin:$HOME/.local/go/bin:$HOME/.local/bun-linux-x64:$PATH"' >> "$BASH_ENV"
+      - restore_cache:
+          keys:
+            - native-archives-v1-{{ checksum "scripts/native/dawn.lock.json" }}
+      - run: bun install --frozen-lockfile
+      - run: bun run setup
+      - save_cache:
+          key: native-archives-v1-{{ checksum "scripts/native/dawn.lock.json" }}
+          paths:
+            - build/native/downloads
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun scripts/validation/desktop-check.ts
+      - run: bun run test:system
+      - run: bun scripts/validation/desktop.ts bun scripts/package/verify.ts
+      - run:
+          name: Verify forced cleanup timeouts
+          command: |
+            HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun run native:build
+            HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 bun scripts/validation/desktop.ts bun scripts/native.ts verify --cleanup-timeouts-only
+      - store_artifacts:
+          path: build/validation
+          destination: validation
+
+workflows:
+  validation:
+    jobs:
+      - linux-validation
+      - macos-validation
+      - windows-validation
