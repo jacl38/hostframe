@@ -15,6 +15,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows:
+    needs: checks
+    if: needs.checks.outputs.integration == 'true'
+    name: Build and check Windows x64 source
+    # The hosted runner does not establish physical GPU or desktop input coverage.
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 60
+    steps:
+      - name: Keep source line endings consistent
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "26.7.0"
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.3.14"
+          no-cache: true
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: "1.26.10"
+          cache: false
+      - name: Install locked dependencies
+        run: bun install --frozen-lockfile
+      - name: Build and check without a desktop
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          set CC=clang
+          set CXX=clang++
+          call bun run setup
+          if errorlevel 1 exit /b 1
+          call bun run typecheck
+          if errorlevel 1 exit /b 1
+          call bun test scripts/native/native.test.ts scripts/native/input-constants.test.ts scripts/validation/process.test.ts packages/core/test
+          if errorlevel 1 exit /b 1
+          call node packages/native/test/globals.ts
+          if errorlevel 1 exit /b 1
+          call bun packages/native/test/globals.ts
+          if errorlevel 1 exit /b 1
+          call build\native\cmake\native_presentation_check.exe --modes-only
+          if errorlevel 1 exit /b 1
+
   macos:
     needs: checks
     if: needs.checks.outputs.integration == 'true'

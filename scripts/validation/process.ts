@@ -3,6 +3,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 
 export function stopProcessGroup(pid: number, signal: NodeJS.Signals = "SIGKILL") {
+  if(process.platform === "win32") throw new Error("POSIX process-group validation is not supported on Windows.");
   if(!Number.isSafeInteger(pid) || pid <= 1) throw new Error("Invalid validation process group");
   try { process.kill(-pid, signal); } catch (error) {
     if((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
@@ -16,6 +17,7 @@ export function startProcess(argv: string[], options: {
   stdout?: "inherit" | ReturnType<typeof Bun.file>,
   stderr?: "inherit" | ReturnType<typeof Bun.file>
 } = {}) {
+  if(process.platform === "win32") throw new Error("POSIX process-group validation is not supported on Windows.");
   const child = Bun.spawn(argv, {
     ...options, stdin: "ignore", stdout: options.stdout ?? "inherit",
     stderr: options.stderr ?? "inherit", detached: true

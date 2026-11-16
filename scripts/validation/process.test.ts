@@ -2,9 +2,9 @@ import { test, expect } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runProcess } from "./process.ts";
+import { runProcess, startProcess, stopProcessGroup } from "./process.ts";
 
-test("failures preserve both output streams and identify exit status", async () => {
+test.skipIf(process.platform === "win32")("failures preserve both output streams and identify exit status", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hostframe-process-"));
   try {
     const prefix = join(directory, "failure");
@@ -14,14 +14,14 @@ test("failures preserve both output streams and identify exit status", async () 
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("timeouts report failure", async () => {
+test.skipIf(process.platform === "win32")("timeouts report failure", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hostframe-process-"));
   try {
     await expect(runProcess([process.execPath, "-e", "setInterval(() => {}, 1000);"], { prefix: join(directory, "timeout"), timeout: 100 })).rejects.toThrow("timeout true");
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("cancellation kills ready descendants that ignore SIGTERM", async () => {
+test.skipIf(process.platform === "win32")("cancellation kills ready descendants that ignore SIGTERM", async () => {
   const directory = await mkdtemp(join(tmpdir(), "hostframe-process-"));
   let wrapper: ReturnType<typeof Bun.spawn> | undefined;
   try {
@@ -52,4 +52,9 @@ test("cancellation kills ready descendants that ignore SIGTERM", async () => {
     wrapper?.kill("SIGKILL");
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test.skipIf(process.platform !== "win32")("POSIX process-group helpers reject Windows before starting a child", () => {
+  expect(() => startProcess([process.execPath, "-e", "process.exit(0)"])).toThrow("not supported on Windows");
+  expect(() => stopProcessGroup(process.pid)).toThrow("not supported on Windows");
 });
