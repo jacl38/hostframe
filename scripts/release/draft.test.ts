@@ -39,6 +39,12 @@ test("release CLI guards draft creation and macOS attachment with checksums", as
       }
     }
     await writeGh();
+    // Use the fixture explicitly: Windows can resolve a real gh.exe ahead of
+    // a PATH-injected gh.cmd, even when the fixture directory comes first.
+    const fixtureAssets = resolve(directory, "scripts/release/assets.ts");
+    const originalAssets = await Bun.file(fixtureAssets).text();
+    expect(originalAssets.match(/gh release/g)).toHaveLength(5);
+    await Bun.write(fixtureAssets, "const gh = process.env.HOSTFRAME_TEST_GH!;\n" + originalAssets.replaceAll("gh release", "${gh} release"));
     const env = {
       ...process.env,
       PATH: `${directory}${delimiter}${process.env.PATH}`,
@@ -52,7 +58,8 @@ test("release CLI guards draft creation and macOS attachment with checksums", as
       GITHUB_EVENT_NAME: "push",
       GITHUB_REF: "refs/tags/v1.2.3-alpha.1",
       GITHUB_REPOSITORY: "example/repo",
-      HOSTFRAME_TEST_GH_ARGS: capture
+      HOSTFRAME_TEST_GH_ARGS: capture,
+      HOSTFRAME_TEST_GH: gh
     };
     async function invoke() {
       const child = Bun.spawn([process.execPath, "scripts/release/assets.ts", "draft"], {
