@@ -1,7 +1,30 @@
 # Native build
 
-Setup supports **Linux x64 with GLFW/X11 and Vulkan** and **macOS arm64
-with GLFW/Cocoa and Metal**. Other platforms
+Windows x64 support is in development. A local build requires Visual Studio
+Build Tools 2026 with the C++ workload and Windows SDK, Clang, Ninja, Go,
+Python, Node.js, and Bun. Run setup from an x64 Visual Studio developer
+environment with `CC=clang` and `CXX=clang++`. Setup downloads the pinned
+Dawn library and the Node import library; the build copies DXC runtime DLLs
+from the selected Windows SDK beside the addon. These files are required for
+D3D12 device creation. Windows package distribution is not yet supported.
+On Windows x64 with an Intel Arc 140V and driver 32.0.101.5737, local
+the native build and `native:verify --presentation` passed with Node.js
+26.1.0 and Bun 1.4.4. Real input interactions and other Windows GPUs remain
+unverified.
+For example, in an x64 Native Tools Command Prompt with the other tools on
+PATH, run:
+
+```bat
+set CC=clang
+set CXX=clang++
+bun install
+bun run setup
+bun run native:verify --presentation
+```
+
+Setup supports **Linux x64 with GLFW/X11 and Vulkan**, **macOS arm64
+with GLFW/Cocoa and Metal**, and the experimental **Windows x64/Win32 and D3D12**
+source build described above. Other platforms
 fail explicitly before downloading an incompatible engine. This is a source
 contributor workflow; see [Linux x64 packaging](packaging.md) and
 [macOS arm64 packaging](macos-packaging.md) for prebuilt addon packaging.
@@ -613,7 +636,7 @@ The native presentation executable tests the engine/helper directly; the separat
 JavaScript fixture exercises surface texture wrapping and synchronous presentation.
 Neither establishes multi-window scheduling, thread handoff, complete GC/disposal
 correctness, or broader window/context APIs.
-Intel macOS, Windows, Linux arm64, native Wayland windows, broader distribution compatibility, and performance
+Intel macOS, Linux arm64, native Wayland windows, broader distribution compatibility, and performance
 remain unverified. High-refresh behavior has deterministic timing coverage, but
 real monitor pacing, frame-time percentiles, input latency, and VRR have not been
 measured; neither Xvfb/lavapipe nor the virtual KWin/Intel checks are performance

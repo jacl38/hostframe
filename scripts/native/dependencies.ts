@@ -122,4 +122,22 @@ export async function prepareDependencies() {
   for(const archive of [headers, getEngine()]) {
     await installArchive(archive);
   }
+  if(process.platform === "win32") {
+    const version = (await $`node -p process.versions.node`.text()).trim();
+    if(!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Invalid Node.js version.");
+    const base = `https://nodejs.org/dist/v${version}`;
+    const sums = await $`curl --fail --location --silent --show-error ${base}/SHASUMS256.txt`.text();
+    const checksum = sums.match(/^([a-f0-9]{64})\s+win-x64\/node\.lib$/m)?.[1];
+    if(!checksum) throw new Error("Node.js release is missing the x64 import library checksum.");
+    const destination = resolve(buildRoot, "node.lib");
+    const temporary = `${destination}.partial`;
+    try {
+      await $`curl --fail --location --silent --show-error --output ${temporary} ${base}/win-x64/node.lib`;
+      await verifyChecksum(temporary, checksum);
+      await rm(destination, { force: true });
+      await rename(temporary, destination);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+  }
 }

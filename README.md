@@ -8,6 +8,8 @@ The current package is an alpha for Linux x64 with glibc, X11, and Vulkan, and
 macOS arm64 with Metal. Linux requires compatible system graphics libraries and
 a Vulkan driver. See the [Linux requirements](docs/packaging.md#consumer-requirements)
 and [macOS packaging notes](docs/macos-packaging.md) for details.
+An experimental Windows x64 source build is described in the
+[native build guide](docs/native-build.md); Windows packages are not yet available.
 
 ## Installation
 

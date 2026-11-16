@@ -4,13 +4,17 @@
 #include <stdexcept>
 #if defined(__APPLE__)
 #include <pthread.h>
-#else
+#elif defined(__linux__)
 #include <sys/syscall.h>
-#endif
 #include <unistd.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#include <tlhelp32.h>
+#undef CreateWindow
+#endif
 
 #include <GLFW/glfw3.h>
-#if !defined(__APPLE__)
+#if defined(__linux__)
 #define GLFW_EXPOSE_NATIVE_X11
 #include <GLFW/glfw3native.h>
 #include <X11/extensions/Xfixes.h>
@@ -25,8 +29,37 @@ namespace hostframe {
 void RequireMainThread(Napi::Env env) {
 #if defined(__APPLE__)
   const bool mainThread = pthread_main_np() != 0;
-#else
+#elif defined(__linux__)
   const bool mainThread = syscall(SYS_gettid) == getpid();
+#else
+  // Resolve the process entry thread once, even if a worker calls us first.
+  // Taking a system-wide snapshot at every native boundary stalls frame dispatch.
+  static const DWORD first = [] {
+    const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    THREADENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+    FILETIME earliest{}, exit{}, kernel{}, user{};
+    DWORD id = 0;
+    if(snapshot != INVALID_HANDLE_VALUE && Thread32First(snapshot, &entry)) {
+      do {
+        if(entry.th32OwnerProcessID != GetCurrentProcessId()) continue;
+        HANDLE thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ThreadID);
+        FILETIME created{};
+        if(!thread || !GetThreadTimes(thread, &created, &exit, &kernel, &user)) {
+          if(thread) CloseHandle(thread);
+          continue;
+        }
+        if(!id || CompareFileTime(&created, &earliest) < 0) {
+          earliest = created;
+          id = entry.th32ThreadID;
+        }
+        CloseHandle(thread);
+      } while(Thread32Next(snapshot, &entry));
+    }
+    if(snapshot != INVALID_HANDLE_VALUE) CloseHandle(snapshot);
+    return id;
+  }();
+  const bool mainThread = first == GetCurrentThreadId();
 #endif
   if(!mainThread) {
     throw Napi::Error::New(env, "Native applications require the process main thread");
@@ -41,7 +74,7 @@ class GlfwSession {
       glfwTerminate();
       throw std::runtime_error("GLFW initialization failed; check desktop session");
     }
-#if !defined(__APPLE__)
+#if defined(__linux__)
     // Mesa's Vulkan WSI caches extension data by xcb_connection_t address for
     // the instance lifetime. A new GLFW session can reuse a closed connection's
     // address while our process GPU is still alive, skipping XFixes negotiation.

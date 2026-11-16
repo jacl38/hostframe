@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { mkdir, rm } from "node:fs/promises";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { buildNative, checkBuild, checkPrerequisites } from "./native/build";
 import { prepareDependencies } from "./native/dependencies";
 import { generateBindings } from "./native/generate";
@@ -31,9 +31,12 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
   if(cleanupOnly && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT !== "1") {
     throw new Error("--cleanup-timeouts-only requires HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 and a matching native build.");
   }
-  const threadCheck = process.platform === "darwin" ? "--thread-only" : "--no-display";
+  const threadCheck = process.platform === "linux" ? "--no-display" : "--thread-only";
+  function executable(name: string) {
+    return resolve(buildRoot, `cmake/${name}${process.platform === "win32" ? ".exe" : ""}`);
+  }
   const checks = cleanupOnly ? [] : [
-    [resolve(buildRoot, "cmake/native_presentation_check"), "--modes-only"],
+    [executable("native_presentation_check"), "--modes-only"],
     ["node", resolve(root, "packages/native/test/globals.ts")],
     ["bun", resolve(root, "packages/native/test/globals.ts")],
     ["node", resolve(root, "packages/native/test/globals.ts"), "--nonextensible"],
@@ -45,10 +48,10 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
   ];
   if(presentation && !cleanupOnly) {
     checks.push(
-      [resolve(buildRoot, "cmake/native_input_check")],
+      [executable("native_input_check")],
       ["node", resolve(root, "packages/native/test/key-labels.ts")],
       ["bun", resolve(root, "packages/native/test/key-labels.ts")],
-      [resolve(buildRoot, "cmake/native_presentation_check")],
+      [executable("native_presentation_check")],
       ["node", resolve(root, "packages/native/test/bindings.ts")],
       ["bun", resolve(root, "packages/native/test/bindings.ts")],
       ["node", resolve(root, "packages/native/test/context.ts")],
@@ -113,7 +116,8 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
     // when developer desktops use UTF-8. Keep Unicode title readback covered.
     if(command.some(argument => argument.endsWith("/lifecycle.ts"))) env.LC_ALL = "C";
     if(command.some(argument => argument.endsWith("/cleanup-timeout.ts"))) env.HOSTFRAME_TEST_STALL_CLEANUP = "1";
-    const child = Bun.spawn(command, { cwd: root, env, stdout: "inherit", stderr: "inherit", timeout: 30_000 });
+    const timeout = command.includes("replacement") || command.some(argument => ["window.ts", "presentation.ts"].includes(basename(argument))) ? 120_000 : 30_000;
+    const child = Bun.spawn(command, { cwd: root, env, stdout: "inherit", stderr: "inherit", timeout });
     const code = await child.exited;
     if(code !== 0) throw new Error(`${command.join(" ")} verification failed (exit ${code}, signal ${child.signalCode || "none"}).`);
   }

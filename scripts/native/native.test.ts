@@ -29,7 +29,7 @@ test("checksum verification detects corrupt or substituted downloads", async () 
 
 test("unsupported hosts fail instead of selecting an incompatible engine", () => {
   expect(() => getEngine("linux", "arm64")).toThrow("No verified build configuration");
-  expect(() => getEngine("win32", "x64")).toThrow("No verified build configuration");
+  expect(() => getEngine("win32", "x64")).not.toThrow();
   expect(() => getEngine("linux", "x64")).not.toThrow();
   expect(() => getEngine("darwin", "arm64")).not.toThrow();
   expect(() => getEngine("darwin", "x64")).toThrow("No verified build configuration");

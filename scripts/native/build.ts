@@ -1,6 +1,6 @@
 import { $ } from "bun";
 import { mkdir } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { assertDependencies } from "./dependencies";
 import { assertGeneratedBindings } from "./generate";
 import { prepareNobind } from "./nobind";
@@ -11,7 +11,7 @@ import { buildRoot, dawnRoot, getEngine, headers, root } from "./release";
 export function checkPrerequisites(forSetup = false) {
   getEngine();
   const tools = ["git", "cmake", "ninja", "node", process.env.CXX || "c++", process.env.CC || "cc"];
-  if(forSetup) tools.push("curl", "tar", "go", "python3", "pkg-config");
+  if(forSetup) tools.push("curl", "tar", "go", process.platform === "win32" ? "python" : "python3", ...(process.platform === "linux" ? ["pkg-config"] : []));
   const missing = tools.filter(tool => !Bun.which(tool));
   if(missing.length > 0) {
     throw new Error(`Missing native build prerequisites: ${missing.join(", ")}. Install these tools and retry; setup does not install system packages.`);
@@ -27,15 +27,15 @@ export function assertBuildSources(commands: CompileCommand[]) {
     const path = resolve(file);
     const own = relative(resolve(root, "packages/native/src"), path);
     const generated = ["src/dawn/node/interop/WebGPU.cpp", "src/dawn/utils/ComboLimits.cpp"]
-      .includes(relative(resolve(buildRoot, "generated"), path));
-    const bindingPath = relative(resolve(buildRoot, "binding/src/dawn/node"), path);
+      .includes(relative(resolve(buildRoot, "generated"), path).split(sep).join("/"));
+    const bindingPath = relative(resolve(buildRoot, "binding/src/dawn/node"), path).split(sep).join("/");
     const binding = /^binding\/[^/]+\.cpp$/.test(bindingPath) || ["interop/Core.cpp", "ManualConstructors.cpp"].includes(bindingPath);
     const glfw = relative(resolve(dawnRoot, "third_party/glfw3/src"), path);
     const presentationCheck = ["presentation.cpp", "input-contracts.cpp", "close-request.cpp"].some(file => path === resolve(root, "packages/native/test", file));
     const helper = ["utils.cpp", "utils_metal.mm"].some(file => path === resolve(dawnRoot, "src/dawn/glfw", file));
-    const inside = [own, glfw].some(part => part !== ".." && !part.startsWith("../") && !part.startsWith("/"));
+    const inside = [own, glfw].some(part => part !== ".." && !part.startsWith(`..${sep}`) && !isAbsolute(part));
     if(!inside && !generated && !binding && !helper && !presentationCheck) throw new Error(`Unexpected native source (engine/Tint builds are forbidden): ${path}`);
-    if(path.endsWith("/src/dawn/node/Module.cpp")) throw new Error("Upstream proc-table module entry point must not be compiled.");
+    if(path.split(sep).join("/").endsWith("/src/dawn/node/Module.cpp")) throw new Error("Upstream proc-table module entry point must not be compiled.");
   }
   return commands.length;
 }
@@ -62,6 +62,10 @@ export async function buildNative() {
     `-DHOSTFRAME_TEST_CLEANUP_TIMEOUT=${process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT === "1" ? "ON" : "OFF"}`,
     `-DHOSTFRAME_ENGINE_LIBRARY=${resolve(engine.destination, engine.sentinel)}`,
     `-DHOSTFRAME_HEADERS_INCLUDE=${resolve(headers.destination, headers.includeDirectory)}`,
+    ...(process.platform === "win32" ? [`-DHOSTFRAME_NODE_LIBRARY=${resolve(buildRoot, "node.lib")}`] : []),
+    ...(process.platform === "win32" && process.env.WindowsSdkDir && process.env.WindowsSDKVersion
+      ? [`-DHOSTFRAME_DXC_DIRECTORY=${resolve(process.env.WindowsSdkDir, "bin", process.env.WindowsSDKVersion, "x64")}`]
+      : []),
     `-DCMAKE_C_COMPILER_LAUNCHER=${launcher}`,
     `-DCMAKE_CXX_COMPILER_LAUNCHER=${launcher}`
   ];

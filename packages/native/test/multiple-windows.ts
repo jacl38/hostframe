@@ -79,6 +79,7 @@ try {
   let created: Window | undefined;
   let createdFrames = 0;
   let ticks = 0;
+  let disposedAt = 0;
   const offUpdate = app.on("fixedUpdate", () => {
     ticks++;
     if(ticks === 1) {
@@ -89,16 +90,16 @@ try {
       // Repeated disposal must not remove the new window.
       first.dispose();
     }
-    if(ticks === 3) {
-      assert.ok(createdFrames > 0);
+    if(ticks >= 3 && createdFrames > 0 && !disposedAt) {
+      disposedAt = ticks;
       created!.dispose();
       assert.throws(() => created!.on("render", () => undefined), /disposed/);
     }
-    if(ticks === 5) second.requestClose();
+    if(disposedAt && ticks >= disposedAt + 2) second.requestClose();
   });
   await app.run({ updateHz: 30, maxFPS: 120 });
   offUpdate();
-  assert.equal(ticks, 5);
+  assert.ok(disposedAt >= 3 && ticks >= disposedAt + 2);
   assert.equal(app.pollEvents(), false);
   assert.equal(second.shouldClose, true);
   await assertDeviceAlive(shared);

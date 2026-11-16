@@ -38,6 +38,11 @@ if(!isMainThread) {
   assert.equal(message, "worker rejected");
 
   if(process.argv.includes("--thread-only")) {
+    if(process.platform === "win32") {
+      // A worker must not claim the cached process thread when it calls first.
+      const app = new Application();
+      app.dispose();
+    }
     console.log(`${process.versions.bun ? "Bun" : "Node.js"}: Application main-thread guard passed.`);
   } else if(process.argv.includes("--no-display")) {
     // The verifier clears DISPLAY before launching: Bun's JS env mutations do

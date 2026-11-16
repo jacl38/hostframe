@@ -70,6 +70,7 @@ export async function generateBindings() {
     "--jinja2-path", resolve(dawnRoot, "third_party/jinja2"),
     "--markupsafe-path", resolve(dawnRoot, "third_party/markupsafe")
   ];
-  await $`python3 ${generatorArguments}`.cwd(root).env({ ...process.env, PYTHONDONTWRITEBYTECODE: "1" });
+  const python = process.platform === "win32" ? "python" : "python3";
+  await $`${python} ${generatorArguments}`.cwd(root).env({ ...process.env, PYTHONDONTWRITEBYTECODE: "1" });
   await Bun.write(resolve(buildRoot, ".generated-inputs"), `${await generationKey()}\n`);
 }

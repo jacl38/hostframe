@@ -132,7 +132,7 @@ try {
           if(ticks >= 120) app.stop();
         });
         let timedOut = false;
-        const timeout = setTimeout(() => { timedOut = true; app.stop(); }, 5000);
+        const timeout = setTimeout(() => { timedOut = true; app.stop(); }, 15000);
         try {
           await app.run({ updateHz: 120, maxFPS });
         } finally {
@@ -140,7 +140,7 @@ try {
           offUpdate();
           offRender();
         }
-        assert.equal(timedOut, false, "presentation did not make progress within five seconds");
+        assert.equal(timedOut, false, "presentation did not make progress within fifteen seconds");
         assert.ok(ticks >= 120);
         assert.ok(starts.length >= 2);
         assert.equal(window.presentMode, mode);

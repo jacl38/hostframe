@@ -37,7 +37,7 @@ export async function resolveInputConstants(headerPath: string) {
   const values = new Map<string, number>();
   try {
     const source = resolve(directory, "constants.cpp");
-    const binary = resolve(directory, "constants");
+    const binary = resolve(directory, process.platform === "win32" ? "constants.exe" : "constants");
     const lines = names.map(name => `  static_assert(std::in_range<long long>(${name}), "GLFW value exceeds compiler output range");\n  std::cout << "${name} " << static_cast<long long>(${name}) << "\\n";`);
     await Bun.write(source, `#define GLFW_INCLUDE_NONE\n#include ${JSON.stringify(header)}\n#include <iostream>\n#include <utility>\nint main() {\n${lines.join("\n")}\n}\n`);
     await $`${compiler} -std=c++20 ${source} -o ${binary}`.quiet();

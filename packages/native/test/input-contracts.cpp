@@ -2,12 +2,15 @@
 #include "input.h"
 #include <functional>
 #include <iostream>
+#include <source_location>
 #include <stdexcept>
 
 using namespace hostframe;
 namespace {
 std::function<void(const InputState&, const std::vector<InputEvent>&)> observe;
-void Check(bool condition) { if(!condition) throw std::runtime_error("Native input contract failed"); }
+void Check(bool condition, std::source_location location = std::source_location::current()) {
+  if(!condition) throw std::runtime_error("Native input contract failed at line " + std::to_string(location.line()));
+}
 }
 namespace hostframe {
 void InputCallback::Call(const InputState& state, const std::vector<InputEvent>& events) const { observe(state, events); }
@@ -15,7 +18,7 @@ void InputCallback::Call(const InputState& state, const std::vector<InputEvent>&
 // This executable has no JavaScript environment; listener failures throw directly.
 extern "C" napi_status napi_is_exception_pending(napi_env, bool* pending) { *pending = false; return napi_ok; }
 
-int main() {
+int main() try {
   Check(glfwInit());
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
   GLFWwindow* window = glfwCreateWindow(100, 100, "input contracts", nullptr, nullptr);
@@ -33,8 +36,10 @@ int main() {
     auto button = glfwSetMouseButtonCallback(window, nullptr);
     glfwSetMouseButtonCallback(window, button);
     focus(window, GLFW_TRUE);
-    observe = [](const auto& state, const auto& events) {
-      Check(state.metrics.width == 100 && state.metrics.height == 100);
+    int width, height;
+    glfwGetWindowSize(window, &width, &height);
+    observe = [width, height](const auto& state, const auto& events) {
+      Check(state.metrics.width == width && state.metrics.height == height);
       Check(state.metrics.framebufferWidth > 0 && state.metrics.drawable);
       Check(!events.empty() && std::holds_alternative<MetricsEvent>(events.front()));
       Check(std::get<MetricsEvent>(events.front()).metrics == state.metrics);
@@ -123,4 +128,7 @@ int main() {
   glfwDestroyWindow(window);
   glfwTerminate();
   std::cout << "Native batched input contracts passed\n";
+} catch(const std::exception& error) {
+  std::cerr << error.what() << '\n';
+  return 1;
 }

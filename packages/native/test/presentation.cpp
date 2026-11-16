@@ -165,6 +165,8 @@ void CheckPresentation() {
   wgpu::RequestAdapterOptions options;
 #if defined(__APPLE__)
   options.backendType = wgpu::BackendType::Metal;
+#elif defined(_WIN32)
+  options.backendType = wgpu::BackendType::D3D12;
 #else
   options.backendType = wgpu::BackendType::Vulkan;
 #endif
@@ -199,8 +201,9 @@ void CheckPresentation() {
         validationFailed.store(true);
       });
   adapter.RequestDevice(&deviceDescriptor, wgpu::CallbackMode::AllowProcessEvents,
-      [deviceRequest](wgpu::RequestDeviceStatus status, wgpu::Device result, wgpu::StringView) {
+      [deviceRequest](wgpu::RequestDeviceStatus status, wgpu::Device result, wgpu::StringView message) {
         if(status == wgpu::RequestDeviceStatus::Success) deviceRequest->device = std::move(result);
+        else std::cerr << "Device request: " << std::string_view(message) << '\n';
         deviceRequest->done = true;
       });
   ProgressUntil(instance, [&] { return deviceRequest->done; });
