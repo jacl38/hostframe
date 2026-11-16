@@ -25,8 +25,8 @@ export async function withBuildLock(action: () => Promise<void>) {
 }
 
 async function verify(presentation: boolean, interactions: boolean, cleanupOnly: boolean) {
-  if(interactions && process.platform !== "linux") {
-    throw new Error("--window-interactions requires Linux/X11, xdotool, and xprop.");
+  if(interactions && process.platform !== "linux" && process.platform !== "win32") {
+    throw new Error("--window-interactions requires Linux/X11 or an interactive Windows desktop.");
   }
   if(cleanupOnly && process.env.HOSTFRAME_TEST_CLEANUP_TIMEOUT !== "1") {
     throw new Error("--cleanup-timeouts-only requires HOSTFRAME_TEST_CLEANUP_TIMEOUT=1 and a matching native build.");
@@ -85,7 +85,13 @@ async function verify(presentation: boolean, interactions: boolean, cleanupOnly:
       }
     }
   }
-  if(interactions) {
+  if(interactions && process.platform === "win32") {
+    checks.push(
+      ["node", resolve(root, "packages/native/test/windows-interactions.ts")],
+      ["bun", resolve(root, "packages/native/test/windows-interactions.ts")]
+    );
+  }
+  if(interactions && process.platform === "linux") {
     checks.push(
       ["node", resolve(root, "packages/native/test/context.ts"), "--interactions"],
       ["bun", resolve(root, "packages/native/test/context.ts"), "--interactions"],

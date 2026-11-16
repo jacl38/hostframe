@@ -49,6 +49,11 @@ set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 if(UNIX AND NOT APPLE)
   set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
 endif()
+
+if(WIN32)
+  add_executable(native_windows_interaction test/windows-interaction.cpp)
+  target_link_libraries(native_windows_interaction PRIVATE user32)
+endif()
 set(GLFW_BUILD_WAYLAND OFF CACHE BOOL "" FORCE)
 add_subdirectory("${DAWN_SOURCE}/third_party/glfw3/src" "${CMAKE_CURRENT_BINARY_DIR}/glfw")
 

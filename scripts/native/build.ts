@@ -31,7 +31,7 @@ export function assertBuildSources(commands: CompileCommand[]) {
     const bindingPath = relative(resolve(buildRoot, "binding/src/dawn/node"), path).split(sep).join("/");
     const binding = /^binding\/[^/]+\.cpp$/.test(bindingPath) || ["interop/Core.cpp", "ManualConstructors.cpp"].includes(bindingPath);
     const glfw = relative(resolve(dawnRoot, "third_party/glfw3/src"), path);
-    const presentationCheck = ["presentation.cpp", "input-contracts.cpp", "close-request.cpp"].some(file => path === resolve(root, "packages/native/test", file));
+    const presentationCheck = ["presentation.cpp", "input-contracts.cpp", "close-request.cpp", "windows-interaction.cpp"].some(file => path === resolve(root, "packages/native/test", file));
     const helper = ["utils.cpp", "utils_metal.mm"].some(file => path === resolve(dawnRoot, "src/dawn/glfw", file));
     const inside = [own, glfw].some(part => part !== ".." && !part.startsWith(`..${sep}`) && !isAbsolute(part));
     if(!inside && !generated && !binding && !helper && !presentationCheck) throw new Error(`Unexpected native source (engine/Tint builds are forbidden): ${path}`);
@@ -56,6 +56,10 @@ export async function buildNative() {
   await mkdir(env.CCACHE_DIR, { recursive: true });
   const engine = getEngine();
   const launcher = Bun.which("ccache") || "";
+  const dxcDirectory = process.env.HOSTFRAME_DXC_DIRECTORY ||
+    (process.env.WindowsSdkDir && process.env.WindowsSDKVersion
+      ? resolve(process.env.WindowsSdkDir, "bin", process.env.WindowsSDKVersion, "x64")
+      : "");
   const options = [
     "-DCMAKE_BUILD_TYPE=Release", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     `-DHOSTFRAME_BUILD_ROOT=${buildRoot}`,
@@ -63,8 +67,8 @@ export async function buildNative() {
     `-DHOSTFRAME_ENGINE_LIBRARY=${resolve(engine.destination, engine.sentinel)}`,
     `-DHOSTFRAME_HEADERS_INCLUDE=${resolve(headers.destination, headers.includeDirectory)}`,
     ...(process.platform === "win32" ? [`-DHOSTFRAME_NODE_LIBRARY=${resolve(buildRoot, "node.lib")}`] : []),
-    ...(process.platform === "win32" && process.env.WindowsSdkDir && process.env.WindowsSDKVersion
-      ? [`-DHOSTFRAME_DXC_DIRECTORY=${resolve(process.env.WindowsSdkDir, "bin", process.env.WindowsSDKVersion, "x64")}`]
+    ...(process.platform === "win32" && dxcDirectory
+      ? [`-DHOSTFRAME_DXC_DIRECTORY=${dxcDirectory}`]
       : []),
     `-DCMAKE_C_COMPILER_LAUNCHER=${launcher}`,
     `-DCMAKE_CXX_COMPILER_LAUNCHER=${launcher}`

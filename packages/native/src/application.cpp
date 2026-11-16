@@ -1,6 +1,8 @@
 #include "application.h"
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <stdexcept>
 #if defined(__APPLE__)
 #include <pthread.h>
@@ -26,40 +28,86 @@
 
 namespace hostframe {
 
+#if defined(_WIN32)
+namespace {
+// The oldest live process thread is the best available approximation of the
+// entry thread when the addon is first loaded by a worker. Keep a handle so a
+// later reused thread ID can never become the accepted identity.
+class ProcessEntryThread {
+ public:
+  ~ProcessEntryThread() {
+    if(auto thread = thread_.load(std::memory_order_acquire)) CloseHandle(thread);
+  }
+
+  bool IsCurrent() {
+    HANDLE thread = thread_.load(std::memory_order_acquire);
+    if(!thread) {
+      std::lock_guard lock(mutex_);
+      thread = thread_.load(std::memory_order_relaxed);
+      if(!thread) {
+        thread = Find();
+        if(thread) thread_.store(thread, std::memory_order_release);
+      }
+    }
+    return thread && WaitForSingleObject(thread, 0) == WAIT_TIMEOUT &&
+        GetThreadId(thread) == GetCurrentThreadId();
+  }
+
+ private:
+  static HANDLE Find() {
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if(snapshot == INVALID_HANDLE_VALUE) return nullptr;
+    THREADENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+    FILETIME earliest{}, exit{}, kernel{}, user{};
+    HANDLE first = nullptr;
+    bool success = Thread32First(snapshot, &entry) != FALSE;
+    if(success) {
+      do {
+        if(entry.th32OwnerProcessID != GetCurrentProcessId()) continue;
+        HANDLE candidate = OpenThread(THREAD_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, entry.th32ThreadID);
+        if(!candidate) {
+          // Threads can exit between the snapshot and OpenThread. Other errors
+          // leave us unable to establish which live thread was created first.
+          if(GetLastError() == ERROR_INVALID_PARAMETER) continue;
+          success = false;
+          break;
+        }
+        FILETIME created{};
+        if(!GetThreadTimes(candidate, &created, &exit, &kernel, &user)) {
+          CloseHandle(candidate);
+          success = false;
+          break;
+        }
+        if(!first || CompareFileTime(&created, &earliest) < 0) {
+          if(first) CloseHandle(first);
+          first = candidate;
+          earliest = created;
+        } else {
+          CloseHandle(candidate);
+        }
+      } while(Thread32Next(snapshot, &entry));
+      if(success && GetLastError() != ERROR_NO_MORE_FILES) success = false;
+    }
+    CloseHandle(snapshot);
+    if(!success && first) { CloseHandle(first); first = nullptr; }
+    return first;
+  }
+
+  std::atomic<HANDLE> thread_{nullptr};
+  std::mutex mutex_;
+};
+}  // namespace
+#endif
+
 void RequireMainThread(Napi::Env env) {
 #if defined(__APPLE__)
   const bool mainThread = pthread_main_np() != 0;
 #elif defined(__linux__)
   const bool mainThread = syscall(SYS_gettid) == getpid();
 #else
-  // Resolve the process entry thread once, even if a worker calls us first.
-  // Taking a system-wide snapshot at every native boundary stalls frame dispatch.
-  static const DWORD first = [] {
-    const auto snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    THREADENTRY32 entry{};
-    entry.dwSize = sizeof(entry);
-    FILETIME earliest{}, exit{}, kernel{}, user{};
-    DWORD id = 0;
-    if(snapshot != INVALID_HANDLE_VALUE && Thread32First(snapshot, &entry)) {
-      do {
-        if(entry.th32OwnerProcessID != GetCurrentProcessId()) continue;
-        HANDLE thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ThreadID);
-        FILETIME created{};
-        if(!thread || !GetThreadTimes(thread, &created, &exit, &kernel, &user)) {
-          if(thread) CloseHandle(thread);
-          continue;
-        }
-        if(!id || CompareFileTime(&created, &earliest) < 0) {
-          earliest = created;
-          id = entry.th32ThreadID;
-        }
-        CloseHandle(thread);
-      } while(Thread32Next(snapshot, &entry));
-    }
-    if(snapshot != INVALID_HANDLE_VALUE) CloseHandle(snapshot);
-    return id;
-  }();
-  const bool mainThread = first == GetCurrentThreadId();
+  static ProcessEntryThread entryThread;
+  const bool mainThread = entryThread.IsCurrent();
 #endif
   if(!mainThread) {
     throw Napi::Error::New(env, "Native applications require the process main thread");

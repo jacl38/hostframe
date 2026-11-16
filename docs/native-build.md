@@ -9,8 +9,11 @@ from the selected Windows SDK beside the addon. These files are required for
 D3D12 device creation. Windows package distribution is not yet supported.
 On Windows x64 with an Intel Arc 140V and driver 32.0.101.5737, local
 the native build and `native:verify --presentation` passed with Node.js
-26.1.0 and Bun 1.4.4. Real input interactions and other Windows GPUs remain
-unverified.
+22.18.0 and 26.1.0 and Bun 1.4.4. The Windows interaction suite passed on
+this desktop with Node.js 22.18.0 and 26.1.0 and Bun 1.4.4, including keyboard, Unicode,
+mouse, focus, resize, minimize, restore and close requests. It requires an
+unlocked interactive desktop. Other GPUs, keyboard layouts, IME composition,
+and physical monitor DPI transitions remain unverified.
 For example, in an x64 Native Tools Command Prompt with the other tools on
 PATH, run:
 

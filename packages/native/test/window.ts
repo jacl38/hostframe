@@ -41,6 +41,18 @@ if(!isMainThread) {
     if(process.platform === "win32") {
       // A worker must not claim the cached process thread when it calls first.
       const app = new Application();
+      const laterWorker = new Worker(new URL(import.meta.url));
+      let laterMessage: unknown;
+      laterWorker.on("message", value => { laterMessage = value; });
+      await new Promise<void>((resolve, reject) => {
+        laterWorker.on("error", reject);
+        laterWorker.on("exit", code => {
+          if(code !== 0) reject(new Error(`Worker exited with ${code}`));
+          else resolve();
+        });
+      });
+      assert.equal(laterMessage, "worker rejected");
+      app.pollEvents();
       app.dispose();
     }
     console.log(`${process.versions.bun ? "Bun" : "Node.js"}: Application main-thread guard passed.`);
