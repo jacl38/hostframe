@@ -122,7 +122,7 @@ test("release CLI guards draft creation and macOS attachment with checksums", as
     const windowsChecksum = resolve(windows, "SHA256SUMS-win32-x64");
     await Bun.write(windowsChecksum, `${sha256(bytes)}  ${windowsName}\n`);
     const windowsNotes = resolve(windows, "windows-x64-notes.md");
-    await Bun.write(windowsNotes, "revision 1527671533a955c40a7e43a68f767fde734c4cb5, DLL SHA-256 fixture");
+    await Bun.write(windowsNotes, "revision 01b62ad47db7dee3dd33f90e7339cf9e860b3f93, DLL SHA-256 fixture");
     await writeGh(true);
     async function attachWindows() {
       const child = Bun.spawn([process.execPath, "scripts/release/assets.ts", "attach-windows"], {

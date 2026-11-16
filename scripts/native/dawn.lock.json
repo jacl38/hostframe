@@ -41,8 +41,18 @@
   },
   "dependencies": {
     "dxc": {
-      "revision": "1527671533a955c40a7e43a68f767fde734c4cb5",
-      "url": "https://github.com/microsoft/DirectXShaderCompiler.git"
+      "version": "v1.9.2609",
+      "revision": "01b62ad47db7dee3dd33f90e7339cf9e860b3f93",
+      "url": "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2609/dxc_2026_09_29.zip",
+      "name": "dxc_2026_09_29.zip",
+      "sha256": "ad31b1fc8443175d204f77a611fdb3ef2ec42759bdc2f1167368de24a4a7e7f1",
+      "files": {
+        "bin/x64/dxcompiler.dll": "0689e2fee0a1c9df8662a59680469f24e2a3ad7ce6bbbcc9284f7a83172bfc59",
+        "bin/x64/dxil.dll": "64be2368211d257a038a7d4ea6bb3e24c878eb8d588c7b8414fccf759b69c2ac",
+        "LICENCE-MIT.txt": "903df5512f7d02609fed0c780a9b704f5a3eeb6e4d84ebe42a29845c81899a3c",
+        "LICENSE-LLVM.txt": "729615317e28dd03907e46f0fc3b5e88f7853cee61d1a1471d2749335516b46f",
+        "LICENSE-MS.txt": "734f72f239fe7b07b4c7203f294c1a7ce27095687278bab7e56d630d7c672963"
+      }
     },
     "archives": [
       {

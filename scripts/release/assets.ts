@@ -4,7 +4,7 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import manifest from "../../package.json";
 import { getEngine, lock, root } from "../native/release.ts";
-import { requireWindowsDxcRevision, windowsDxc, windowsDxcHash } from "../native/dxc.ts";
+import { windowsDxc, windowsDxcFiles } from "../native/dxc.ts";
 
 const directory = resolve(root, "build/release");
 const filename = `${manifest.name}-${manifest.version}-linux-x64.tgz`;
@@ -64,7 +64,6 @@ If macOS arm64 assets are attached, see the accompanying macos-arm64-notes.md an
 }
 
 async function prepareWindows() {
-  await requireWindowsDxcRevision();
   const tag = releaseTag(manifest.version, process.env.GITHUB_REF);
   const packed = resolve(root, `build/package/${manifest.name}-${manifest.version}.tgz`);
   const metadata = JSON.parse(await $`tar -xOf ${packed} package/package.json`.text());
@@ -73,17 +72,17 @@ async function prepareWindows() {
     throw new Error("Packed Windows metadata does not match the release. Run package:verify first.");
   }
   const contents = (await $`tar -tzf ${packed}`.text()).trim().split(/\r?\n/);
-  for(const file of ["hostframe.node", "dxcompiler.dll", "DXC-LICENSE.txt", "DXC-DirectX-Headers-LICENSE.txt"]) {
+  for(const file of ["hostframe.node", ...Object.values(windowsDxcFiles)]) {
     if(!contents.includes(`package/dist/${file}`)) throw new Error(`Windows package is missing ${file}.`);
   }
-  const dxcHash = await windowsDxcHash();
-  for(const file of ["hostframe.node", "dxcompiler.dll"]) {
+  const dxcHash = windowsDxc.files["bin/x64/dxcompiler.dll"];
+  for(const file of ["hostframe.node", "dxcompiler.dll", "dxil.dll"]) {
     const child = Bun.spawn(["tar", "-xOf", packed, `package/dist/${file}`], { stdout: "pipe", stderr: "inherit", timeout: 30_000 });
     const bytes = new Uint8Array(await new Response(child.stdout).arrayBuffer());
     if(await child.exited !== 0) throw new Error(`Unable to extract ${file} from Windows package.`);
     if(peMachine(bytes) !== 0x8664) throw new Error(`Windows package ${file} is not x64.`);
-    if(file === "dxcompiler.dll" && sha256(bytes) !== dxcHash) {
-      throw new Error(`Windows package ${file} does not match the verified DXC build.`);
+    if(file !== "hostframe.node" && sha256(bytes) !== windowsDxc.files[`bin/x64/${file}` as "bin/x64/dxcompiler.dll" | "bin/x64/dxil.dll"]) {
+      throw new Error(`Windows package ${file} does not match the verified DXC release.`);
     }
   }
   const output = resolve(root, "build/release-windows");
@@ -105,7 +104,7 @@ Install from ${repository}/releases/download/${tag}/${name} after verifying SHA2
 Built and verified on Windows x64 with Node.js ${proof.nodeVersion} and Bun ${proof.bunVersion}. A compatible D3D12 GPU and driver and Microsoft C++ runtime are required; other systems and GPUs are not established by this build.
 
 Dawn ${lock.release}, revision ${lock.revision}; engine archive SHA-256 ${getEngine().sha256}.
-DirectX Shader Compiler source ${windowsDxc.url}, revision ${windowsDxc.revision}, DLL SHA-256 ${dxcHash}. The package contains the upstream license files.
+DirectX Shader Compiler ${windowsDxc.version}, ${windowsDxc.url}, revision ${windowsDxc.revision}, DLL SHA-256 ${dxcHash}. The package contains the upstream license files.
 `);
   console.log(`Windows release assets prepared in ${output}`);
 }

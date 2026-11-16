@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import manifest from "../../package.json";
 import { root } from "../native/release.ts";
+import { windowsDxcFiles } from "../native/dxc.ts";
 
 async function run(command: string[], cwd: string, env = process.env, timeout = 30_000) {
-  const child = Bun.spawn(command, { cwd, env, stdout: "inherit", stderr: "inherit", timeout });
+  const executable = process.platform === "win32" && command[0] === "npm" ? ["npm.cmd", ...command.slice(1)] : command;
+  const child = Bun.spawn(executable, { cwd, env, stdout: "inherit", stderr: "inherit", timeout });
   const code = await child.exited;
   if(code !== 0) throw new Error(`${command.join(" ")} failed (exit ${code}, signal ${child.signalCode || "none"}).`);
 }
@@ -48,7 +50,7 @@ async function main() {
     assert.ok(files.includes(`package/${required}`), `Missing ${required} in tarball`);
   }
   if(process.platform === "win32") {
-    for(const required of ["dxcompiler.dll", "DXC-LICENSE.txt", "DXC-DirectX-Headers-LICENSE.txt"]) {
+    for(const required of Object.values(windowsDxcFiles)) {
       assert.ok(files.includes(`package/dist/${required}`), `Missing ${required} in tarball`);
     }
   }

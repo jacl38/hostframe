@@ -5,7 +5,7 @@ import { build } from "tsdown";
 import config from "../tsdown.config.ts";
 import { buildRoot, root } from "./native/release.ts";
 import { writeNotices } from "./package/notices.ts";
-import { prepareWindowsDxc, requireWindowsDxcRevision } from "./native/dxc.ts";
+import { prepareWindowsDxc } from "./native/dxc.ts";
 
 try {
   const reportHeader = Reflect.get(process.report.getReport(), "header");
@@ -17,7 +17,6 @@ try {
   }
   // Remove old output even when the native build fails; never pack a stale addon.
   await rm(resolve(root, "dist"), { recursive: true, force: true });
-  if(windows) await requireWindowsDxcRevision();
   await $`bun run native:build`.cwd(root);
   await build(config);
   await copyFile(resolve(buildRoot, "cmake/hostframe.node"), resolve(root, "dist/hostframe.node"));

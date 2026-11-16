@@ -20,7 +20,7 @@ export async function writeNotices() {
   ];
   let notices = `hostframe native third-party notices\n\nDawn release: ${lock.release}\nDawn revision: ${lock.revision}\nEngine archive SHA-256: ${getEngine().sha256}\n`;
   if(process.platform === "win32") {
-    notices += `\nDirectX Shader Compiler source: ${windowsDxc.url}\nRevision: ${windowsDxc.revision}\nSee the accompanying DXC license files for the upstream terms.\n`;
+    notices += `\nDirectX Shader Compiler ${windowsDxc.version}: ${windowsDxc.url}\nRevision: ${windowsDxc.revision}\nSee the accompanying DXC license files for the upstream terms.\n`;
   }
   for(const [name, path] of licenses) {
     notices += `\n${"=".repeat(72)}\n${name}\n${"=".repeat(72)}\n\n${await Bun.file(path).text()}\n`;

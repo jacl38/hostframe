@@ -7,7 +7,7 @@ environment with `CC=clang` and `CXX=clang++`. Setup downloads the pinned
 Dawn library and the Node import library; the build copies DXC runtime DLLs
 from the selected Windows SDK beside the addon. These files are required for
 D3D12 device creation. See [Windows packaging](windows-packaging.md) for
-building a package with the pinned DXC source.
+building a package with the prebuilt DXC release.
 On Windows x64 with an Intel Arc 140V and driver 32.0.101.5737,
 the native build and `native:verify --presentation` passed with Node.js
 22.18.0 and 26.1.0 and Bun 1.4.4. The Windows interaction suite passed on
