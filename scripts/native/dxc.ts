@@ -82,7 +82,8 @@ export async function buildWindowsDxc() {
   const jobs = process.env.HOSTFRAME_JOBS || "2";
   if(!/^[1-9]\d*$/.test(jobs)) throw new Error("HOSTFRAME_JOBS must be a positive integer.");
   const compiler = await Bun.file(resolve(output, "CMakeCache.txt")).exists() ? [] : ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"];
-  await $`cmake -S ${source} -B ${output} -G Ninja ${compiler} -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD=None -DLLVM_INCLUDE_TESTS=OFF -DHLSL_INCLUDE_TESTS=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DENABLE_SPIRV_CODEGEN=OFF -DSPIRV_BUILD_TESTS=OFF`.cwd(root);
+  // ARC migration is unrelated to shader compilation and enables DXC's broken Objective-C rewriter.
+  await $`cmake -S ${source} -B ${output} -G Ninja ${compiler} -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD=None -DLLVM_INCLUDE_TESTS=OFF -DHLSL_INCLUDE_TESTS=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DCLANG_ENABLE_ARCMT=OFF -DENABLE_SPIRV_CODEGEN=OFF -DSPIRV_BUILD_TESTS=OFF`.cwd(root);
   const cmakeCache = await Bun.file(resolve(output, "CMakeCache.txt")).text();
   if(!/^CMAKE_CXX_COMPILER:(?:FILEPATH|STRING)=.*[/\\]cl\.exe\s*$/im.test(cmakeCache)) {
     throw new Error("DXC build requires the Visual Studio MSVC compiler; use a clean DXC build directory.");
