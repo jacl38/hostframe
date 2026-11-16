@@ -84,7 +84,7 @@ export async function buildWindowsDxc() {
   const compiler = await Bun.file(resolve(output, "CMakeCache.txt")).exists() ? [] : ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"];
   await $`cmake -S ${source} -B ${output} -G Ninja ${compiler} -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD=None -DLLVM_INCLUDE_TESTS=OFF -DHLSL_INCLUDE_TESTS=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DENABLE_SPIRV_CODEGEN=OFF -DSPIRV_BUILD_TESTS=OFF`.cwd(root);
   const cmakeCache = await Bun.file(resolve(output, "CMakeCache.txt")).text();
-  if(!/^CMAKE_CXX_COMPILER:FILEPATH=.*[/\\]cl\.exe\s*$/im.test(cmakeCache)) {
+  if(!/^CMAKE_CXX_COMPILER:(?:FILEPATH|STRING)=.*[/\\]cl\.exe\s*$/im.test(cmakeCache)) {
     throw new Error("DXC build requires the Visual Studio MSVC compiler; use a clean DXC build directory.");
   }
   await $`cmake --build ${output} --target dxcompiler --parallel ${jobs}`.cwd(root);
