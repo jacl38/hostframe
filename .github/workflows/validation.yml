@@ -61,6 +61,40 @@ jobs:
           if errorlevel 1 exit /b 1
           call build\native\cmake\native_presentation_check.exe --modes-only
           if errorlevel 1 exit /b 1
+      - name: Identify DXC toolchain
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          if not defined VCToolsVersion exit /b 1
+          if not defined WindowsSDKVersion exit /b 1
+          set "SDK_VERSION=%WindowsSDKVersion:\=%"
+          echo HOSTFRAME_DXC_TOOLCHAIN=msvc-%VCToolsVersion%-sdk-%SDK_VERSION%-vs-%VSCMD_VER%>>"%GITHUB_ENV%"
+      - name: Cache exact DXC build
+        id: dxc-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: build/native/dxc/cache
+          key: dxc-${{ runner.os }}-${{ runner.arch }}-${{ env.HOSTFRAME_DXC_TOOLCHAIN }}-${{ hashFiles('scripts/native/dawn.lock.json', 'scripts/native/dxc.ts') }}
+      - name: Build pinned DXC on cache miss
+        if: steps.dxc-cache.outputs.cache-hit != 'true'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          call bun scripts/native.ts dxc
+          if errorlevel 1 exit /b 1
+      - name: Verify DXC cache and packed consumers
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          set CC=clang
+          set CXX=clang++
+          call bun scripts/native.ts dxc-verify
+          if errorlevel 1 exit /b 1
+          call bun scripts/package/verify.ts --headless
+          if errorlevel 1 exit /b 1
 
   macos:
     needs: checks

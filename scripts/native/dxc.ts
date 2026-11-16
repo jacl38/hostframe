@@ -8,15 +8,21 @@ export const windowsDxc = lock.dependencies.dxc;
 const dxcRoot = dxcBuildRoot;
 const source = resolve(dxcRoot, "source");
 const output = resolve(dxcRoot, "cmake");
-const binary = resolve(output, "bin/dxcompiler.dll");
-const marker = resolve(dxcRoot, "hostframe-build.json");
+const cache = resolve(dxcRoot, "cache");
+const binary = resolve(cache, "dxcompiler.dll");
+const marker = resolve(cache, "hostframe-build.json");
+const licenses = [
+  ["LICENSE.TXT", "DXC-LICENSE.txt"],
+  ["external/DirectX-Headers/LICENSE", "DXC-DirectX-Headers-LICENSE.txt"]
+] as const;
 const modules = ["external/DirectX-Headers"];
 const recipe = "hostframe-dxc-msvc-release-no-spirv-v1";
 
-export function assertDxcBuildRecord(data: unknown, digest: string) {
+export function assertDxcBuildRecord(data: unknown, digest: string, toolchain = process.env.HOSTFRAME_DXC_TOOLCHAIN) {
   if(typeof data !== "object" || data === null ||
       Reflect.get(data, "revision") !== windowsDxc.revision ||
-      Reflect.get(data, "recipe") !== recipe || Reflect.get(data, "sha256") !== digest) {
+      Reflect.get(data, "recipe") !== recipe || Reflect.get(data, "sha256") !== digest ||
+      (toolchain !== undefined && Reflect.get(data, "toolchain") !== toolchain)) {
     throw new Error("DXC build provenance mismatch; run bun scripts/native.ts dxc.");
   }
 }
@@ -77,29 +83,43 @@ export async function buildWindowsDxc() {
   if(!/^[1-9]\d*$/.test(jobs)) throw new Error("HOSTFRAME_JOBS must be a positive integer.");
   const compiler = await Bun.file(resolve(output, "CMakeCache.txt")).exists() ? [] : ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"];
   await $`cmake -S ${source} -B ${output} -G Ninja ${compiler} -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DLLVM_TARGETS_TO_BUILD=None -DLLVM_INCLUDE_TESTS=OFF -DHLSL_INCLUDE_TESTS=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DENABLE_SPIRV_CODEGEN=OFF -DSPIRV_BUILD_TESTS=OFF`.cwd(root);
-  const cache = await Bun.file(resolve(output, "CMakeCache.txt")).text();
-  if(!/^CMAKE_CXX_COMPILER:FILEPATH=.*[/\\]cl\.exe\s*$/im.test(cache)) {
+  const cmakeCache = await Bun.file(resolve(output, "CMakeCache.txt")).text();
+  if(!/^CMAKE_CXX_COMPILER:FILEPATH=.*[/\\]cl\.exe\s*$/im.test(cmakeCache)) {
     throw new Error("DXC build requires the Visual Studio MSVC compiler; use a clean DXC build directory.");
   }
   await $`cmake --build ${output} --target dxcompiler --parallel ${jobs}`.cwd(root);
   await assertSource();
-  await Bun.write(marker, JSON.stringify({ revision: windowsDxc.revision, recipe, sha256: await hash(binary) }) + "\n");
+  await mkdir(cache, { recursive: true });
+  await copyFile(resolve(output, "bin/dxcompiler.dll"), binary);
+  const licenseHashes: Record<string, string> = {};
+  for(const [from, to] of licenses) {
+    await copyFile(resolve(source, from), resolve(cache, to));
+    licenseHashes[to] = await hash(resolve(cache, to));
+  }
+  const headersRevision = (await $`git -C ${resolve(source, "external/DirectX-Headers")} rev-parse HEAD`.text()).trim();
+  await Bun.write(marker, JSON.stringify({ revision: windowsDxc.revision, recipe, sha256: await hash(binary), headersRevision, licenseHashes, toolchain: process.env.HOSTFRAME_DXC_TOOLCHAIN ?? null }) + "\n");
+}
+
+export async function verifyDxcCache(directory: string, manifest: string) {
+  requireDxcRevision(manifest, windowsDxc.revision);
+  const data = await Bun.file(resolve(directory, "hostframe-build.json")).json();
+  const digest = await hash(resolve(directory, "dxcompiler.dll"));
+  assertDxcBuildRecord(data, digest);
+  requireDxcHeadersRevision(manifest, data.headersRevision);
+  for(const [, name] of licenses) {
+    if(!data.licenseHashes || data.licenseHashes[name] !== await hash(resolve(directory, name))) {
+      throw new Error(`DXC cached license mismatch: ${name}. Rebuild the compiler.`);
+    }
+  }
+  return digest;
 }
 
 export async function windowsDxcHash() {
-  await requireWindowsDxcRevision();
-  await assertSource();
-  const data = await Bun.file(marker).json();
-  const digest = await hash(binary);
-  assertDxcBuildRecord(data, digest);
-  return digest;
+  return verifyDxcCache(cache, await Bun.file(resolve(dawnRoot, "DEPS")).text());
 }
 
 export async function prepareWindowsDxc() {
   await windowsDxcHash();
   await copyFile(binary, resolve(root, "dist/dxcompiler.dll"));
-  for(const [from, to] of [
-    ["LICENSE.TXT", "DXC-LICENSE.txt"],
-    ["external/DirectX-Headers/LICENSE", "DXC-DirectX-Headers-LICENSE.txt"]
-  ]) await copyFile(resolve(source, from!), resolve(root, "dist", to!));
+  for(const [, name] of licenses) await copyFile(resolve(cache, name), resolve(root, "dist", name));
 }

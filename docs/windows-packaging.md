@@ -33,6 +33,13 @@ environment. This does not publish the draft.
 Release preparation requires a full (non-headless) `package:verify` run for
 the same tarball; a headless run does not establish presentation behavior.
 
+The Windows validation job caches only the DXC DLL, its license files, and its
+build record. Its exact cache key includes the pinned inputs, build recipe,
+Windows architecture, MSVC version, Visual Studio version, and SDK version.
+An exact hit is checked against Dawn's pinned revisions and recorded hashes;
+otherwise CI builds DXC and saves the result after the job succeeds. The hosted
+job runs the headless package checks, not interactive presentation verification.
+
 The package requires a compatible D3D12 GPU and driver and the Microsoft C++
 runtime. Only the systems and runtimes actually tested in the release notes
 are verified.
