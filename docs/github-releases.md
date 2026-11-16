@@ -17,6 +17,8 @@ compatibility with older Linux distributions.
 - The draft is created after all three platform builds pass. The macOS and
   Windows tarballs, checksums, and notes are then attached to it. Check that
   all expected assets have been attached before publishing.
+- macOS builds run on macOS 26 targeting macOS 15. The exact packaged artifact
+  is installed and exercised on a macOS 15 runner before draft creation.
 - Versions containing a prerelease suffix are marked as prereleases.
 - The draft remains unpublished until a maintainer publishes it on GitHub.
   No npm registry publication occurs.

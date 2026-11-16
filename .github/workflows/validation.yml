@@ -85,8 +85,10 @@ jobs:
     needs: checks
     if: needs.checks.outputs.integration == 'true'
     name: Build and verify macOS arm64
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
